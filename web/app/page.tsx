@@ -8,11 +8,11 @@ import { DrivePickerModal, type DrivePick } from "@/components/studio/DrivePicke
 import { VariantStepper } from "@/components/studio/VariantStepper";
 import { GenerateButton } from "@/components/studio/GenerateButton";
 import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
+import { StudioCaptionsBox } from "@/components/studio/StudioCaptionsBox";
 import { StudioQueue } from "@/components/studio/StudioQueueLive";
 import { ProgressPanel } from "@/components/studio/ProgressPanel";
 import { readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
 import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
-import { captionToggleHint, captionToggleLabel } from "@/lib/prepareCopy";
 import { createJob, createJobFromDrive } from "@/lib/api";
 import { useRun } from "@/lib/runStore";
 import { useAuthMe } from "@/lib/useAuthMe";
@@ -159,17 +159,10 @@ export default function StudioPage() {
           />
         </div>
 
-        <label className="studio-caption-toggle">
-          <input
-            type="checkbox"
-            checked={generateCaptions}
-            onChange={(e) => setGenerateCaptions(e.target.checked)}
-          />
-          <span>
-            {captionToggleLabel()}
-            <small>{captionToggleHint()}</small>
-          </span>
-        </label>
+        <StudioCaptionsBox
+          generateCaptions={generateCaptions}
+          onGenerateCaptionsChange={setGenerateCaptions}
+        />
 
         {error && (
           <div className="vf-alert vf-alert--error" style={{ marginTop: 12, marginBottom: 0 }}>

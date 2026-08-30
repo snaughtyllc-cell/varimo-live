@@ -26,7 +26,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Generate: drop files or pick from Drive, set copies, Fast (HQ coming soon), Advanced, live queue.",
+      "Generate: drop files or pick from Drive, set copies, Fast (HQ coming soon), captions, Advanced, live queue.",
   },
   {
     href: "/gallery",

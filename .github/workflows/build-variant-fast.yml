@@ -3,8 +3,7 @@ name: Build varimo Fast CPU worker
 on:
   push:
     branches:
-      - cursor/railway-runpod-split-c975
-      - cursor/ship-loop-c975
+      - main
     paths:
       - deploy/runpod/Dockerfile.fast
       - deploy/runpod/cp_handler.py

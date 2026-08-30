@@ -1,0 +1,14 @@
+{
+  "lane": "live",
+  "github_repo": "snaughtyllc-cell/varimo-live",
+  "lab_github_repo": "snaughtyllc-cell/variant-maker",
+  "default_branch": "main",
+  "live_product_url": "https://varyforge-studio-production.up.railway.app",
+  "promote": "copy",
+  "do_not": [
+    "git merge Lab into Live",
+    "git merge Live into Lab",
+    "pull Lab history to 'catch up' the UI",
+    "run engine experiments on testers"
+  ]
+}

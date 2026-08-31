@@ -771,7 +771,9 @@ def test_delete_job_drops_r2_prefixes(tmp_path):
 
 def test_create_job_generate_captions_is_unique_per_index(tmp_path):
     store = _store(tmp_path)
-    job = store.create_job([("boil.mp4", b"x")], count=2, generate_captions=True)
+    job = store.create_job(
+        [("boil.mp4", b"x")], count=2, generate_captions=True, caption_prompt="POV boil #reels",
+    )
     store.wait(job.job_id, timeout=5)
     done = store.get(job.job_id)
     caps = [v.caption for v in done.sources[0].variants]

@@ -30,7 +30,8 @@ export default function StudioPage() {
   const [perVideo, setPerVideo] = useState(DEFAULT_PER_VIDEO);
   const [allowCreativeEscalate, setAllowCreativeEscalate] = useState(true);
   const [qualityMode, setQualityMode] = useState<"fast" | "hq">("fast");
-  const [generateCaptions, setGenerateCaptions] = useState(true);
+  const [generateCaptions, setGenerateCaptions] = useState(false);
+  const [captionPrompt, setCaptionPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,8 +103,9 @@ export default function StudioPage() {
               qualityMode: "fast",
               allowCreativeEscalate,
               generateCaptions,
+              captionPrompt,
             })
-          : await createJob(files, perVideo, allowCreativeEscalate, "fast", generateCaptions);
+          : await createJob(files, perVideo, allowCreativeEscalate, "fast", generateCaptions, captionPrompt);
       start(resp, "fast");
     } catch (e) {
       clear();
@@ -162,6 +164,8 @@ export default function StudioPage() {
         <StudioCaptionsBox
           generateCaptions={generateCaptions}
           onGenerateCaptionsChange={setGenerateCaptions}
+          captionPrompt={captionPrompt}
+          onCaptionPromptChange={setCaptionPrompt}
         />
 
         {error && (

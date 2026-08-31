@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   PREPARING_JOB_ID,
+  captionPromptLabel,
+  captionPromptPlaceholder,
   captionSnippet,
   captionToggleHint,
   captionToggleLabel,
@@ -24,7 +26,9 @@ describe("prepare copy", () => {
 
   it("asks for captions on Generate, not a separate bank UI", () => {
     expect(captionToggleLabel()).toMatch(/write captions/i);
-    expect(captionToggleHint()).toMatch(/gallery/i);
+    expect(captionToggleHint()).toMatch(/opens a box/i);
+    expect(captionPromptLabel()).toMatch(/caption for these copies/i);
+    expect(captionPromptPlaceholder()).toMatch(/caption you want/i);
     expect(uniquenessCustomerLabel()).toBe("Originality");
   });
 

@@ -829,7 +829,7 @@ def test_create_job_generate_captions_attaches_copy(tmp_path):
     resp = client.post(
         "/api/jobs",
         files=[("files", ("boil.mp4", b"x", "video/mp4"))],
-        data={"count": "2", "generate_captions": "true"},
+        data={"count": "2", "generate_captions": "true", "caption_prompt": "POV boil #reels"},
     )
     assert resp.status_code == 201
     job_id = resp.json()["job_id"]

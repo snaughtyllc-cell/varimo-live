@@ -1,12 +1,21 @@
 "use client";
-import { captionToggleHint, captionToggleLabel } from "@/lib/prepareCopy";
+import {
+  captionPromptLabel,
+  captionPromptPlaceholder,
+  captionToggleHint,
+  captionToggleLabel,
+} from "@/lib/prepareCopy";
 
 export function StudioCaptionsBox({
   generateCaptions,
   onGenerateCaptionsChange,
+  captionPrompt,
+  onCaptionPromptChange,
 }: {
   generateCaptions: boolean;
   onGenerateCaptionsChange: (value: boolean) => void;
+  captionPrompt: string;
+  onCaptionPromptChange: (value: string) => void;
 }) {
   return (
     <section className="studio-captions-box" data-testid="studio-captions-box" aria-label="Captions">
@@ -22,6 +31,16 @@ export function StudioCaptionsBox({
           <small>{captionToggleHint()}</small>
         </span>
       </label>
+      {generateCaptions && (
+        <textarea
+          className="studio-caption-prompt"
+          value={captionPrompt}
+          onChange={(e) => onCaptionPromptChange(e.target.value)}
+          placeholder={captionPromptPlaceholder()}
+          aria-label={captionPromptLabel()}
+          rows={5}
+        />
+      )}
     </section>
   );
 }

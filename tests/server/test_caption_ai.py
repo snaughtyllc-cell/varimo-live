@@ -20,13 +20,16 @@ def test_local_caption_is_unique_per_index():
     assert "/" not in a and "\\" not in a
 
 
-def test_captions_for_source_falls_back_without_keys(monkeypatch):
+def test_captions_for_source_needs_operator_prompt(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("VARIANT_OPENAI_API_KEY", raising=False)
-    out = captions_for_source("boil.mp4", 2, environ={})
+    assert captions_for_source("boil.mp4", 2, environ={}) == []
+    out = captions_for_source("boil.mp4", 2, prompt="POV boil #reels", environ={})
     assert len(out) == 2
+    assert "POV boil #reels" in out[0]
     assert "Copy 1 of 2" in out[0]
+    assert "Copy 2 of 2" in out[1]
 
 
 def test_source_stem_strips_extension():
@@ -74,6 +77,7 @@ def test_captions_prefer_anthropic_haiku_4_5_over_openai(monkeypatch):
     out = captions_for_source(
         "boil.mp4",
         2,
+        prompt="POV she said wait for it #reels",
         environ={
             "ANTHROPIC_API_KEY": "sk-ant-test",
             "OPENAI_API_KEY": "sk-openai-test",
@@ -83,6 +87,7 @@ def test_captions_prefer_anthropic_haiku_4_5_over_openai(monkeypatch):
     assert len(calls) == 1
     assert calls[0][0] == ANTHROPIC_URL
     assert calls[0][1]["model"] == "claude-haiku-4-5"
+    assert "POV she said wait for it" in calls[0][1]["messages"][0]["content"]
     assert "POV boil" in out[0]
     assert "Wait for it" in out[1]
 

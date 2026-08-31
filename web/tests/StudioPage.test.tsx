@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthMe } from "@/lib/types";
 import { initRun } from "@/lib/progress";
+import { captionPromptPlaceholder } from "@/lib/prepareCopy";
 
 const me: { data: AuthMe | undefined; isLoading: boolean } = {
   data: undefined,
@@ -65,9 +66,20 @@ describe("Studio page captions", () => {
 
     expect(screen.getByTestId("studio-captions-box")).toBeInTheDocument();
     expect(screen.getByText(/write captions for these copies/i)).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: /write captions for these copies/i })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /write captions for these copies/i })).not.toBeChecked();
+    expect(screen.queryByRole("textbox", { name: /caption for these copies/i })).not.toBeInTheDocument();
     expect(screen.queryByText("Caption bank")).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/new folder/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/20 left/i)).not.toBeInTheDocument();
+  });
+
+  it("opens a prompt box when the toggle is on", () => {
+    render(<StudioPage />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /write captions for these copies/i }));
+    const box = screen.getByRole("textbox", { name: /caption for these copies/i });
+    expect(box).toBeInTheDocument();
+    expect(box).toHaveAttribute("placeholder", captionPromptPlaceholder());
+    fireEvent.change(box, { target: { value: "POV she said wait for it #reels" } });
+    expect(box).toHaveValue("POV she said wait for it #reels");
   });
 });

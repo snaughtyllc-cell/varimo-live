@@ -132,3 +132,151 @@ def test_write_look_stills(tmp_path):
     assert names["look_var"] == "look_v01.jpg"
     assert os.path.getsize(tmp_path / names["look_src"]) > 0
     assert os.path.getsize(tmp_path / names["look_var"]) > 0
+
+
+def _mean_rgb(path: str, vf: str) -> tuple[float, float, float]:
+    proc = subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-i", path, "-vf", vf,
+            "-frames:v", "1", "-f", "rawvideo", "pipe:1",
+        ],
+        check=True, capture_output=True,
+    )
+    buf = proc.stdout
+    n = len(buf) // 3
+    rs = gs = bs = 0
+    for i in range(0, len(buf), 3):
+        rs += buf[i]
+        gs += buf[i + 1]
+        bs += buf[i + 2]
+    return rs / n, gs / n, bs / n
+
+
+def test_still_vf_is_zscale_srgb():
+    """Naked scale=360 is the 601-ish JPEG path that olives Gallery stills."""
+    vf = look.still_vf()
+    assert "zscale=" in vf
+    assert "iec61966-2-1" in vf
+    assert f"scale={look.STILL_WIDTH}:-2" in vf
+    assert "eq=saturation" not in vf
+
+
+def test_look_stills_do_not_olive_a_tagged_skin(tmp_path):
+    """Gallery look JPEGs used a naked scale=360. Mid grey hides it (G−R ≈ 0
+    either way). Skin-ish 0xC68642 tagged bt709/tv shows the 601 JPEG olive."""
+    src = str(tmp_path / "skin.mp4")
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", "color=c=0xC68642:s=640x360:r=15:d=1",
+            "-vf", "format=yuv420p",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an",
+            "-colorspace", "bt709", "-color_primaries", "bt709",
+            "-color_trc", "bt709", "-color_range", "tv",
+            src,
+        ],
+        check=True, capture_output=True,
+    )
+    names = look.write_look_stills(src, src, str(tmp_path), 1)
+    jpg = str(tmp_path / names["look_src"])
+    r, g, b = _mean_rgb(jpg, "format=rgb24")
+    truth_vf = (
+        "zscale=matrixin=709:transferin=709:primariesin=709:rangein=limited:"
+        "matrix=709:transfer=iec61966-2-1:primaries=bt709:range=full,format=rgb24"
+    )
+    tr, tg, tb = _mean_rgb(src, truth_vf)
+    assert abs((g - r) - (tg - tr)) < 2.5
+    assert abs((g - b) - (tg - tb)) < 2.5
+
+
+def _caption_bar(src: str, dest: str) -> str:
+    """Bottom caption / IG chrome — the bradnded overlay class."""
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error", "-i", src,
+            "-vf", "drawbox=x=0:y=ih*0.75:w=iw:h=ih*0.25:color=white:t=fill",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", dest,
+        ],
+        check=True, capture_output=True,
+    )
+    return dest
+
+
+def _crop_keep(
+    src: str, dest: str, keep: float = 0.90,
+    *, x_frac: float = 0.5, y_frac: float = 0.5,
+) -> str:
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error", "-i", src,
+            "-vf", (
+                f"crop=iw*{keep:.4f}:ih*{keep:.4f}:"
+                f"(iw-iw*{keep:.4f})*{x_frac:.4f}:(ih-ih*{keep:.4f})*{y_frac:.4f}"
+            ),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", dest,
+        ],
+        check=True, capture_output=True,
+    )
+    return dest
+
+
+def test_overlay_plus_caption_crop_does_not_fail_look(tmp_path):
+    """Caption + punch-in is a geometry miss, not lava. Naive full-frame MAE
+    trips 38; crop-align the source window so a pack Jeff would ship stays look-ok."""
+    src = _caption_bar(
+        _clip(str(tmp_path / "src.mp4"), w=360, h=640),
+        str(tmp_path / "overlay.mp4"),
+    )
+    cropped = _crop_keep(
+        src, str(tmp_path / "crop.mp4"), keep=0.80, x_frac=0.5, y_frac=0.0,
+    )
+    naive = look.score_look(src, cropped)
+    assert naive["look_mae_max"] > look.LOOK_LUMA_MAX
+    aligned = look.score_look(
+        src, cropped,
+        video={"crop_keep": 0.80, "crop_x_frac": 0.5, "crop_y_frac": 0.0},
+    )
+    assert aligned["look_status"] == "ok"
+    assert aligned["look_mae_max"] <= look.LOOK_LUMA_MAX
+
+
+def test_trim_and_out_fps_do_not_fail_look(tmp_path):
+    """NEW-bradnded MAE 119 was keyframe-seek on 60fps vs 48fps + trim, not
+    lava. Accurate frame times keep the same story moment under the 38 gate."""
+    src = str(tmp_path / "src.mp4")
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", "testsrc2=size=360x640:rate=60:duration=4",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-g", "60", "-keyint_min", "60", "-an", src,
+        ],
+        check=True, capture_output=True,
+    )
+    dest = str(tmp_path / "var.mp4")
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error", "-i", src,
+            "-vf", "trim=start=0.30:end=3.70,setpts=PTS-STARTPTS,setpts=PTS/1.06,fps=48",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "48", "-an", dest,
+        ],
+        check=True, capture_output=True,
+    )
+    scored = look.score_look(
+        src, dest,
+        video={"trim_s": 0.30, "trim_end_s": 0.30, "speed": 1.06, "out_fps": 48},
+    )
+    assert scored["look_status"] == "ok"
+    assert scored["look_mae_max"] <= look.LOOK_LUMA_MAX
+
+
+def test_crop_align_does_not_pass_a_luma_blotch(tmp_path):
+    src = _clip(str(tmp_path / "src.mp4"), w=360, h=640)
+    cropped = _crop_keep(src, str(tmp_path / "crop.mp4"), keep=0.90)
+    blotch = _overlay_blotch(cropped, str(tmp_path / "blotch.mp4"))
+    scored = look.score_look(
+        src, blotch,
+        video={"crop_keep": 0.90, "crop_x_frac": 0.5, "crop_y_frac": 0.5},
+    )
+    assert scored["look_status"] == "fail"
+    assert scored["look_mae_max"] > look.LOOK_LUMA_MAX

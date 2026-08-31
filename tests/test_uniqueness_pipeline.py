@@ -48,7 +48,7 @@ def _stub_common(monkeypatch):
     monkeypatch.setattr(pipeline.uniqueness, "bits_vs", lambda a, b: 64)
     monkeypatch.setattr(
         pipeline.look, "score_look",
-        lambda src_path, variant_path: {
+        lambda src_path, variant_path, video=None: {
             "look_status": "ok", "look_metric": "coarse_luma_v1",
             "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
         },
@@ -122,12 +122,41 @@ def test_keeps_light_preset_when_first_attempt_is_ok(monkeypatch, tmp_path):
     assert record.uniqueness_status == "ok"
 
 
+def test_score_look_receives_video_params(monkeypatch, tmp_path):
+    """Crop/trim MAE needs the variant's sampled video dict, including auto-tune."""
+    _stub_common(monkeypatch)
+    monkeypatch.setattr(pipeline, "sample", lambda preset, seed, **_kw: {
+        "video": {
+            "crop_keep": 0.90, "crop_x_frac": 0.5, "crop_y_frac": 0.5,
+            "rotate_deg": 0.0,
+        },
+        "audio": {},
+    })
+    seen: dict = {}
+
+    def fake_look(src_path, variant_path, video=None):
+        seen["video"] = video
+        return {
+            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
+        }
+
+    monkeypatch.setattr(pipeline.look, "score_look", fake_look)
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(0.6, bits=38),
+    )
+    pipeline.run(_cfg(tmp_path))
+    assert seen.get("video") is not None
+    assert seen["video"]["crop_keep"] == 0.90
+
+
 def test_look_fail_skips_escalate(monkeypatch, tmp_path):
     """lookaqmtp-class blotch must not escalate. Keep the medium file."""
     _stub_common(monkeypatch)
     monkeypatch.setattr(
         pipeline.look, "score_look",
-        lambda src_path, variant_path: {
+        lambda src_path, variant_path, video=None: {
             "look_status": "fail", "look_metric": "coarse_luma_v1",
             "look_mae": 50.0, "look_mae_max": 57.0, "look_target": 38.0,
         },
@@ -163,7 +192,7 @@ def test_escalate_look_fail_keeps_medium(monkeypatch, tmp_path):
     ])
     monkeypatch.setattr(
         pipeline.look, "score_look",
-        lambda src_path, variant_path: next(looks),
+        lambda src_path, variant_path, video=None: next(looks),
     )
     monkeypatch.setattr(
         pipeline.uniqueness, "score_uniqueness",
@@ -873,3 +902,116 @@ def test_hq_still_targets_1080_from_720p(monkeypatch, tmp_path):
     ))
     assert seen
     assert all(p is not None and p.width == 1080 and p.height == 1920 for p in seen)
+
+
+def test_pipeline_forwards_copyid_gate(monkeypatch, tmp_path):
+    _stub_common(monkeypatch)
+    seen = {}
+
+    def fake_score(src_path, variant_path, target=None, **kw):
+        seen["kw"] = kw
+        return _ok_score(0.5, bits=32, status="ok")
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
+    manifest = pipeline.run(_cfg(tmp_path, copyid="gate", uniq_strengths=[1.0]))
+    assert seen["kw"].get("copyid") == "gate"
+    assert manifest.run.get("copyid") == "gate"
+
+
+def test_pipeline_records_heads_on_quality(monkeypatch, tmp_path):
+    _stub_common(monkeypatch)
+    heads = {
+        "ssim": {"uniqueness": 0.5, "bits": 32, "available": True},
+        "visual": {"uniqueness": 0.2, "sim": 0.6, "available": True},
+    }
+
+    def fake_score(src_path, variant_path, target=None, **kw):
+        return {**_ok_score(0.5, bits=32, status="ok"), "heads": heads}
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
+    manifest = pipeline.run(_cfg(tmp_path, copyid="record", uniq_strengths=[1.0]))
+    assert manifest.variants[0].quality.get("heads")["visual"]["sim"] == 0.6
+    assert manifest.run.get("copyid") == "record"
+
+def test_pipeline_records_heads_through_fast_autotune(monkeypatch, tmp_path):
+    """Fast daily packs reconstruct ``u`` from tune() — must keep copyid heads.
+
+    Lab pack 3d4fae98ca77 ran copyid=record but wrote quality.heads=null
+    because the auto_tune success path copied bits/status and dropped heads.
+    """
+    _stub_common(monkeypatch)
+    heads = {
+        "ssim": {"uniqueness": 0.5, "bits": 32, "available": True, "status": "ok"},
+        "audio": {"uniqueness": 0.26, "sim": 0.74, "available": True, "status": "ok"},
+        "visual": {"uniqueness": None, "sim": None, "available": False},
+    }
+
+    def fake_score(src_path, variant_path, target=None, **kw):
+        return {
+            **_ok_score(0.5, bits=32, status="ok"),
+            "heads": heads,
+            "copyid_mode": kw.get("copyid") or "record",
+        }
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_score)
+    manifest = pipeline.run(_cfg(
+        tmp_path, copyid="record", auto_tune=True, allow_creative_escalate=False,
+    ))
+    got = manifest.variants[0].quality.get("heads")
+    assert got is not None
+    assert got["audio"]["sim"] == 0.74
+    assert got["visual"]["available"] is False
+    assert manifest.run.get("copyid") == "record"
+
+
+def test_pipeline_record_scores_heads_after_uniqueness(monkeypatch, tmp_path):
+    """record must not fpcalc on the uniqueness thread. SSIM wait, then heads.
+
+    Lab pack ce6862e51d4c paid ~20s of Chromaprint inside uniqueness. Source
+    fingerprint also ran again on copy 2. Heads still land on quality.heads.
+    """
+    _stub_common(monkeypatch)
+    order: list[str] = []
+    uniq_kw: list[dict] = []
+
+    def fake_uniq(src_path, variant_path, target=None, **kw):
+        order.append("uniq")
+        uniq_kw.append(kw)
+        return _ok_score(0.5, bits=32, status="ok")
+
+    def fake_mae(src_path, variant_path, video=None):
+        order.append("mae")
+        return {
+            "look_status": "ok", "look_metric": "coarse_luma_v1",
+            "look_mae": 8.0, "look_mae_max": 10.0, "look_target": 38.0,
+        }
+
+    def fake_attach(result, src_path, variant_path, **kw):
+        order.append("audio")
+        return {
+            **result,
+            "heads": {
+                "ssim": {"uniqueness": 0.5, "bits": 32, "available": True},
+                "audio": {
+                    "uniqueness": 0.18, "sim": 0.82, "available": True,
+                    "status": "ok", "via": "ffmpeg_s16le",
+                },
+            },
+            "copyid_mode": "record",
+        }
+
+    monkeypatch.setattr(pipeline.uniqueness, "score_uniqueness", fake_uniq)
+    monkeypatch.setattr(pipeline.look, "score_look", fake_mae)
+    monkeypatch.setattr(pipeline.uniqueness, "attach_copyid_heads", fake_attach)
+
+    manifest = pipeline.run(_cfg(
+        tmp_path, copyid="record", uniq_strengths=[1.0],
+        allow_creative_escalate=False,
+    ))
+    assert uniq_kw[0].get("copyid") == "record"
+    assert uniq_kw[0].get("attach_heads") is False
+    assert order == ["uniq", "mae", "audio"]
+    audio = manifest.variants[0].quality.get("heads")["audio"]
+    assert audio["sim"] == 0.82
+    assert audio["via"] == "ffmpeg_s16le"
+

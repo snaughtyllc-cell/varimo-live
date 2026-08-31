@@ -211,10 +211,20 @@ def score_uniqueness(
     *,
     target: float | None = None,
     n_frames: int | None = None,  # retained for call-site compat; ignored (fixed 3 frames)
+    copyid: str | bool | None = None,
+    extra_heads: dict | None = None,
+    attach_heads: bool = True,
 ) -> dict:
     """Score variant uniqueness vs source.
 
     Returns uniqueness ∈ [0, 1] as bits/64, plus raw ``bits`` for logs/tests.
+
+    ``copyid``: ``off`` (default) | ``record`` | ``gate``. Extra visual/audio
+    heads are lazy (see ``variant_maker.copyid``). ``gate`` fuses with min
+    uniqueness; SSIM ``below_floor`` is never overridden. ``extra_heads``
+    injects already-scored heads (tests). ``attach_heads=False`` skips extra
+    heads on ``record`` so Generate wait stays SSIM-bound; ``gate`` still
+    fuses here because uniqueness_status depends on it.
     """
     del n_frames  # fixed FRAME_FRACS — kept in signature for older callers
     base = {
@@ -228,7 +238,7 @@ def score_uniqueness(
         bits = bits_vs(src_path, variant_path)
         score = max(0.0, min(1.0, bits / 64.0))
         status = status_for_bits(bits, target=target)
-        return {
+        result = {
             "uniqueness": score,
             "uniqueness_status": status,
             "uniqueness_metric": METRIC_VERSION,
@@ -238,3 +248,79 @@ def score_uniqueness(
         }
     except (OSError, subprocess.CalledProcessError, ValueError, TypeError):
         return base
+    if not attach_heads:
+        from .copyid import normalize_mode
+        if normalize_mode(copyid) != "gate":
+            return result
+    return _attach_copyid(
+        result, src_path, variant_path,
+        target=target, copyid=copyid, extra_heads=extra_heads,
+    )
+
+
+def attach_copyid_heads(
+    result: dict,
+    src_path: str,
+    variant_path: str,
+    *,
+    copyid: str | bool | None = "record",
+    extra_heads: dict | None = None,
+) -> dict:
+    """Attach visual/audio heads after SSIM. Used by ``record`` so Chromaprint
+    is not on the uniqueness wait. ``gate`` should score inside ``score_uniqueness``.
+    """
+    return _attach_copyid(
+        dict(result), src_path, variant_path,
+        target=result.get("uniqueness_target"),
+        copyid=copyid, extra_heads=extra_heads,
+    )
+
+
+def _attach_copyid(
+    result: dict,
+    src_path: str,
+    variant_path: str,
+    *,
+    target: float | None,
+    copyid: str | bool | None,
+    extra_heads: dict | None,
+) -> dict:
+    # Fast path: do not import copyid (or probe fpcalc/torch) on the default off gate.
+    if extra_heads is None and copyid is None:
+        env = os.environ.get("VARIANT_MAKER_COPYID")
+        if not env or str(env).strip().lower() in ("off", "0", "false", "no", ""):
+            return result
+    from .copyid import fuse_heads, normalize_mode, score_heads
+
+    mode = normalize_mode(copyid)
+    # extra_heads is a test injection; it still requires record|gate to attach.
+    if mode == "off":
+        return result
+    extras = dict(extra_heads) if extra_heads is not None else score_heads(src_path, variant_path)
+    ssim_head = {
+        "uniqueness": result["uniqueness"],
+        "sim": None if result["uniqueness"] is None else 1.0 - result["uniqueness"],
+        "status": result["uniqueness_status"],
+        "available": result["uniqueness"] is not None,
+        "bits": result["bits"],
+        "metric": METRIC_VERSION,
+    }
+    heads = {"ssim": ssim_head, **extras}
+    result = {**result, "heads": heads, "copyid_mode": mode}
+    if mode != "gate":
+        return result
+    usable = [
+        name for name, head in extras.items()
+        if head and head.get("available") and head.get("uniqueness") is not None
+    ]
+    if not usable:
+        return result
+    # below_floor is the SSIM ship floor — embeddings must not hide a twin.
+    if result["uniqueness_status"] == "below_floor":
+        return result
+    fused = fuse_heads(heads, target=target)
+    result["uniqueness"] = fused["uniqueness"]
+    result["uniqueness_status"] = fused["uniqueness_status"]
+    result["uniqueness_metric"] = fused["uniqueness_metric"]
+    result["fused_from"] = fused["fused_from"]
+    return result

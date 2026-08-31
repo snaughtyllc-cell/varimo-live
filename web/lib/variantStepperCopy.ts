@@ -1,18 +1,13 @@
-/** Studio variant-count defaults and Fast-path helper copy. */
+/** Studio variant-count defaults. Keep helper copy off the stepper — no GPU tips. */
 
-export const DEFAULT_PER_VIDEO = 20;
-/** Stepper ceiling — usual Fast pack is ~20; leave room to tap up. */
+export const DEFAULT_PER_VIDEO = 8;
+/** Stepper ceiling — leave room to tap up from the default 8. */
 export const MAX_PER_VIDEO = 40;
-/** Suggested count when someone is timing a first Generate. */
-export const SPEED_TEST_PER_VIDEO = 3;
 
-export function variantStepperHint(qualityMode: "fast" | "hq"): string | null {
-  if (qualityMode !== "fast") return null;
-  return "Usual pack is 20 on the GPU. Tap − to 3 for a speed test on Studio (no GPU wait).";
+export function variantStepperHint(_qualityMode: "fast" | "hq"): string | null {
+  return null;
 }
 
-export function generatePackLabel(fileCount: number, perVideo: number): string {
-  if (fileCount <= 0) return `${perVideo} variants each`;
-  if (fileCount === 1) return `1 clip → ${perVideo} variants`;
-  return `${fileCount} clips → ${fileCount * perVideo} variants`;
+export function generatePackLabel(_fileCount: number, perVideo: number): string {
+  return `${perVideo} variants each`;
 }

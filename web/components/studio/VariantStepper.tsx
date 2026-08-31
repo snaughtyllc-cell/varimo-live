@@ -1,6 +1,5 @@
 "use client";
-import { totalVariants } from "@/lib/files";
-import { MAX_PER_VIDEO, variantStepperHint } from "@/lib/variantStepperCopy";
+import { MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
 
 interface VariantStepperProps {
   value: number;
@@ -16,12 +15,7 @@ export function VariantStepper({
   onChange,
   min = 1,
   max = MAX_PER_VIDEO,
-  fileCount,
-  qualityMode = "fast",
 }: VariantStepperProps) {
-  const total = totalVariants(fileCount, value);
-  const hint = variantStepperHint(qualityMode);
-
   function decrement() {
     if (value > min) onChange(value - 1);
   }
@@ -61,12 +55,6 @@ export function VariantStepper({
             +
           </button>
         </div>
-      </div>
-      <div className="studio-stepper__hint">
-        {fileCount > 0
-          ? `per video · ${fileCount} clip${fileCount !== 1 ? "s" : ""} → ${total} total`
-          : "per video · add clips above"}
-        {hint ? ` · ${hint}` : ""}
       </div>
     </div>
   );

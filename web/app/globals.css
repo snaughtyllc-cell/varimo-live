@@ -136,8 +136,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
 .studio-captions-box { background: #f8fcfc; border: 1px solid var(--color-line); border-radius: 14px; margin-top: 18px; padding: 16px 16px 18px; }
 .studio-captions-box h2 { color: var(--ink); font-size: 16px; font-weight: 760; letter-spacing: -0.02em; margin: 0; }
-.studio-captions-box__lead { color: var(--color-muted); font-size: 12.5px; line-height: 1.45; margin: 4px 0 0; max-width: 58ch; }
-.studio-caption-toggle { align-items: flex-start; color: var(--ink); cursor: pointer; display: flex; font-size: 13.5px; font-weight: 650; gap: 10px; line-height: 1.35; margin: 14px 0 18px; }
+.studio-caption-toggle { align-items: flex-start; color: var(--ink); cursor: pointer; display: flex; font-size: 13.5px; font-weight: 650; gap: 10px; line-height: 1.35; margin: 12px 0 0; }
 .studio-caption-toggle input { flex: none; margin-top: 2px; }
 .studio-caption-toggle small { color: var(--color-muted); display: block; font-size: 12px; font-weight: 500; margin-top: 3px; }
 .studio-intro { margin: 0 0 24px; }

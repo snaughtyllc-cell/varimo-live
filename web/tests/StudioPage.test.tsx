@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthMe } from "@/lib/types";
 import { initRun } from "@/lib/progress";
@@ -36,15 +36,6 @@ vi.mock("@/lib/api", () => ({
   createJob: vi.fn(),
   createJobFromDrive: vi.fn(),
   cancelJob: vi.fn(),
-  listCaptionBanks: vi.fn(async () => []),
-  listCaptions: vi.fn(async () => ({
-    cursor: 0,
-    items: [],
-    captions: [],
-    remaining: 0,
-    count: 0,
-    bank_id: "",
-  })),
 }));
 
 import StudioPage from "@/app/page";
@@ -69,16 +60,14 @@ beforeEach(() => {
 });
 
 describe("Studio page captions", () => {
-  it("shows the captions box on Studio, including the caption bank", async () => {
+  it("shows Write captions for these copies and not the old caption bank", () => {
     render(<StudioPage />);
 
-    const box = screen.getByTestId("studio-captions-box");
-    expect(box).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Captions" })).toBeInTheDocument();
+    expect(screen.getByTestId("studio-captions-box")).toBeInTheDocument();
     expect(screen.getByText(/write captions for these copies/i)).toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(screen.getByText("Caption bank")).toBeInTheDocument();
-    });
+    expect(screen.getByRole("checkbox", { name: /write captions for these copies/i })).toBeChecked();
+    expect(screen.queryByText("Caption bank")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/new folder/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/20 left/i)).not.toBeInTheDocument();
   });
 });

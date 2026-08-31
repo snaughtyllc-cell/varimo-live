@@ -63,6 +63,7 @@ describe("createJob posts multipart with files + count", () => {
     expect(body.get("count")).toBe("3");
     expect(body.get("quality_mode")).toBe("fast");
     expect(body.get("generate_captions")).toBe("false");
+    expect(body.get("caption_prompt")).toBe("");
     expect(body.getAll("files").length).toBe(1);
   });
 
@@ -70,9 +71,10 @@ describe("createJob posts multipart with files + count", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
     const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
-    await api.createJob([f], 3, true, "fast", true);
+    await api.createJob([f], 3, true, "fast", true, "POV boil #reels");
     const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
     expect(body.get("generate_captions")).toBe("true");
+    expect(body.get("caption_prompt")).toBe("POV boil #reels");
   });
 
   it("sends quality_mode hq when requested", async () => {
@@ -114,6 +116,7 @@ describe("createJob posts multipart with files + count", () => {
     expect(fromUploads).toBeTruthy();
     const fromBody = (fromUploads![1] as RequestInit).body as FormData;
     expect(fromBody.get("generate_captions")).toBe("false");
+    expect(fromBody.get("caption_prompt")).toBe("");
   });
 });
 
@@ -294,6 +297,7 @@ describe("createJobFromDrive", () => {
       quality_mode: "hq",
       allow_creative_escalate: false,
       generate_captions: false,
+      caption_prompt: "",
     });
   });
 
@@ -306,6 +310,7 @@ describe("createJobFromDrive", () => {
       fileIds: ["f1"],
       count: 3,
       generateCaptions: true,
+      captionPrompt: "POV boil #reels",
     });
     expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
       destination_id: "dst_1",
@@ -314,6 +319,7 @@ describe("createJobFromDrive", () => {
       quality_mode: "fast",
       allow_creative_escalate: true,
       generate_captions: true,
+      caption_prompt: "POV boil #reels",
     });
   });
 });

@@ -285,6 +285,7 @@ class JobFromDriveIn(BaseModel):
     quality_mode: str = "fast"
     allow_creative_escalate: bool = True
     generate_captions: bool = False
+    caption_prompt: str = ""
 
 
 class WorkflowSummaryOut(BaseModel):

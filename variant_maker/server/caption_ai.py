@@ -57,54 +57,71 @@ def anthropic_caption_model(environ: Mapping[str, str] | None = None) -> str:
     return raw
 
 
-def captions_for_source(filename: str, count: int, *, environ: Mapping[str, str] | None = None) -> list[str]:
+def captions_for_source(
+    filename: str,
+    count: int,
+    *,
+    prompt: str | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> list[str]:
     n = max(0, int(count))
-    if n == 0:
+    brief = (prompt or "").strip()
+    if n == 0 or not brief:
         return []
     env = os.environ if environ is None else environ
     anthropic_key = (env.get("ANTHROPIC_API_KEY") or env.get("VARIANT_ANTHROPIC_API_KEY") or "").strip()
     if anthropic_key:
         try:
-            return _anthropic_captions(filename, n, anthropic_key, env)
+            return _anthropic_captions(filename, n, anthropic_key, env, brief)
         except (OSError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
             pass
     openai_key = (env.get("OPENAI_API_KEY") or env.get("VARIANT_OPENAI_API_KEY") or "").strip()
     if openai_key:
         try:
-            return _openai_captions(filename, n, openai_key, env)
+            return _openai_captions(filename, n, openai_key, env, brief)
         except (OSError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
             pass
-    return [local_caption(filename, i + 1, n) for i in range(n)]
+    return [local_caption_from_prompt(brief, i + 1, n) for i in range(n)]
 
 
-def _prompt(filename: str, count: int) -> str:
+def local_caption_from_prompt(brief: str, index: int, total: int) -> str:
+    text = (brief or "").strip() or "New clip"
+    if total <= 1:
+        return text
+    return f"{text}\n\nCopy {index} of {total}"
+
+
+def _prompt(filename: str, count: int, brief: str) -> str:
     return (
         "Write Instagram Reels / TikTok captions for short UGC clips.\n"
         f"Source filename: {source_stem(filename)}\n"
-        f"Write exactly {count} captions, one per variant.\n"
+        "The operator wrote this caption for the video:\n"
+        f"{brief.strip()}\n"
+        f"Write exactly {count} captions, one per variant, based on that caption.\n"
+        "Keep the same meaning, hook, and hashtags. Vary wording slightly so each copy is unique.\n"
         "Output ONLY the captions. No intro. Separate them with a line that is exactly ---\n"
         "Each caption: 1-2 short hook lines, then 3-8 hashtags. No / or \\ characters."
     )
 
 
-def _split_ai(raw: str, count: int, filename: str) -> list[str]:
+def _split_ai(raw: str, count: int, brief: str) -> list[str]:
     from variant_maker.server.captions import split_caption_bank
 
     parts = split_caption_bank(raw or "")
     out = [p for p in parts if p][:count]
     while len(out) < count:
-        out.append(local_caption(filename, len(out) + 1, count))
+        out.append(local_caption_from_prompt(brief, len(out) + 1, count))
     return out[:count]
 
 
-def _openai_captions(filename: str, count: int, key: str, env: Mapping[str, str]) -> list[str]:
+def _openai_captions(filename: str, count: int, key: str, env: Mapping[str, str], brief: str) -> list[str]:
     raw = (env.get("VARIANT_CAPTION_MODEL") or "").strip()
     model = raw if raw.lower().startswith("gpt-") else DEFAULT_OPENAI_CAPTION_MODEL
     payload = json.dumps({
         "model": model or DEFAULT_OPENAI_CAPTION_MODEL,
         "messages": [
             {"role": "system", "content": "You write short social captions."},
-            {"role": "user", "content": _prompt(filename, count)},
+            {"role": "user", "content": _prompt(filename, count, brief)},
         ],
         "temperature": 0.7,
     }).encode()
@@ -117,15 +134,15 @@ def _openai_captions(filename: str, count: int, key: str, env: Mapping[str, str]
     with urllib.request.urlopen(req, timeout=20) as resp:
         body = json.loads(resp.read().decode())
     text = body["choices"][0]["message"]["content"]
-    return _split_ai(text, count, filename)
+    return _split_ai(text, count, brief)
 
 
-def _anthropic_captions(filename: str, count: int, key: str, env: Mapping[str, str]) -> list[str]:
+def _anthropic_captions(filename: str, count: int, key: str, env: Mapping[str, str], brief: str) -> list[str]:
     model = anthropic_caption_model(env)
     payload = json.dumps({
         "model": model,
         "max_tokens": 2000,
-        "messages": [{"role": "user", "content": _prompt(filename, count)}],
+        "messages": [{"role": "user", "content": _prompt(filename, count, brief)}],
     }).encode()
     req = urllib.request.Request(
         ANTHROPIC_URL,
@@ -140,4 +157,4 @@ def _anthropic_captions(filename: str, count: int, key: str, env: Mapping[str, s
     with urllib.request.urlopen(req, timeout=20) as resp:
         body = json.loads(resp.read().decode())
     text = body["content"][0]["text"]
-    return _split_ai(text, count, filename)
+    return _split_ai(text, count, brief)

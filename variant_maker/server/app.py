@@ -1170,11 +1170,13 @@ def create_app(
     async def create_job(files: list[UploadFile], count: int = Form(...),
                           allow_creative_escalate: bool = Form(True),
                           quality_mode: str = Form("fast"),
-                          generate_captions: bool = Form(False)) -> CreateJobResponse:
+                          generate_captions: bool = Form(False),
+                          caption_prompt: str = Form("")) -> CreateJobResponse:
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
         job = store.create_job(
             uploads, count=count, allow_creative_escalate=allow_creative_escalate,
             quality_mode=quality_mode, generate_captions=generate_captions,
+            caption_prompt=caption_prompt,
         )
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
@@ -1220,6 +1222,7 @@ def create_app(
         allow_creative_escalate: bool = Form(True),
         quality_mode: str = Form("fast"),
         generate_captions: bool = Form(False),
+        caption_prompt: str = Form(""),
     ) -> CreateJobResponse:
         ids = [u.strip() for u in upload_ids.split(",") if u.strip()]
         if not ids:
@@ -1235,6 +1238,7 @@ def create_app(
         job = store.create_job_from_paths(
             paths, count=count, allow_creative_escalate=allow_creative_escalate,
             quality_mode=quality_mode, generate_captions=generate_captions,
+            caption_prompt=caption_prompt,
         )
         for uid in ids:
             _UPLOAD_META.pop(uid, None)
@@ -1271,6 +1275,7 @@ def create_app(
                 allow_creative_escalate=body.allow_creative_escalate,
                 quality_mode=body.quality_mode,
                 generate_captions=body.generate_captions,
+                caption_prompt=body.caption_prompt,
             )
         finally:
             shutil.rmtree(stage, ignore_errors=True)

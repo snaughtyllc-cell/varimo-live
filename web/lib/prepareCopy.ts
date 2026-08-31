@@ -24,7 +24,15 @@ export function captionToggleLabel(): string {
 }
 
 export function captionToggleHint(): string {
-  return "AI writes a post caption per variant. Preview them in Gallery under each clip.";
+  return "Opens a box. Claude uses what you write for each copy — preview in Gallery.";
+}
+
+export function captionPromptLabel(): string {
+  return "Caption for these copies";
+}
+
+export function captionPromptPlaceholder(): string {
+  return "The caption you want on these copies";
 }
 
 export function captionPreviewLabel(): string {

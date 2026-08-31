@@ -7,6 +7,7 @@ from conftest import HAS_FFMPEG
 
 from variant_maker import pipeline
 from variant_maker.neural import upscale
+from variant_maker.presets import MEDIUM, SUBTLE
 from variant_maker.probe import probe
 from variant_maker.uniqueness import DEFAULT_TARGET, FLOOR_BITS, MIN_PEER_BITS, TARGET_BITS
 
@@ -29,6 +30,31 @@ def test_default_uniqueness_target_is_24_bits():
     assert pipeline.FAST_TUNE_MAX_ITERS == 1
     assert pipeline.use_face_protect("fast") is False
     assert pipeline.use_face_protect("hq") is True
+
+
+def test_apply_variant_policy_safe_rotate_and_optional_us_metadata():
+    """Studio/CLI default is safe. never still zeros. US tags stay opt-in."""
+    motion = {"video": {"rotate_deg": 0.1}, "audio": {}}
+    pipeline._apply_variant_policy(motion, 99, MEDIUM, "motion", False, {"us_metadata": True})
+    assert motion["video"]["rotate_deg"] == pytest.approx(0.7)
+    assert motion["us_metadata"] is True
+    assert motion["video"]["us_metadata_seed"] == 99
+
+    head = {"video": {"rotate_deg": -2.0}, "audio": {}}
+    pipeline._apply_variant_policy(head, 1, MEDIUM, "talking_head", False, {})
+    assert head["video"]["rotate_deg"] == pytest.approx(-0.8)
+    assert "us_metadata" not in head
+
+    never = {"video": {"rotate_deg": 1.2}, "audio": {}}
+    pipeline._apply_variant_policy(never, 1, MEDIUM, "motion", True, {})
+    assert never["video"]["rotate_deg"] == 0.0
+
+    subtle = {"video": {"rotate_deg": 0.0}, "audio": {}}
+    pipeline._apply_variant_policy(subtle, 1, SUBTLE, "motion", False, {})
+    assert subtle["video"]["rotate_deg"] == 0.0
+
+
+# Live CLI does not grow --us-metadata in this promote. Engine policy is tested above.
 
 
 HAS_RESR = upscale.available("models/realesrgan")

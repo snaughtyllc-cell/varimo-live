@@ -3,17 +3,23 @@ import pytest
 from variant_maker.presets import MEDIUM, STRONG, SUBTLE
 from variant_maker.sampler import (
     _VIDEO_AXES,
+    CROP_DRIFT_MAX_DEFAULT,
+    CROP_DRIFT_MAX_TALKING_HEAD,
     CROP_OFFSET_HI,
     CROP_OFFSET_LO,
     CROP_Y_KEEP_BOTTOM_HI,
     CROP_Y_KEEP_BOTTOM_LO,
+    FPS_CHOICES,
     RESAMPLE_FLAGS,
     RESAMPLE_PX_CHOICES,
     _axis_distortion,
+    apply_rotate_safe,
+    clamp_crop_drift,
     clamp_strength,
     clamp_trims,
     derive_seed,
     disable_fast_pixel_ops,
+    ensure_crop_travel,
     sample,
     total_distortion,
 )
@@ -34,7 +40,7 @@ ZERO_MEAN_AXES = {
 
 VIDEO_RANGE_AXES = (
     "crop_keep", "rotate_deg", "brightness", "contrast", "saturation",
-    "gamma", "hue_deg", "grain", "unsharp", "warp_k1", "rebuild_scale",
+    "gamma", "hue_deg", "vignette", "grain", "unsharp", "warp_k1", "rebuild_scale",
     "speed", "trim_s",
 )
 
@@ -90,12 +96,13 @@ def test_video_axes_within_range_bounds(preset):
         assert preset.crf.lo <= v["crf"] <= preset.crf.hi
         assert v["crf"] == int(v["crf"])  # encoder setting is an integer
         assert v["gop"] in preset.gop_choices
+        assert v["out_fps"] in FPS_CHOICES
 
 
 @pytest.mark.parametrize("preset", [SUBTLE, MEDIUM, STRONG])
 def test_audio_within_range_bounds(preset):
     for s in SEEDS[:50]:
-        a = sample(preset, s)["audio"]
+        a = sample(preset, s, audio_uniqueness=True)["audio"]
         assert preset.loudnorm_i.lo <= a["loudnorm_i"] <= preset.loudnorm_i.hi
         assert preset.aac_kbps.lo <= a["aac_kbps"] <= preset.aac_kbps.hi
         assert len(a["eq_gains"]) == preset.eq_bands
@@ -172,8 +179,26 @@ def test_pitch_is_zero_without_rubberband():
 
 def test_pitch_within_range_with_rubberband():
     for s in SEEDS[:50]:
-        pp = sample(MEDIUM, s, rubberband=True)["audio"]["pitch_pct"]
+        pp = sample(MEDIUM, s, rubberband=True, audio_uniqueness=True)["audio"]["pitch_pct"]
         assert MEDIUM.pitch_pct.lo <= pp <= MEDIUM.pitch_pct.hi
+
+
+def test_voice_safe_audio_skips_uniqueness_axes_by_default():
+    """Talking clips keep natural audio. Pitch/EQ/loudnorm are the robotic sound."""
+    for s in SEEDS[:50]:
+        a = sample(MEDIUM, s, rubberband=True)["audio"]
+        assert a["pitch_pct"] == 0.0
+        assert a["loudnorm_i"] is None
+        assert all(g == 0.0 for g in a["eq_gains"])
+
+
+def test_audio_uniqueness_draws_eq_and_loudnorm():
+    for s in SEEDS[:50]:
+        a = sample(MEDIUM, s, audio_uniqueness=True)["audio"]
+        assert MEDIUM.loudnorm_i.lo <= a["loudnorm_i"] <= MEDIUM.loudnorm_i.hi
+        assert len(a["eq_gains"]) == MEDIUM.eq_bands
+        for g in a["eq_gains"]:
+            assert MEDIUM.eq_gain_db.lo <= g <= MEDIUM.eq_gain_db.hi
 
 
 def test_sample_includes_crop_offset_and_trim_end():
@@ -216,19 +241,24 @@ def test_instagram_720_crop_punches_from_top_and_keeps_bottom():
         v = sample(MEDIUM, s, shot="talking_head", width=720, height=1280)["video"]
         assert 0.86 - 1e-9 <= v["crop_keep"] <= 0.90 + 1e-9
         assert CROP_OFFSET_LO <= v["crop_x_frac"] <= CROP_OFFSET_HI
+        assert CROP_OFFSET_LO <= v["crop_x_end_frac"] <= CROP_OFFSET_HI
         assert CROP_Y_KEEP_BOTTOM_LO - 1e-9 <= v["crop_y_frac"] <= CROP_Y_KEEP_BOTTOM_HI + 1e-9
+        assert CROP_Y_KEEP_BOTTOM_LO - 1e-9 <= v["crop_y_end_frac"] <= CROP_Y_KEEP_BOTTOM_HI + 1e-9
         assert v["crop_y_frac"] > 0.8
+        assert v["crop_y_end_frac"] > 0.8
     # 1080 talking-head keeps the signed caption-safe center band.
     for s in SEEDS[:80]:
         v = sample(MEDIUM, s, shot="talking_head", width=1080, height=1920)["video"]
         assert MEDIUM.crop_keep.lo - 1e-9 <= v["crop_keep"] <= MEDIUM.crop_keep.hi + 1e-9
         assert CROP_OFFSET_LO <= v["crop_y_frac"] <= CROP_OFFSET_HI
+        assert CROP_OFFSET_LO <= v["crop_y_end_frac"] <= CROP_OFFSET_HI
 
 
 def test_instagram_720_motion_keeps_bottom_captions_without_th_punch():
     v = sample(MEDIUM, SEEDS[0], shot="motion", width=720, height=1280)["video"]
     assert MEDIUM.crop_keep.lo - 1e-9 <= v["crop_keep"] <= MEDIUM.crop_keep.hi + 1e-9
     assert v["crop_y_frac"] >= CROP_Y_KEEP_BOTTOM_LO - 1e-9
+    assert v["crop_y_end_frac"] >= CROP_Y_KEEP_BOTTOM_LO - 1e-9
 
 
 def test_crop_offset_axes_are_zero_mean():
@@ -631,3 +661,136 @@ def test_strong_720_talking_head_does_not_draw_luma_shade():
     assert wide["video"]["chroma_cloud"] == pytest.approx(expect_cloud)
     moved = sample(STRONG, seed, shot="motion", width=720, height=1280)
     assert "luma_shade" not in moved["video"]
+
+
+def test_crop_end_does_not_shift_existing_fingerprint_draws():
+    """Drift uses a separate RNG; start crop / trim_end / resample stay seed-stable."""
+    seed = derive_seed(11, 5)
+    plain = sample(MEDIUM, seed)
+    head = sample(MEDIUM, seed, shot="talking_head")
+    assert plain["video"]["crop_x_frac"] == head["video"]["crop_x_frac"]
+    assert plain["video"]["crop_y_frac"] == head["video"]["crop_y_frac"]
+    assert plain["video"]["trim_end_s"] == head["video"]["trim_end_s"]
+    assert plain["video"]["resample_px"] == head["video"]["resample_px"]
+    assert "crop_x_end_frac" in plain["video"]
+    assert "crop_y_end_frac" in plain["video"]
+    assert "crop_x_end_frac" in head["video"]
+    assert "crop_y_end_frac" in head["video"]
+    assert "crop_hand_amp_x" in plain["video"]
+    assert "crop_hand_p1" in plain["video"]
+
+
+def test_crop_end_fracs_in_same_legal_ranges_as_start():
+    for s in SEEDS[:200]:
+        v = sample(MEDIUM, s)["video"]
+        assert CROP_OFFSET_LO <= v["crop_x_end_frac"] <= CROP_OFFSET_HI
+        assert CROP_OFFSET_LO <= v["crop_y_end_frac"] <= CROP_OFFSET_HI
+        assert CROP_OFFSET_LO <= v["crop_x_frac"] <= CROP_OFFSET_HI
+        assert CROP_OFFSET_LO <= v["crop_y_frac"] <= CROP_OFFSET_HI
+
+
+def test_crop_drift_respects_max_delta_for_shot():
+    assert CROP_DRIFT_MAX_TALKING_HEAD == pytest.approx(0.24)
+    assert CROP_DRIFT_MAX_DEFAULT == pytest.approx(0.28)
+    for s in SEEDS[:200]:
+        th = sample(MEDIUM, s, shot="talking_head")["video"]
+        assert abs(th["crop_x_end_frac"] - th["crop_x_frac"]) <= CROP_DRIFT_MAX_TALKING_HEAD + 1e-9
+        assert abs(th["crop_y_end_frac"] - th["crop_y_frac"]) <= CROP_DRIFT_MAX_TALKING_HEAD + 1e-9
+        moved = sample(MEDIUM, s, shot="motion")["video"]
+        assert abs(moved["crop_x_end_frac"] - moved["crop_x_frac"]) <= CROP_DRIFT_MAX_DEFAULT + 1e-9
+        assert abs(moved["crop_y_end_frac"] - moved["crop_y_frac"]) <= CROP_DRIFT_MAX_DEFAULT + 1e-9
+        plain = sample(MEDIUM, s)["video"]
+        assert abs(plain["crop_x_end_frac"] - plain["crop_x_frac"]) <= CROP_DRIFT_MAX_DEFAULT + 1e-9
+        assert abs(plain["crop_y_end_frac"] - plain["crop_y_frac"]) <= CROP_DRIFT_MAX_DEFAULT + 1e-9
+
+
+def test_crop_x_end_frac_is_unbudgeted():
+    p = sample(MEDIUM, derive_seed(3, 1))
+    base = total_distortion(MEDIUM, p)
+    bumped = {"video": dict(p["video"])}
+    bumped["video"]["crop_x_end_frac"] = 0.0
+    bumped["video"]["crop_y_end_frac"] = 1.0
+    assert total_distortion(MEDIUM, bumped) == base
+
+
+def test_crop_travel_has_a_floor_so_the_window_actually_moves():
+    """Jeff barely saw the first pan — end can land on start. Force a floor."""
+    for s in SEEDS[:200]:
+        th = sample(MEDIUM, s, shot="talking_head")["video"]
+        assert abs(th["crop_x_end_frac"] - th["crop_x_frac"]) >= 0.08 - 1e-9
+        moved = sample(MEDIUM, s, shot="motion")["video"]
+        assert abs(moved["crop_x_end_frac"] - moved["crop_x_frac"]) >= 0.10 - 1e-9
+
+
+def test_handheld_amps_stay_in_band_and_do_not_shift_main_rng():
+    seed = derive_seed(11, 5)
+    a = sample(MEDIUM, seed, shot="talking_head", width=720, height=1280)
+    b = sample(MEDIUM, seed, shot="talking_head", width=720, height=1280)
+    va, vb = a["video"], b["video"]
+    assert va["trim_end_s"] == vb["trim_end_s"]
+    assert va["resample_px"] == vb["resample_px"]
+    assert va["crop_hand_amp_x"] == vb["crop_hand_amp_x"]
+    assert 0.02 <= va["crop_hand_amp_x"] <= 0.06
+    assert 0.005 <= va["crop_hand_amp_y"] <= 0.016
+    assert 1.5 <= va["crop_hand_p1"] <= 3.6
+    assert va["crop_hand_p2"] > va["crop_hand_p1"]
+    y0, y1, ay = va["crop_y_frac"], va["crop_y_end_frac"], va["crop_hand_amp_y"]
+    assert y0 - ay >= CROP_Y_KEEP_BOTTOM_LO - 1e-9
+    assert y1 + ay <= CROP_Y_KEEP_BOTTOM_HI + 1e-9
+
+
+def test_ensure_crop_travel():
+    assert ensure_crop_travel(0.50, 0.50, 0.35, 0.65, 0.08, 0.24) == pytest.approx(0.58)
+    assert ensure_crop_travel(0.62, 0.62, 0.35, 0.65, 0.08, 0.24) == pytest.approx(0.54)
+    assert ensure_crop_travel(0.95, 0.95, 0.90, 1.00, 0.06, 0.09) == pytest.approx(1.00)
+
+
+def test_clamp_crop_drift():
+    assert clamp_crop_drift(0.5, 0.55, 0.35, 0.65, 0.12) == pytest.approx(0.55)
+    assert clamp_crop_drift(0.5, 0.9, 0.35, 0.65, 0.12) == pytest.approx(0.62)
+    assert clamp_crop_drift(0.5, 0.0, 0.35, 0.65, 0.12) == pytest.approx(0.38)
+    assert clamp_crop_drift(0.35, 0.65, 0.35, 0.65, 0.12) == pytest.approx(0.47)
+    assert clamp_crop_drift(0.65, 0.35, 0.35, 0.65, 0.12) == pytest.approx(0.53)
+    assert clamp_crop_drift(0.95, 1.0, 0.90, 1.00, 0.12) == pytest.approx(1.0)
+    assert clamp_crop_drift(0.95, 0.80, 0.90, 1.00, 0.12) == pytest.approx(0.90)
+    assert clamp_crop_drift(0.5, 0.5, 0.35, 0.65, 0.12) == pytest.approx(0.5)
+    assert clamp_crop_drift(0.40, 0.40 + 0.20, 0.35, 0.65, 0.20) == pytest.approx(0.60)
+
+
+def test_crop_drift_pairs_differ_across_seeds():
+    pairs = {
+        (
+            round(v["crop_x_frac"], 6),
+            round(v["crop_x_end_frac"], 6),
+            round(v["crop_y_frac"], 6),
+            round(v["crop_y_end_frac"], 6),
+        )
+        for v in (sample(MEDIUM, s)["video"] for s in SEEDS[:80])
+    }
+    assert len(pairs) > 40
+
+
+def test_vignette_and_out_fps_use_separate_rng():
+    """New axes must not consume the main stream (crop / resample / GOP stay put)."""
+    v = sample(MEDIUM, 7)["video"]
+    assert v["crop_x_frac"] == pytest.approx(0.3871405883448937)
+    assert v["crop_y_frac"] == pytest.approx(0.4169716893821044)
+    assert v["trim_end_s"] == pytest.approx(0.36960162784195627)
+    assert v["resample_px"] == -30
+    assert v["resample_flags"] == "bicubic"
+    assert v["gop"] == 90
+    assert MEDIUM.vignette.lo <= v["vignette"] <= MEDIUM.vignette.hi
+    assert v["out_fps"] in FPS_CHOICES
+    assert sample(MEDIUM, 7)["video"]["vignette"] == v["vignette"]
+    assert sample(MEDIUM, 7)["video"]["out_fps"] == v["out_fps"]
+
+
+def test_apply_rotate_safe_uses_their_band():
+    assert apply_rotate_safe(0.0, None) == pytest.approx(0.7)
+    assert apply_rotate_safe(0.1, "motion") == pytest.approx(0.7)
+    assert apply_rotate_safe(-0.2, "motion") == pytest.approx(-0.7)
+    assert apply_rotate_safe(2.0, "motion") == pytest.approx(1.3)
+    assert apply_rotate_safe(0.1, "talking_head") == pytest.approx(0.35)
+    assert apply_rotate_safe(-2.0, "talking_head") == pytest.approx(-0.8)
+    assert apply_rotate_safe(0.5, "talking_head") == pytest.approx(0.5)
+    assert apply_rotate_safe(0.0, "talking_head", allow_zero=True) == 0.0

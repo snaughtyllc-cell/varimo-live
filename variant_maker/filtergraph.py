@@ -2,17 +2,21 @@
 
 Video filter ORDER is load-bearing:
   trim -> crop -> scale(even, range-aware) -> [rebuild round-trip] -> [±px resample
-  fallback] -> [rotate w/ fill] -> [lenscorrection warp] -> eq(color) -> hue ->
-  unsharp -> grain -> fps -> setpts(tempo) -> format=yuv420p
+  fallback] -> [rotate w/ fill] -> [lenscorrection warp] -> eq(brightness/contrast/gamma) ->
+  hue(h+s) -> [vignette] -> unsharp -> grain -> fps(out_fps or platform) -> setpts(tempo)
+  -> format=yuv420p
 Audio mirrors time changes: atrim (identical) -> [pitch] -> atempo(=speed) ->
-  equalizer -> loudnorm.
+  [equalizer] -> [loudnorm]. Pitch / EQ / loudnorm are omitted unless sampled
+  (voice-safe default: talking stays natural; audio-uniqueness is a later switch).
 
 Trim supports an independent START (`trim_s`) and END (`trim_end_s`, a fingerprint
 micro-trim off the tail); end trim needs the source duration (both builders take `src`)
 since ffmpeg's `trim=end=` is an absolute timestamp, not an offset from the tail. Both
 streams mirror the identical trim window, keeping video/audio in sync. Crop punch-in
-also carries an x/y offset fraction (fingerprint axis; 0.5/0.5 == centered). The resize
-uses color.even_scale_filter (the safe even form); color.zscale_convert_filter only fires
+carries an x/y offset fraction (fingerprint; 0.5/0.5 == centered), an optional
+start→end smoothstep (`crop_x_end_frac` / `crop_y_end_frac`) of the window over
+remaining time, and a two-sine handheld wander. The resize uses
+color.even_scale_filter (the safe even form); color.zscale_convert_filter only fires
 if the output target ever differs from the carried source tags. NEVER let a naive scale
 reinterpret color range. Fast uniqueness is a reconstructive rebuild (down to
 `rebuild_scale` then back to the platform canvas) — not a ±32 px peek.
@@ -29,11 +33,20 @@ from .color import (
 )
 from .platforms import Platform
 from .probe import SourceInfo
-from .sampler import clamp_trims
+from .sampler import (
+    CROP_OFFSET_HI,
+    CROP_OFFSET_LO,
+    CROP_Y_KEEP_BOTTOM_HI,
+    CROP_Y_KEEP_BOTTOM_LO,
+    clamp_trims,
+)
+from .shot import keeps_bottom_captions
 
 _EPS = 1e-6
 _ROTATE_MIN_DEG = 0.05  # below this, rotation is a visual no-op that only risks a black sliver
 _WARP_MIN = 1e-4
+_CROP_DRIFT_MIN = 1e-4
+_CROP_DRIFT_MIN_DURATION_S = 0.05
 _RESAMPLE_FLAGS = frozenset({"lanczos", "spline", "bicubic"})
 # ffmpeg's loudnorm (EBU R128) emits NaN/+-Inf on very short clips; AAC then fails.
 # Skip loudnorm when post-trim, post-atempo audio would be shorter than this.
@@ -57,6 +70,36 @@ _CHROMA_CLOUD_BLUR = 4.0
 _LUMA_DUST_MAX = 13
 # Fixed EQ band centre frequencies by band count (data, not logic).
 _EQ_BANDS = {1: (1000.0,), 2: (200.0, 4000.0)}
+# ffmpeg vignette default PI/5 (~0.63) is a heavy lens on 9:16 (~40 RGB + olive
+# on white walls). Sampled 0.02–0.20 is already a mild edge falloff when used as
+# the angle. Cap so a leftover large param cannot crush the frame.
+_VIGNETTE_ANGLE_MAX = 0.45
+
+
+def vignette_angle(amount: float) -> float:
+    """Map sampled vignette amount to an ffmpeg `vignette=angle=` value.
+
+    Larger angle darkens more of the frame on this ffmpeg. Do **not** subtract
+    from PI/5 — that is the crush Jeff saw as a green tint on every clip.
+    """
+    a = float(amount or 0.0)
+    if a <= _EPS:
+        return 0.0
+    return min(a, _VIGNETTE_ANGLE_MAX)
+
+
+def _hue_filter(v: dict) -> str | None:
+    """YUV-native hue + saturation. eq=saturation= is an olive-cast RGB round-trip."""
+    h = float(v.get("hue_deg") or 0.0)
+    s = float(v.get("saturation") or 1.0)
+    parts: list[str] = []
+    if abs(h) > _EPS:
+        parts.append(f"h={h:.4f}")
+    if abs(s - 1.0) > _EPS:
+        parts.append(f"s={s:.4f}")
+    if not parts:
+        return None
+    return "hue=" + ":".join(parts)
 
 
 def grain_scale_for_size(width: int | None, height: int | None) -> float:
@@ -172,6 +215,55 @@ def _remaining_duration_s(v: dict, duration_s: float) -> float:
     return max(0.0, duration_s - start_s - end_s)
 
 
+def _crop_filter(v: dict, duration_s: float, width: int | None = None, height: int | None = None) -> str:
+    """Crop punch-in; smoothstep + handheld when the window moves (escaped commas).
+
+    Missing/equal ends and zero handheld → today's static crop string. A real
+    start→end delta or handheld amp eases with smoothstep (not a linear ramp —
+    linear + integer crop is the hard pixel shift) and two sines, then a 2×
+    scale around the crop so 1px stair-steps get filtered on the way back down.
+    """
+    crop_keep = v.get("crop_keep", 1.0)
+    if crop_keep >= 1.0 - _EPS:
+        return ""
+    x0 = float(v.get("crop_x_frac", 0.5))
+    y0 = float(v.get("crop_y_frac", 0.5))
+    x1 = float(v.get("crop_x_end_frac", x0))
+    y1 = float(v.get("crop_y_end_frac", y0))
+    amp_x = float(v.get("crop_hand_amp_x", 0.0) or 0.0)
+    amp_y = float(v.get("crop_hand_amp_y", 0.0) or 0.0)
+    p1 = float(v.get("crop_hand_p1", 2.4) or 2.4)
+    p2 = float(v.get("crop_hand_p2", 3.8) or 3.8)
+    remaining = _remaining_duration_s(v, duration_s)
+    drifting = abs(x1 - x0) >= _CROP_DRIFT_MIN or abs(y1 - y0) >= _CROP_DRIFT_MIN
+    handheld = amp_x > _EPS or amp_y > _EPS
+    if (not drifting and not handheld) or remaining <= _CROP_DRIFT_MIN_DURATION_S:
+        return (
+            f"crop=iw*{crop_keep:.4f}:ih*{crop_keep:.4f}:"
+            f"(iw-iw*{crop_keep:.4f})*{x0:.4f}:(ih-ih*{crop_keep:.4f})*{y0:.4f}"
+        )
+    x_lo, x_hi = CROP_OFFSET_LO, CROP_OFFSET_HI
+    if keeps_bottom_captions(width, height):
+        y_lo, y_hi = CROP_Y_KEEP_BOTTOM_LO, CROP_Y_KEEP_BOTTOM_HI
+    else:
+        y_lo, y_hi = CROP_OFFSET_LO, CROP_OFFSET_HI
+    keep = f"{crop_keep:.4f}"
+    p = f"min(max(t/{remaining:.4f}\\,0)\\,1)"
+    # smoothstep s = p^2 * (3-2p) — ease in/out instead of a linear ramp.
+    s = f"{p}*{p}*(3-2*{p})"
+    osc = f"(sin(2*PI*t/{p1:.4f})+0.4*sin(2*PI*t/{p2:.4f}))"
+    hand_x = f"+{amp_x:.4f}*{osc}" if amp_x > _EPS else ""
+    hand_y = f"+{amp_y:.4f}*{osc}" if amp_y > _EPS else ""
+    xf = f"min(max({x0:.4f}+({x1:.4f}-{x0:.4f})*{s}{hand_x}\\,{x_lo:.4f})\\,{x_hi:.4f})"
+    yf = f"min(max({y0:.4f}+({y1:.4f}-{y0:.4f})*{s}{hand_y}\\,{y_lo:.4f})\\,{y_hi:.4f})"
+    crop = f"crop=iw*{keep}:ih*{keep}:(iw-iw*{keep})*{xf}:(ih-ih*{keep})*{yf}"
+    # 2× before crop, even-down after: half-pixel x/y, then the later platform scale.
+    return (
+        f"scale=trunc(iw/2)*4:trunc(ih/2)*4,{crop},"
+        f"scale=trunc(iw/2)*2:trunc(ih/2)*2"
+    )
+
+
 def _trim_expr(v: dict, duration_s: float) -> str:
     """Build the `trim=...` (video) / caller prefixes `a` for `atrim=...` (audio) expr.
 
@@ -249,16 +341,11 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
     if trim_expr:
         parts.append(f"{trim_expr},setpts=PTS-STARTPTS")
 
-    # crop punch-in with an x/y offset fraction (fingerprint axis); the scale below
-    # restores even dims. Offset 0.5/0.5 == the old centered crop.
-    crop_keep = v.get("crop_keep", 1.0)
-    if crop_keep < 1.0 - _EPS:
-        crop_x = v.get("crop_x_frac", 0.5)
-        crop_y = v.get("crop_y_frac", 0.5)
-        parts.append(
-            f"crop=iw*{crop_keep:.4f}:ih*{crop_keep:.4f}:"
-            f"(iw-iw*{crop_keep:.4f})*{crop_x:.4f}:(ih-ih*{crop_keep:.4f})*{crop_y:.4f}"
-        )
+    # crop punch-in with an x/y offset (fingerprint). Missing end = static start;
+    # a real start→end delta or handheld amp eases the window over remaining duration.
+    crop = _crop_filter(v, src.duration_s, src.width, src.height)
+    if crop:
+        parts.append(crop)
 
     # scale: range-aware conversion only when the target differs from source, then even resize
     if needs_conversion(src.color, out):
@@ -300,14 +387,21 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
     if abs(warp) >= _WARP_MIN:
         parts.append(f"lenscorrection=cx=0.5:cy=0.5:k1={warp:.6f}:k2=0")
 
-    # color (always emitted — this is the color stage)
+    # color (always emitted — this is the color stage). Saturation stays 1.0 here;
+    # ffmpeg eq sat is an RGB 601 round-trip that tints every clip olive.
     parts.append(
         f"eq=brightness={v['brightness']:.4f}:contrast={v['contrast']:.4f}:"
-        f"saturation={v['saturation']:.4f}:gamma={v['gamma']:.4f}"
+        f"saturation=1.0000:gamma={v['gamma']:.4f}"
     )
 
-    if abs(v.get("hue_deg", 0.0)) > _EPS:
-        parts.append(f"hue=h={v['hue_deg']:.4f}")
+    hue = _hue_filter(v)
+    if hue:
+        parts.append(hue)
+    vig = float(v.get("vignette") or 0.0)
+    if vig > _EPS:
+        angle = vignette_angle(vig)
+        if angle > _EPS:
+            parts.append(f"vignette=angle={angle:.4f}")
     if v.get("unsharp", 0.0) > _EPS:
         parts.append(f"unsharp=5:5:{v['unsharp']:.4f}:5:5:0.0")
     if v.get("grain", 0.0) > _EPS and not v.get("noise_chroma"):
@@ -317,8 +411,11 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
         parts.append(_noise_filter(v, ow, oh))
     # Phase 9: HQ + RIFE owns fps/tempo; skip ffmpeg drop/dupe so audio atempo still matches.
     if not v.get("defer_tempo"):
-        if platform.fps:
-            parts.append(f"fps={platform.fps:g}")
+        out_fps = v.get("out_fps")
+        if out_fps in (None, 0, ""):
+            out_fps = platform.fps
+        if out_fps:
+            parts.append(f"fps={float(out_fps):g}")
         speed = v.get("speed", 1.0)
         if abs(speed - 1.0) > _EPS:
             parts.append(f"setpts={1.0 / speed:.6f}*PTS")
@@ -363,17 +460,23 @@ def build_audio_filters(params: dict, src: SourceInfo, has_audio: bool) -> str:
         parts.append(f"rubberband=pitch={1.0 + pitch / 100.0:.6f}")
 
     # one speed factor on both streams — atempo MUST equal video speed
-    parts.append(f"atempo={a['speed']:.6f}")
+    speed = a.get("speed", 1.0)
+    if abs(speed - 1.0) > _EPS:
+        parts.append(f"atempo={speed:.6f}")
 
     gains = a.get("eq_gains", [])
     freqs = _EQ_BANDS.get(a.get("eq_bands", len(gains)), ())
     for freq, gain in zip(freqs, gains):
-        parts.append(f"equalizer=f={freq:g}:width_type=o:width=1:g={gain:.3f}")
+        if abs(gain) > _EPS:
+            parts.append(f"equalizer=f={freq:g}:width_type=o:width=1:g={gain:.3f}")
 
     # loudnorm after atempo — effective length is remaining/speed. Short clips
-    # make loudnorm emit NaN which AAC rejects (exit 234).
-    speed = max(a.get("speed", 1.0), _EPS)
-    effective_s = _remaining_duration_s(v, src.duration_s) / speed
-    if effective_s >= _LOUDNORM_MIN_S:
-        parts.append(f"loudnorm=I={a['loudnorm_i']:.1f}:TP=-1.5:LRA=11")
+    # make loudnorm emit NaN which AAC rejects (exit 234). Voice-safe params
+    # leave loudnorm_i unset so talking is not radio-processed.
+    ln = a.get("loudnorm_i")
+    if ln is not None:
+        speed = max(float(speed), _EPS)
+        effective_s = _remaining_duration_s(v, src.duration_s) / speed
+        if effective_s >= _LOUDNORM_MIN_S:
+            parts.append(f"loudnorm=I={float(ln):.1f}:TP=-1.5:LRA=11")
     return ",".join(parts)

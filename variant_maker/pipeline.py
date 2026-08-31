@@ -13,12 +13,13 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from . import autotune, look, quality, uniqueness
+from .copyid import normalize_mode
 from .ffmpeg import has_rubberband, render_variant
 from .manifest import Manifest, VariantRecord
 from .platforms import fit_platform_to_source, resolve_platform
 from .presets import get_preset
 from .probe import probe
-from .sampler import clamp_strength, derive_seed, disable_fast_pixel_ops, sample
+from .sampler import apply_rotate_safe, clamp_strength, derive_seed, disable_fast_pixel_ops, sample
 from .shot import classify_shot
 
 # TikFusion Smart Detector floor ≈ 18 bits. Fast vs-source *gate* is 24/64 (~38% UI)
@@ -50,6 +51,27 @@ def use_face_protect(quality_mode: str | None) -> bool:
     return str(quality_mode or "fast").strip().lower() == "hq"
 
 
+def _apply_variant_policy(
+    params: dict,
+    vseed: int,
+    preset,
+    shot_kind: str | None,
+    rotate_off: bool,
+    config: dict,
+) -> None:
+    """Rotate safe by default; optional US metadata. Mutates params."""
+    if rotate_off:
+        params["video"]["rotate_deg"] = 0.0
+    else:
+        allow_zero = abs(preset.rotate_deg.hi - preset.rotate_deg.lo) < 1e-12
+        params["video"]["rotate_deg"] = apply_rotate_safe(
+            params["video"]["rotate_deg"], shot_kind, allow_zero=allow_zero,
+        )
+    if config.get("us_metadata"):
+        params["us_metadata"] = True
+        params["video"]["us_metadata_seed"] = int(vseed)
+
+
 def _ffmpeg_version() -> str:
     out = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, check=False)
     line = out.stdout.splitlines()[0] if out.stdout else ""
@@ -72,19 +94,26 @@ def run(config: dict, *, on_event=None) -> Manifest:
     # backend-specific floor could restore sensitivity to subtler corruption later.)
     corruption_floor = config.get("corruption_floor", 20.0)
     max_regen = config.get("max_regen", 3)
-    rotate_off = config.get("rotate", "never") == "never"
+    rotate_mode = config.get("rotate", "safe")
+    rotate_off = rotate_mode == "never"
     dry_run = config.get("dry_run", False)
     jobs = max(1, config.get("jobs", 1))
 
-    rubberband = config.get("rubberband")
-    if rubberband is None:
-        rubberband = has_rubberband()
-        config = {**config, "rubberband": rubberband}
+    audio_uniqueness = bool(config.get("audio_uniqueness", False))
+    if audio_uniqueness:
+        rubberband = config.get("rubberband")
+        if rubberband is None:
+            rubberband = has_rubberband()
+    else:
+        rubberband = False
+    config = {**config, "rubberband": rubberband, "audio_uniqueness": audio_uniqueness}
 
     # Uniqueness gate: try the light (config) preset at escalating strengths; if none
     # clears the target (and peer-bits floor), spend exactly one creative-escalate
     # attempt on the strong preset.
     uniqueness_target = config.get("uniqueness_target", DEFAULT_UNIQUENESS_TARGET)
+    # off (default Fast) | record (score heads, SSIM gates) | gate (fused min).
+    copyid_mode = normalize_mode(config.get("copyid"))
     allow_creative_escalate = config.get("allow_creative_escalate", True)
     uniq_strengths = config.get("uniq_strengths", list(DEFAULT_UNIQ_STRENGTHS))
     min_bits_vs_peers = config.get("min_bits_vs_peers", DEFAULT_MIN_BITS_VS_PEERS)
@@ -151,11 +180,13 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "quality_mode": config.get("quality_mode", "fast"),
         "auto_tune": bool(auto_tune),
         "rubberband": bool(rubberband),
+        "audio_uniqueness": bool(audio_uniqueness),
         "protect": False,
         "count": count,
         "shot": shot_info,
         "quality_floor": {"metric": "vmaf", "value": floor},
         "ffmpeg_version": _ffmpeg_version(),
+        "copyid": copyid_mode,
     }
 
     def _prep(i: int):
@@ -171,11 +202,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
             params = sample(
                 preset, vseed, rubberband=rubberband, duration_s=src.duration_s,
                 shot=shot_kind, width=src.width, height=src.height,
+                audio_uniqueness=audio_uniqueness,
             )
             if use_face_protect(config.get("quality_mode")):
                 params = protect.apply_to_params(params)
-            if rotate_off:
-                params["video"]["rotate_deg"] = 0.0
+            _apply_variant_policy(params, vseed, preset, shot_kind, rotate_off, config)
             if hq:
                 params = disable_fast_pixel_ops(params)
             _, cmd = render_variant(src, params, platform, path, dry_run=True)
@@ -190,6 +221,17 @@ def run(config: dict, *, on_event=None) -> Manifest:
     if use_face_protect(config.get("quality_mode")) and protect_mod.available():
         protect_frame = protect_mod.grab_mid_frame(src.path, src.duration_s, out_dir)
     run_meta["protect"] = protect_frame is not None
+
+    if copyid_mode != "off":
+        def _prefetch_src_audio() -> None:
+            try:
+                from .copyid.chromaprint import prefetch
+                prefetch(src.path)
+            except (OSError, subprocess.CalledProcessError, ValueError, TypeError):
+                return
+        threading.Thread(
+            target=_prefetch_src_audio, name="copyid-prefetch", daemon=True,
+        ).start()
 
     def _render_one(i: int) -> VariantRecord:
         token = config.get("cancel_token")
@@ -212,12 +254,12 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 use_preset, vseed, strength=effective_strength, rubberband=rubberband,
                 duration_s=src.duration_s, shot=shot_kind,
                 width=src.width, height=src.height,
+                audio_uniqueness=audio_uniqueness,
             )
             if protect_frame is not None:
                 from .neural import protect
                 params = protect.apply_to_params(params, frame_path=protect_frame)
-            if rotate_off:
-                params["video"]["rotate_deg"] = 0.0
+            _apply_variant_policy(params, vseed, use_preset, shot_kind, rotate_off, config)
             if hq:
                 params = disable_fast_pixel_ops(params)
             if hq:
@@ -264,17 +306,30 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 return {}
 
         def _score_uniqueness_now() -> dict:
+            # Extra kwargs only when enabled so existing test fakes stay valid.
+            # record: SSIM only on this thread (Generate wait). Chromaprint
+            # attaches after uniqueness on the kept file. gate still fuses here.
+            extra: dict = {}
+            if copyid_mode == "gate":
+                extra = {"copyid": "gate"}
+            elif copyid_mode == "record":
+                extra = {"copyid": "record", "attach_heads": False}
             scored = uniqueness.score_uniqueness(
-                src.path, path, target=uniqueness_target,
+                src.path, path, target=uniqueness_target, **extra,
             )
             return _apply_peer_status(scored, _peer_bits(path))
 
-        def _look_then_uniqueness() -> dict:
+        def _look_then_uniqueness(video: dict | None = None) -> dict:
             """Stills on the card first. Uniqueness work starts immediately.
 
             Two 360px JPEGs overlap SSIM so Generate wait stays uniqueness-bound.
             Coarse MAE runs *after* uniqueness — overlapping it with 8-wide SSIM
             on Fast contended the CPU and stretched the uniqueness phase.
+            ``record`` Chromaprint also waits until the kept file (after MAE) so
+            autotune attempts do not decode audio N times. ``gate`` still fuses
+            inside ``score_uniqueness``.
+            Auto-tune calls this before assigning outer ``r`` — pass ``video=``
+            from the attempt so crop/trim MAE aligns.
             """
             nonlocal look_info
             with ThreadPoolExecutor(max_workers=1) as look_ex:
@@ -283,7 +338,13 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 _emit_looking()
                 emit("uniqueness", index=i)
                 scored = uniq_f.result()
-            look_info = {**look_info, **look.score_look(src.path, path)}
+            look_video = video
+            if look_video is None and r is not None:
+                look_video = (r.get("params") or {}).get("video")
+            look_info = {
+                **look_info,
+                **look.score_look(src.path, path, video=look_video),
+            }
             return scored
 
         def _snapshot_medium() -> dict:
@@ -386,7 +447,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
             def _tune_attempt(strength: float) -> dict:
                 r_try = attempt(strength, preset, gate_quality=False)
-                u_try = _look_then_uniqueness()
+                u_try = _look_then_uniqueness(
+                    video=(r_try.get("params") or {}).get("video"),
+                )
                 peer_min = u_try.get("min_bits_vs_peers")
                 peer_ok = (
                     (not peer_gate)
@@ -436,6 +499,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 "uniqueness_target": tuned["uniqueness_target"],
                 "bits": tuned.get("bits"),
                 "min_bits_vs_peers": tuned.get("min_bits_vs_peers"),
+                # Fast auto_tune used to drop these — lab pack 3d4fae98ca77
+                # ran copyid=record and still wrote quality.heads=null.
+                "heads": tuned.get("heads"),
+                "copyid_mode": tuned.get("copyid_mode"),
+                "fused_from": tuned.get("fused_from"),
             }
             cleared = (
                 tuned.get("quality_passed")
@@ -482,6 +550,13 @@ def run(config: dict, *, on_event=None) -> Manifest:
                     escalated = True
                     _restore_medium_if_look_fail(snap)
 
+        # record: fingerprint the kept file once, after SSIM/MAE. Do not pay
+        # Chromaprint on every autotune attempt. gate already fused above.
+        if copyid_mode == "record" and not u.get("heads"):
+            u = uniqueness.attach_copyid_heads(
+                u, src.path, path, copyid="record",
+            )
+
         if r is not None and r.get("vmaf") is None:
             qr = path + ".qr.mp4"
             quality.quality_render(src, r["params"], qr)
@@ -524,6 +599,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             "look_status": look_info.get("look_status"),
             "look_mae": look_info.get("look_mae"),
             "look_mae_max": look_info.get("look_mae_max"),
+            "heads": u.get("heads"),
         }
         # Accept into the peer set only when we ship a usable file.
         if status not in ("corrupt", "uniqueness_fail") and os.path.exists(path):

@@ -131,7 +131,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-shell { background: linear-gradient(180deg, #effafb 0%, var(--aqua) 100%); display: grid; grid-template-columns: 1fr; min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 28px; }
 .studio-cockpit { background: var(--color-panel); border: 1px solid #d2e4e7; border-radius: 18px 18px 0 0; box-shadow: var(--card-shadow); padding: 32px; }
 .studio-progress { background: #172124; border: 1px solid #172124; border-radius: 0 0 18px 18px; color: #f1fafb; display: flex; flex-direction: column; min-height: 330px; padding: 28px; }
-.studio-shell--live .studio-progress { order: -1; }
 .studio-progress--idle { display: flex; }
 .studio-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
 .studio-captions-box { background: #f8fcfc; border: 1px solid var(--color-line); border-radius: 14px; margin-top: 18px; padding: 16px 16px 18px; }
@@ -317,7 +316,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   .studio-shell { grid-template-columns: minmax(440px, 0.93fr) minmax(480px, 1.07fr); margin: 0; padding: 28px; }
   .studio-cockpit { border-radius: 18px 0 0 18px; border-right: 0; padding: 38px; }
   .studio-progress { border-radius: 0 18px 18px 0; min-height: 0; padding: 32px; }
-  .studio-shell--live .studio-progress { order: 0; }
   .studio-actions { align-items: stretch; flex-direction: row; gap: 12px; margin-top: 20px; }
   .variant-sheet { left: auto !important; width: 470px !important; }
 }

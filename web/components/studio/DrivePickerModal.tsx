@@ -9,6 +9,7 @@ export interface DrivePick {
   destinationId: string;
   id: string;
   name: string;
+  thumbUrl?: string;
 }
 
 interface DrivePickerModalProps {

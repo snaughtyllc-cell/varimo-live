@@ -1,12 +1,18 @@
 import json
+import re
 
 from variant_maker.server.caption_ai import (
     ANTHROPIC_URL,
     DEFAULT_ANTHROPIC_CAPTION_MODEL,
+    _prompt,
     anthropic_caption_model,
+    briefs_for_sources,
     captions_for_source,
     local_caption,
+    parse_caption_prompts_field,
     source_stem,
+    split_ai_captions,
+    strip_internal_index_lines,
 )
 
 
@@ -14,8 +20,8 @@ def test_local_caption_is_unique_per_index():
     a = local_caption("if you didnt know a good boil #viral.mp4", 1, 3)
     b = local_caption("if you didnt know a good boil #viral.mp4", 2, 3)
     assert a != b
-    assert "Copy 1 of 3" in a
-    assert "Copy 2 of 3" in b
+    assert "copy 1 of" not in a.lower()
+    assert "copy 2 of" not in b.lower()
     assert "#viral" in a
     assert "/" not in a and "\\" not in a
 
@@ -27,9 +33,12 @@ def test_captions_for_source_needs_operator_prompt(monkeypatch):
     assert captions_for_source("boil.mp4", 2, environ={}) == []
     out = captions_for_source("boil.mp4", 2, prompt="POV boil #reels", environ={})
     assert len(out) == 2
-    assert "POV boil #reels" in out[0]
-    assert "Copy 1 of 2" in out[0]
-    assert "Copy 2 of 2" in out[1]
+    assert "POV boil" in out[0]
+    assert out[0] != out[1]
+    joined = "\n".join(out).lower()
+    assert "copy 1 of" not in joined
+    assert "copy 2 of" not in joined
+    assert "take 1 of" not in joined
 
 
 def test_source_stem_strips_extension():
@@ -90,4 +99,71 @@ def test_captions_prefer_anthropic_haiku_4_5_over_openai(monkeypatch):
     assert "POV she said wait for it" in calls[0][1]["messages"][0]["content"]
     assert "POV boil" in out[0]
     assert "Wait for it" in out[1]
+
+
+def test_split_numbered_list_without_dashes_is_one_caption_each():
+    raw = (
+        "1. POV the boil hits different\n#reels #fyp\n"
+        "2. She said wait for the boil\n#reels #fyp\n"
+        "3. Real ones know this boil\n#reels #viral"
+    )
+    out = split_ai_captions(raw, 3, "POV boil #reels")
+    assert len(out) == 3
+    assert "hits different" in out[0]
+    assert "wait for the boil" in out[1]
+    assert "Real ones" in out[2]
+    assert len(set(out)) == 3
+    assert "Copy 2 of 3" not in out[1]
+
+
+def test_split_json_array_captions():
+    raw = json.dumps([
+        "POV the boil hits different\n#reels",
+        "She said wait for it\n#fyp",
+        "Real ones know\n#viral",
+    ])
+    out = split_ai_captions(raw, 3, "POV boil #reels")
+    assert out[0].startswith("POV the boil")
+    assert "wait for it" in out[1]
+    assert "Real ones" in out[2]
+
+
+def test_duplicate_ai_captions_are_uniquified():
+    raw = "Same hook #reels\n---\nSame hook #reels\n---\nSame hook #reels"
+    out = split_ai_captions(raw, 3, "Same hook #reels")
+    assert len(out) == 3
+    assert len({re.sub(r"\s+", " ", c.strip().lower()) for c in out}) == 3
+    joined = "\n".join(out).lower()
+    assert "copy " not in joined or "copy 1 of" not in joined
+    assert "take 1 of" not in joined
+    assert "take 2 of" not in joined
+
+
+def test_prompt_demands_distinct_rewrites_not_copy_paste():
+    text = _prompt("boil.mp4", 8, "POV boil #reels")
+    lower = text.lower()
+    assert "distinct" in lower or "unique" in lower
+    assert "json" in lower
+    assert "pov boil #reels" in lower
+    assert "copy 1 of 20" in lower
+
+
+def test_strip_internal_index_lines_drops_copy_n_of_m():
+    raw = "POV the boil hits different\n\nCopy 1 of 20\n#reels"
+    assert strip_internal_index_lines(raw) == "POV the boil hits different\n\n#reels"
+
+
+def test_parse_caption_prompts_json_array():
+    assert parse_caption_prompts_field('["a","b"]') == ["a", "b"]
+    assert parse_caption_prompts_field("") == []
+    assert parse_caption_prompts_field("just one") == ["just one"]
+
+
+def test_briefs_for_sources_are_per_source():
+    assert briefs_for_sources(2, caption_prompts=["POV boil", "Gym pull"]) == ["POV boil", "Gym pull"]
+    assert briefs_for_sources(2, caption_prompt="shared") == ["shared", "shared"]
+    assert briefs_for_sources(2, caption_prompt="shared", caption_prompts=["only first", ""]) == [
+        "only first",
+        "",
+    ]
 

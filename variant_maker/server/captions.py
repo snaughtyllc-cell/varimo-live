@@ -12,6 +12,9 @@ from dataclasses import asdict, dataclass
 MAX_STEM = 240
 _ILLEGAL = re.compile(r"[/\\\x00-\x1f]")
 _DASH_SPLIT = re.compile(r"(?m)^\s*---\s*$")
+INTERNAL_INDEX_RE = re.compile(
+    r"(?im)^(?:copy|take)\s+\d+\s+of\s+\d+\s*(?:[—–-].*)?$"
+)
 
 
 class CaptionError(Exception):
@@ -43,9 +46,15 @@ def split_caption_bank(raw: str) -> list[str]:
     return out
 
 
+def strip_internal_index_lines(text: str) -> str:
+    """Drop 'Copy 1 of 20' / 'Take 2 of 8' lines so they never hit Drive filenames."""
+    lines = [ln for ln in (text or "").splitlines() if not INTERNAL_INDEX_RE.match(ln.strip())]
+    return "\n".join(lines).strip()
+
+
 def sanitize_caption_stem(text: str) -> str:
     """Drive-safe filename stem. Keeps hashtags/emoji; strips path chars and newlines."""
-    cleaned = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    cleaned = strip_internal_index_lines(text or "").replace("\r\n", "\n").replace("\r", "\n")
     cleaned = cleaned.replace("\n", " ")
     cleaned = _ILLEGAL.sub(" ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" .")

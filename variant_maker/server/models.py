@@ -45,6 +45,10 @@ class PostUrlIn(BaseModel):
     url: str = ""
 
 
+class CaptionIn(BaseModel):
+    caption: str = ""
+
+
 class InFlightOut(BaseModel):
     """Live mid-variant state for proxies that buffer SSE."""
     index: int
@@ -286,6 +290,7 @@ class JobFromDriveIn(BaseModel):
     allow_creative_escalate: bool = True
     generate_captions: bool = False
     caption_prompt: str = ""
+    caption_prompts: list[str] = []
 
 
 class WorkflowSummaryOut(BaseModel):

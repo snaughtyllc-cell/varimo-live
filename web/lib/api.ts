@@ -124,16 +124,28 @@ async function uploadFileChunked(file: File): Promise<string> {
   return init.upload_id;
 }
 
+function captionFields(generate: boolean, captionPrompt: string | string[]): {
+  caption_prompt: string;
+  caption_prompts: string;
+} {
+  if (!generate) return { caption_prompt: "", caption_prompts: "[]" };
+  const list = Array.isArray(captionPrompt) ? captionPrompt : [captionPrompt];
+  return {
+    caption_prompt: list.length === 1 ? (list[0] ?? "") : "",
+    caption_prompts: JSON.stringify(list),
+  };
+}
+
 export async function createJob(
   files: File[],
   count: number,
   allowCreativeEscalate: boolean = true,
   qualityMode: "fast" | "hq" = "fast",
   generateCaptions: boolean = false,
-  captionPrompt: string = "",
+  captionPrompt: string | string[] = "",
 ): Promise<CreateJobResponse> {
   const captions = generateCaptions ? "true" : "false";
-  const prompt = generateCaptions ? captionPrompt : "";
+  const prompts = captionFields(generateCaptions, captionPrompt);
   const needsChunk = files.some((f) => f.size > CHUNK_THRESHOLD);
   if (!needsChunk) {
     const fd = new FormData();
@@ -141,7 +153,8 @@ export async function createJob(
     fd.append("allow_creative_escalate", String(allowCreativeEscalate));
     fd.append("quality_mode", qualityMode);
     fd.append("generate_captions", captions);
-    fd.append("caption_prompt", prompt);
+    fd.append("caption_prompt", prompts.caption_prompt);
+    fd.append("caption_prompts", prompts.caption_prompts);
     for (const f of files) fd.append("files", f, f.name);
     return fetch("/api/jobs", { method: "POST", body: fd }).then(json<CreateJobResponse>);
   }
@@ -156,7 +169,8 @@ export async function createJob(
   fd.append("allow_creative_escalate", String(allowCreativeEscalate));
   fd.append("quality_mode", qualityMode);
   fd.append("generate_captions", captions);
-  fd.append("caption_prompt", prompt);
+  fd.append("caption_prompt", prompts.caption_prompt);
+  fd.append("caption_prompts", prompts.caption_prompts);
   return fetch("/api/jobs/from-uploads", { method: "POST", body: fd }).then(json<CreateJobResponse>);
 }
 
@@ -188,6 +202,14 @@ export function setPostUrl(sourceId: string, index: number, url: string): Promis
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url }),
+  }).then(json<VariantOut>);
+}
+
+export function setVariantCaption(sourceId: string, index: number, caption: string): Promise<VariantOut> {
+  return fetch(`/api/variants/${sourceId}/${index}/caption`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ caption }),
   }).then(json<VariantOut>);
 }
 
@@ -321,8 +343,9 @@ export function createJobFromDrive(opts: {
   qualityMode?: "fast" | "hq";
   allowCreativeEscalate?: boolean;
   generateCaptions?: boolean;
-  captionPrompt?: string;
+  captionPrompt?: string | string[];
 }): Promise<CreateJobResponse> {
+  const packed = captionFields(opts.generateCaptions ?? false, opts.captionPrompt ?? "");
   return fetch("/api/jobs/from-drive", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -333,7 +356,8 @@ export function createJobFromDrive(opts: {
       quality_mode: opts.qualityMode ?? "fast",
       allow_creative_escalate: opts.allowCreativeEscalate ?? true,
       generate_captions: opts.generateCaptions ?? false,
-      caption_prompt: opts.generateCaptions ? (opts.captionPrompt ?? "") : "",
+      caption_prompt: packed.caption_prompt,
+      caption_prompts: JSON.parse(packed.caption_prompts) as string[],
     }),
   }).then(json<CreateJobResponse>);
 }

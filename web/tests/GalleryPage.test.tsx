@@ -29,6 +29,7 @@ vi.mock("@/lib/api", () => ({
   removeSource: vi.fn(),
   setPlatformResult: vi.fn().mockResolvedValue({}),
   setPostUrl: vi.fn().mockResolvedValue({}),
+  setVariantCaption: vi.fn().mockResolvedValue({}),
 }));
 
 import { GalleryContent } from "@/app/gallery/page";

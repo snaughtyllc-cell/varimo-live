@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthMe } from "@/lib/types";
 import { initRun } from "@/lib/progress";
-import { captionPromptPlaceholder } from "@/lib/prepareCopy";
+import { captionNeedSourcesCopy, captionPromptLabelForSource } from "@/lib/prepareCopy";
 
 const me: { data: AuthMe | undefined; isLoading: boolean } = {
   data: undefined,
@@ -55,6 +55,15 @@ const SOLO: AuthMe = {
   experience: "solo",
 };
 
+beforeAll(() => {
+  if (!URL.createObjectURL) {
+    URL.createObjectURL = vi.fn(() => "blob:studio-thumb");
+  }
+  if (!URL.revokeObjectURL) {
+    URL.revokeObjectURL = vi.fn();
+  }
+});
+
 beforeEach(() => {
   me.data = SOLO;
   me.isLoading = false;
@@ -67,19 +76,33 @@ describe("Studio page captions", () => {
     expect(screen.getByTestId("studio-captions-box")).toBeInTheDocument();
     expect(screen.getByText(/write captions for these copies/i)).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /write captions for these copies/i })).not.toBeChecked();
-    expect(screen.queryByRole("textbox", { name: /caption for these copies/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.queryByText("Caption bank")).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/new folder/i)).not.toBeInTheDocument();
   });
 
-  it("opens a prompt box when the toggle is on", () => {
+  it("asks for videos before showing caption boxes", () => {
     render(<StudioPage />);
+    fireEvent.click(screen.getByRole("checkbox", { name: /write captions for these copies/i }));
+    expect(screen.getByText(captionNeedSourcesCopy())).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("opens one caption box per dropped source, with a thumbnail", () => {
+    render(<StudioPage />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const a = new File(["aaa"], "aaaa1111.mp4", { type: "video/mp4" });
+    const b = new File(["bbb"], "bbbb2222.mp4", { type: "video/mp4" });
+    fireEvent.change(input, { target: { files: [a, b] } });
 
     fireEvent.click(screen.getByRole("checkbox", { name: /write captions for these copies/i }));
-    const box = screen.getByRole("textbox", { name: /caption for these copies/i });
-    expect(box).toBeInTheDocument();
-    expect(box).toHaveAttribute("placeholder", captionPromptPlaceholder());
-    fireEvent.change(box, { target: { value: "POV she said wait for it #reels" } });
-    expect(box).toHaveValue("POV she said wait for it #reels");
+    expect(screen.getAllByTestId("studio-caption-source")).toHaveLength(2);
+    const first = screen.getByRole("textbox", { name: captionPromptLabelForSource(0, 2) });
+    const second = screen.getByRole("textbox", { name: captionPromptLabelForSource(1, 2) });
+    fireEvent.change(first, { target: { value: "POV boil #reels" } });
+    fireEvent.change(second, { target: { value: "Gym pull #fyp" } });
+    expect(first).toHaveValue("POV boil #reels");
+    expect(second).toHaveValue("Gym pull #fyp");
+    expect(document.querySelectorAll(".studio-source-thumb").length).toBeGreaterThanOrEqual(2);
   });
 });

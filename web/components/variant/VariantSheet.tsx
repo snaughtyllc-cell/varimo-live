@@ -19,10 +19,6 @@ interface VariantSheetProps {
   onRegenerate: () => void;
 }
 
-function captionOf(v: { caption?: string | null }): string | null | undefined {
-  return v.caption;
-}
-
 export function VariantSheet({
   sourceId,
   sourceName,
@@ -248,7 +244,7 @@ export function VariantSheet({
               <ScrubBar videos={[beforeRef, afterRef]} />
             </div>
 
-            <CaptionBlock caption={captionOf(variant)} />
+            <CaptionBlock sourceId={sourceId} variant={variant} onSaved={onRegenerate} />
 
             <QualityPanel
               uniqueness={variant.uniqueness}

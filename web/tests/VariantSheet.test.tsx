@@ -11,6 +11,7 @@ vi.mock("@/lib/api", () => ({
   regenerate: vi.fn(),
   setPlatformResult: vi.fn().mockResolvedValue({}),
   setPostUrl: vi.fn().mockResolvedValue({}),
+  setVariantCaption: vi.fn().mockResolvedValue({}),
 }));
 
 function variant(over: Partial<VariantOut> = {}): VariantOut {
@@ -74,7 +75,10 @@ describe("VariantSheet layout", () => {
     expect(screen.queryByAltText("Source still")).not.toBeInTheDocument();
     expect(screen.queryByAltText("Variant still")).not.toBeInTheDocument();
     expect(screen.getByText(captionPreviewLabel())).toBeInTheDocument();
-    expect(screen.getByText(captionEmptyCopy())).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: captionPreviewLabel() })).toHaveAttribute(
+      "placeholder",
+      captionEmptyCopy(),
+    );
     expect(screen.getByText(uniquenessCustomerLabel())).toBeInTheDocument();
     expect(screen.queryByText("Look fail")).not.toBeInTheDocument();
     expect(screen.queryByText("VMAF")).not.toBeInTheDocument();

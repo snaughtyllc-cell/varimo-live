@@ -506,6 +506,38 @@ def test_set_post_url_survives_hydrate(tmp_path):
     assert restored.platform_result is None
 
 
+def test_set_caption_survives_hydrate(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job(
+        [("boil.mp4", b"x")], count=2, generate_captions=True, caption_prompt="POV boil #reels",
+    )
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    index = src.variants[0].index
+    updated = store.set_caption(src.source_id, index, "Wait — the boil hits different\n#reels")
+    assert updated is not None
+    assert "hits different" in (updated.caption or "")
+
+    store2 = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    assert store2.hydrate_from_disk() == 1
+    restored = store2.get(job.job_id).sources[0]
+    assert "hits different" in (restored.variants[0].caption or "")
+    assert restored.planned_captions[index - 1] == restored.variants[0].caption
+
+
+def test_set_caption_strips_copy_n_of_m(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job([("boil.mp4", b"x")], count=1)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    updated = store.set_caption(
+        src.source_id, src.variants[0].index, "POV boil\n\nCopy 1 of 20\n#reels",
+    )
+    assert updated is not None
+    assert updated.caption == "POV boil\n\n#reels"
+    assert "copy 1 of" not in (updated.caption or "").lower()
+
+
 def test_gallery_keep_boots_oldest_finished_job(tmp_path):
     store = JobStore(
         Workspace(str(tmp_path)), FakeRunner({}), gallery_keep_jobs=2,
@@ -779,5 +811,23 @@ def test_create_job_generate_captions_is_unique_per_index(tmp_path):
     caps = [v.caption for v in done.sources[0].variants]
     assert caps[0] and caps[1]
     assert caps[0] != caps[1]
-    assert "Copy 1 of 2" in caps[0]
-    assert "Copy 2 of 2" in caps[1]
+    joined = "\n".join(caps).lower()
+    assert "copy 1 of" not in joined
+    assert "copy 2 of" not in joined
+
+
+def test_create_job_caption_prompts_are_per_source(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job(
+        [("boil.mp4", b"x"), ("gym.mp4", b"y")],
+        count=1,
+        generate_captions=True,
+        caption_prompts=["POV boil #reels", "Gym pull up #fyp"],
+    )
+    store.wait(job.job_id, timeout=5)
+    done = store.get(job.job_id)
+    boil = done.sources[0].planned_captions
+    gym = done.sources[1].planned_captions
+    assert boil and "boil" in boil[0].lower()
+    assert gym and "gym" in gym[0].lower()
+    assert "copy 1 of" not in boil[0].lower()

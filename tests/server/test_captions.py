@@ -38,7 +38,12 @@ def test_sanitize_strips_drive_illegal_chars():
     assert ":" in sanitize_caption_stem("POV: wait")
 
 
-def test_caption_filename_uses_mp4_and_falls_back():
+def test_caption_filename_strips_copy_n_of_m():
+    name = caption_filename("POV boil\n\nCopy 1 of 20\n#reels", "v01.mp4")
+    assert name == "POV boil #reels.mp4"
+    assert "copy" not in name.lower() or "copy 1 of" not in name.lower()
+    take = caption_filename("Gym pull\nTake 2 of 8\n#fyp", "v02.mp4")
+    assert take == "Gym pull #fyp.mp4"
     assert caption_filename("Hello world", "v01.mp4") == "Hello world.mp4"
     assert caption_filename("   ", "v01.mp4") == "v01.mp4"
     assert caption_filename(None, "v01.mp4") == "v01.mp4"

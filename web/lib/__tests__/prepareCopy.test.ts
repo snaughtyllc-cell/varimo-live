@@ -1,14 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   PREPARING_JOB_ID,
+  captionEmptyCopy,
+  captionNeedSourcesCopy,
   captionPromptLabel,
+  captionPromptLabelForSource,
   captionPromptPlaceholder,
+  captionSaveLabel,
   captionSnippet,
+  captionStatusHint,
   captionToggleHint,
   captionToggleLabel,
   isPreparingJob,
   preparingHeadline,
   preparingSubcopy,
+  stripInternalIndexLines,
   uniquenessCustomerLabel,
   uniquenessCoverageChips,
   uniquenessCoverageSubcopy,
@@ -26,10 +32,21 @@ describe("prepare copy", () => {
 
   it("asks for captions on Generate, not a separate bank UI", () => {
     expect(captionToggleLabel()).toMatch(/write captions/i);
-    expect(captionToggleHint()).toMatch(/opens a box/i);
-    expect(captionPromptLabel()).toMatch(/caption for these copies/i);
-    expect(captionPromptPlaceholder()).toMatch(/caption you want/i);
+    expect(captionToggleHint()).toMatch(/thumbnail/i);
+    expect(captionToggleHint()).toMatch(/per source|each clip|source clip/i);
+    expect(captionPromptLabel()).toMatch(/caption for this clip/i);
+    expect(captionPromptPlaceholder()).toMatch(/this clip/i);
+    expect(captionPromptLabelForSource(0, 4)).toMatch(/source 1 of 4/i);
+    expect(captionNeedSourcesCopy()).toMatch(/add videos first/i);
     expect(uniquenessCustomerLabel()).toBe("Originality");
+  });
+
+  it("lets Gallery edit captions without tying status to Instagram copy", () => {
+    expect(captionSaveLabel()).toMatch(/save caption/i);
+    expect(captionEmptyCopy()).toMatch(/no caption/i);
+    expect(captionStatusHint()).toMatch(/before/i);
+    expect(captionStatusHint()).toMatch(/instagram/i);
+    expect(captionStatusHint()).toMatch(/video/i);
   });
 
   it("says Originality is 3-frame pixel SSIM, not a platform check", () => {
@@ -49,5 +66,11 @@ describe("prepare copy", () => {
     expect(captionSnippet("  hello   world  ")).toBe("hello world");
     expect(captionSnippet("a".repeat(80))).toBe("a".repeat(80));
     expect(captionSnippet("a".repeat(81))).toBe(`${"a".repeat(79)}…`);
+  });
+
+  it("strips Copy N of M lines from captions and Drive filenames", () => {
+    expect(stripInternalIndexLines("POV boil\n\nCopy 1 of 20\n#reels")).toBe("POV boil\n\n#reels");
+    expect(stripInternalIndexLines("Gym pull\nTake 2 of 8\n#fyp")).toBe("Gym pull\n#fyp");
+    expect(captionSnippet("POV boil\n\nCopy 1 of 20\n#reels")).toBe("POV boil #reels");
   });
 });

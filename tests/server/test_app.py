@@ -559,6 +559,56 @@ def test_post_url_roundtrip_and_persist(tmp_path):
                        json={"url": url}).status_code == 404
 
 
+def test_variant_caption_roundtrip_and_persist(tmp_path):
+    client, store = _client(tmp_path)
+    job_id = client.post(
+        "/api/jobs",
+        files=[("files", ("boil.mp4", b"x", "video/mp4"))],
+        data={"count": "1", "generate_captions": "true", "caption_prompt": "POV boil #reels"},
+    ).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    src = client.get(f"/api/jobs/{job_id}").json()["sources"][0]
+    sid = src["source_id"]
+    index = src["variants"][0]["index"]
+
+    text = "Wait — the boil hits different\n#reels #fyp"
+    resp = client.post(f"/api/variants/{sid}/{index}/caption", json={"caption": text})
+    assert resp.status_code == 200
+    assert resp.json()["caption"] == text
+    assert client.get(f"/api/jobs/{job_id}").json()["sources"][0]["variants"][0]["caption"] == text
+
+    store2 = JobStore(Workspace(str(tmp_path)), FakeRunner({}))
+    assert store2.hydrate_from_disk() == 1
+    assert store2.get(job_id).sources[0].variants[0].caption == text
+
+    cleared = client.post(f"/api/variants/{sid}/{index}/caption", json={"caption": "  "})
+    assert cleared.status_code == 200
+    assert cleared.json()["caption"] is None
+    assert client.post(f"/api/variants/{sid}/999/caption", json={"caption": text}).status_code == 404
+
+
+def test_variant_caption_api_strips_copy_n_of_m(tmp_path):
+    client, store = _client(tmp_path)
+    job_id = client.post(
+        "/api/jobs",
+        files=[("files", ("boil.mp4", b"x", "video/mp4"))],
+        data={"count": "1"},
+    ).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    src = client.get(f"/api/jobs/{job_id}").json()["sources"][0]
+    sid = src["source_id"]
+    index = src["variants"][0]["index"]
+    resp = client.post(
+        f"/api/variants/{sid}/{index}/caption",
+        json={"caption": "POV boil\n\nCopy 1 of 20\n#reels"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["caption"] == "POV boil\n\n#reels"
+    listed = client.get(f"/api/jobs/{job_id}").json()["sources"][0]["variants"][0]["caption"]
+    assert listed == "POV boil\n\n#reels"
+    assert "copy 1 of" not in listed.lower()
+
+
 def test_zip_contains_ok_variants(tmp_path):
     client, store = _client(tmp_path, plan={2: "best_effort"})
     job_id = client.post("/api/jobs",
@@ -837,5 +887,31 @@ def test_create_job_generate_captions_attaches_copy(tmp_path):
     variants = client.get(f"/api/jobs/{job_id}").json()["sources"][0]["variants"]
     captions = [v.get("caption") or "" for v in variants if v["status"] == "ok"]
     assert captions
-    assert "Copy 1 of 2" in captions[0]
     assert captions[0] != captions[1]
+    joined = "\n".join(captions).lower()
+    assert "copy 1 of" not in joined
+
+
+def test_create_job_caption_prompts_json_is_per_source(tmp_path):
+    client, store = _client(tmp_path)
+    resp = client.post(
+        "/api/jobs",
+        files=[
+            ("files", ("boil.mp4", b"x", "video/mp4")),
+            ("files", ("gym.mp4", b"y", "video/mp4")),
+        ],
+        data={
+            "count": "1",
+            "generate_captions": "true",
+            "caption_prompts": '["POV boil #reels","Gym pull #fyp"]',
+        },
+    )
+    assert resp.status_code == 201
+    job_id = resp.json()["job_id"]
+    store.wait(job_id, timeout=5)
+    sources = client.get(f"/api/jobs/{job_id}").json()["sources"]
+    boil = sources[0]["variants"][0].get("caption") or ""
+    gym = sources[1]["variants"][0].get("caption") or ""
+    assert "boil" in boil.lower()
+    assert "gym" in gym.lower()
+    assert "copy 1 of" not in boil.lower()

@@ -24,15 +24,47 @@ export function captionToggleLabel(): string {
 }
 
 export function captionToggleHint(): string {
-  return "Opens a box. Claude uses what you write for each copy — preview in Gallery.";
+  return (
+    "One box per source clip, with a thumbnail. Claude writes a unique take " +
+    "for each copy — edit in Gallery before you send."
+  );
 }
 
 export function captionPromptLabel(): string {
-  return "Caption for these copies";
+  return "Caption for this clip";
 }
 
 export function captionPromptPlaceholder(): string {
-  return "The caption you want on these copies";
+  return "The caption you want on copies of this clip";
+}
+
+export function captionPromptLabelForSource(index: number, total: number): string {
+  return total > 1 ? `Caption for source ${index + 1} of ${total}` : captionPromptLabel();
+}
+
+export function sourceCaptionEyebrow(index: number, total: number): string {
+  return total > 1 ? `Source ${index + 1} of ${total}` : "Source";
+}
+
+export function captionNeedSourcesCopy(): string {
+  return "Add videos first — each clip gets its own thumbnail and caption box.";
+}
+
+export function alignCaptionPrompts(prev: string[], count: number): string[] {
+  const n = Math.max(0, count);
+  const next = prev.slice(0, n);
+  while (next.length < n) next.push("");
+  return next;
+}
+
+const INTERNAL_INDEX_RE = /^(?:copy|take)\s+\d+\s+of\s+\d+\s*(?:[—–-].*)?$/i;
+
+export function stripInternalIndexLines(text: string | null | undefined): string {
+  return (text || "")
+    .split(/\r?\n/)
+    .filter((line) => !INTERNAL_INDEX_RE.test(line.trim()))
+    .join("\n")
+    .trim();
 }
 
 export function captionPreviewLabel(): string {
@@ -41,6 +73,18 @@ export function captionPreviewLabel(): string {
 
 export function captionEmptyCopy(): string {
   return "No caption on this copy yet.";
+}
+
+export function captionSaveLabel(): string {
+  return "Save caption";
+}
+
+export function captionStatusHint(): string {
+  return (
+    "Edit here before Send to Drive or a drop. After it is posted, pass / duplicate " +
+    "is for this video — not the caption. If you change the caption on Instagram, " +
+    "this box will not update; use the post link to find the right copy."
+  );
 }
 
 export function uniquenessCustomerLabel(): string {
@@ -141,7 +185,7 @@ export function uniquenessCoverageChips(
 }
 
 export function captionSnippet(text: string | null | undefined, max = 80): string {
-  const one = (text || "").replace(/\s+/g, " ").trim();
+  const one = stripInternalIndexLines(text).replace(/\s+/g, " ").trim();
   if (!one) return "";
   if (one.length <= max) return one;
   return `${one.slice(0, Math.max(1, max - 1)).trimEnd()}…`;

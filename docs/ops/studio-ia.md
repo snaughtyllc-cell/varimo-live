@@ -59,7 +59,7 @@ old four-row list.
 
 | Surface | Parent | How it opens |
 |---|---|---|
-| Variant sheet | Gallery | Tap a finished copy. Compare slider, scrub, quality, uniqueness, platform flag, post URL, download. |
+| Variant sheet | Gallery | Tap a finished copy. Compare slider, scrub, editable caption, uniqueness, platform flag, post URL, download. |
 | Send to Drive | Gallery / variant sheet | Pick destination + caption folder; split a pack across folders. |
 | Drive picker | Studio | Import source files from a saved Drive destination. |
 | Watch / queue / cancel | Studio + Workflows | Live job tiles, cancel, re-attach after reload. |

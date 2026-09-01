@@ -8,7 +8,7 @@ import { DrivePickerModal, type DrivePick } from "@/components/studio/DrivePicke
 import { VariantStepper } from "@/components/studio/VariantStepper";
 import { GenerateButton } from "@/components/studio/GenerateButton";
 import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
-import { StudioCaptionsBox } from "@/components/studio/StudioCaptionsBox";
+import { StudioCaptionsBox, type CaptionSource } from "@/components/studio/StudioCaptionsBox";
 import { StudioQueue } from "@/components/studio/StudioQueueLive";
 import { ProgressPanel } from "@/components/studio/ProgressPanel";
 import { readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
@@ -31,12 +31,22 @@ export default function StudioPage() {
   const [allowCreativeEscalate, setAllowCreativeEscalate] = useState(true);
   const [qualityMode, setQualityMode] = useState<"fast" | "hq">("fast");
   const [generateCaptions, setGenerateCaptions] = useState(false);
-  const [captionPrompt, setCaptionPrompt] = useState("");
+  const [fileCaptions, setFileCaptions] = useState<string[]>([]);
+  const [driveCaptions, setDriveCaptions] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const sourceCount = files.length + drivePicks.length;
   const driveDestinationId = drivePicks[0]?.destinationId ?? null;
+  const captionSources: CaptionSource[] = [
+    ...files.map((file, i) => ({ key: `file-${i}-${file.name}`, name: file.name, file })),
+    ...drivePicks.map((pick) => ({
+      key: `drive-${pick.id}`,
+      name: pick.name,
+      thumbUrl: pick.thumbUrl,
+    })),
+  ];
+  const captionPrompts = [...fileCaptions, ...driveCaptions];
 
   const handleFiles = useCallback(async (incoming: File[]) => {
     const blocked = incoming.map(tooLargeMessage).find(Boolean);
@@ -50,6 +60,7 @@ export default function StudioPage() {
       readDurations(combined).then(setDurations);
       return combined;
     });
+    setFileCaptions((prev) => [...prev, ...incoming.map(() => "")]);
   }, []);
 
   function handleRemoveFile(index: number) {
@@ -58,22 +69,47 @@ export default function StudioPage() {
       readDurations(next).then(setDurations);
       return next;
     });
+    setFileCaptions((prev) => prev.filter((_, i) => i !== index));
   }
 
   function handleRemoveDrivePick(index: number) {
     setDrivePicks((prev) => prev.filter((_, i) => i !== index));
+    setDriveCaptions((prev) => prev.filter((_, i) => i !== index));
   }
 
   function handleDriveConfirm(picks: DrivePick[]) {
     if (picks.length === 0) return;
     const destId = picks[0].destinationId;
     setDrivePicks((prev) => {
-      if (prev.length === 0 || prev[0].destinationId !== destId) return picks;
+      if (prev.length === 0 || prev[0].destinationId !== destId) {
+        setDriveCaptions(picks.map(() => ""));
+        return picks;
+      }
       const byId = new Map(prev.map((p) => [p.id, p]));
+      const captionsById = new Map(prev.map((p, i) => [p.id, driveCaptions[i] ?? ""]));
       for (const p of picks) byId.set(p.id, p);
-      return Array.from(byId.values());
+      const next = Array.from(byId.values());
+      setDriveCaptions(next.map((p) => captionsById.get(p.id) ?? ""));
+      return next;
     });
     setError(null);
+  }
+
+  function handleCaptionChange(index: number, value: string) {
+    if (index < files.length) {
+      setFileCaptions((prev) => {
+        const next = [...prev];
+        next[index] = value;
+        return next;
+      });
+      return;
+    }
+    const driveIndex = index - files.length;
+    setDriveCaptions((prev) => {
+      const next = [...prev];
+      next[driveIndex] = value;
+      return next;
+    });
   }
 
   async function handleGenerate() {
@@ -103,9 +139,9 @@ export default function StudioPage() {
               qualityMode: "fast",
               allowCreativeEscalate,
               generateCaptions,
-              captionPrompt,
+              captionPrompt: driveCaptions,
             })
-          : await createJob(files, perVideo, allowCreativeEscalate, "fast", generateCaptions, captionPrompt);
+          : await createJob(files, perVideo, allowCreativeEscalate, "fast", generateCaptions, fileCaptions);
       start(resp, "fast");
     } catch (e) {
       clear();
@@ -164,8 +200,9 @@ export default function StudioPage() {
         <StudioCaptionsBox
           generateCaptions={generateCaptions}
           onGenerateCaptionsChange={setGenerateCaptions}
-          captionPrompt={captionPrompt}
-          onCaptionPromptChange={setCaptionPrompt}
+          sources={captionSources}
+          prompts={captionPrompts}
+          onPromptChange={handleCaptionChange}
         />
 
         {error && (

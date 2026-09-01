@@ -23,7 +23,8 @@ from variant_maker.farm.drive import DriveClient, is_video_file
 from variant_maker.farm.ledger import Ledger
 
 from .auth_app import PUBLIC_API_PATHS, AttrProxy, JobStoreProxy, current_bundle, tenant_cv
-from .captions import CaptionError, CaptionStore, split_caption_bank
+from .caption_ai import parse_caption_prompts_field
+from .captions import CaptionError, CaptionStore, split_caption_bank, strip_internal_index_lines
 from .destinations import Destination, DestinationError, DestinationStore, probe_folder_writable
 from .drive_config import (
     ENV_OAUTH_CLIENT_ID,
@@ -90,6 +91,7 @@ from .models import (
     CaptionBulkIn,
     CaptionCreateIn,
     CaptionFolderCreateIn,
+    CaptionIn,
     CaptionOut,
     CaptionPreviewOut,
     CreateJobResponse,
@@ -190,7 +192,7 @@ def _variant_out(source_id: str, v, *, file_ready: bool = True) -> VariantOut:
         look_mae=v.look_mae,
         look_src_url=_look_file_url(source_id, v.look_src),
         look_var_url=_look_file_url(source_id, v.look_var),
-        caption=getattr(v, "caption", None),
+        caption=strip_internal_index_lines(getattr(v, "caption", None) or "") or None,
     )
 
 
@@ -1171,12 +1173,14 @@ def create_app(
                           allow_creative_escalate: bool = Form(True),
                           quality_mode: str = Form("fast"),
                           generate_captions: bool = Form(False),
-                          caption_prompt: str = Form("")) -> CreateJobResponse:
+                          caption_prompt: str = Form(""),
+                          caption_prompts: str = Form("")) -> CreateJobResponse:
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
         job = store.create_job(
             uploads, count=count, allow_creative_escalate=allow_creative_escalate,
             quality_mode=quality_mode, generate_captions=generate_captions,
             caption_prompt=caption_prompt,
+            caption_prompts=parse_caption_prompts_field(caption_prompts),
         )
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
@@ -1223,6 +1227,7 @@ def create_app(
         quality_mode: str = Form("fast"),
         generate_captions: bool = Form(False),
         caption_prompt: str = Form(""),
+        caption_prompts: str = Form(""),
     ) -> CreateJobResponse:
         ids = [u.strip() for u in upload_ids.split(",") if u.strip()]
         if not ids:
@@ -1237,8 +1242,9 @@ def create_app(
             paths.append((meta["filename"], meta["path"]))
         job = store.create_job_from_paths(
             paths, count=count, allow_creative_escalate=allow_creative_escalate,
-            quality_mode=quality_mode, generate_captions=generate_captions,
+            quality_mode=quality_mode,             generate_captions=generate_captions,
             caption_prompt=caption_prompt,
+            caption_prompts=parse_caption_prompts_field(caption_prompts),
         )
         for uid in ids:
             _UPLOAD_META.pop(uid, None)
@@ -1276,6 +1282,7 @@ def create_app(
                 quality_mode=body.quality_mode,
                 generate_captions=body.generate_captions,
                 caption_prompt=body.caption_prompt,
+                caption_prompts=list(body.caption_prompts or []),
             )
         finally:
             shutil.rmtree(stage, ignore_errors=True)
@@ -1432,6 +1439,17 @@ def create_app(
         if variant is None:
             raise HTTPException(status_code=404, detail="variant not found")
         _sync_post_url_to_sheet(source_id, index, url)
+        loc = store._locate(source_id)
+        file_ready = True
+        if loc is not None:
+            file_ready = variant_on_disk(store._ws, loc[0], source_id, variant.filename)
+        return _variant_out(source_id, variant, file_ready=file_ready)
+
+    @app.post("/api/variants/{source_id}/{index}/caption", response_model=VariantOut)
+    def set_caption(source_id: str, index: int, body: CaptionIn) -> VariantOut:
+        variant = store.set_caption(source_id, index, body.caption)
+        if variant is None:
+            raise HTTPException(status_code=404, detail="variant not found")
         loc = store._locate(source_id)
         file_ready = True
         if loc is not None:

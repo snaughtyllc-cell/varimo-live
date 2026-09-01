@@ -64,6 +64,7 @@ describe("createJob posts multipart with files + count", () => {
     expect(body.get("quality_mode")).toBe("fast");
     expect(body.get("generate_captions")).toBe("false");
     expect(body.get("caption_prompt")).toBe("");
+    expect(body.get("caption_prompts")).toBe("[]");
     expect(body.getAll("files").length).toBe(1);
   });
 
@@ -75,6 +76,18 @@ describe("createJob posts multipart with files + count", () => {
     const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
     expect(body.get("generate_captions")).toBe("true");
     expect(body.get("caption_prompt")).toBe("POV boil #reels");
+    expect(body.get("caption_prompts")).toBe(JSON.stringify(["POV boil #reels"]));
+  });
+
+  it("sends one caption_prompts entry per source", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
+    const a = new File([new Uint8Array([1])], "a.mp4", { type: "video/mp4" });
+    const b = new File([new Uint8Array([2])], "b.mp4", { type: "video/mp4" });
+    await api.createJob([a, b], 3, true, "fast", true, ["POV boil #reels", "Gym pull #fyp"]);
+    const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
+    expect(body.get("caption_prompt")).toBe("");
+    expect(body.get("caption_prompts")).toBe(JSON.stringify(["POV boil #reels", "Gym pull #fyp"]));
   });
 
   it("sends quality_mode hq when requested", async () => {
@@ -117,6 +130,7 @@ describe("createJob posts multipart with files + count", () => {
     const fromBody = (fromUploads![1] as RequestInit).body as FormData;
     expect(fromBody.get("generate_captions")).toBe("false");
     expect(fromBody.get("caption_prompt")).toBe("");
+    expect(fromBody.get("caption_prompts")).toBe("[]");
   });
 });
 
@@ -163,6 +177,26 @@ describe("setPostUrl", () => {
     expect((init as RequestInit).method).toBe("POST");
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
       url: "https://www.instagram.com/reel/AbC/",
+    });
+  });
+});
+
+describe("setVariantCaption", () => {
+  it("POSTs the edited caption", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        index: 1, filename: "v01.mp4", status: "ok", quality: {},
+        file_url: "/api/variants/s1/v01.mp4",
+        caption: "Wait — the boil hits different\n#reels",
+      }), { status: 200 }),
+    );
+    const out = await api.setVariantCaption("s1", 1, "Wait — the boil hits different\n#reels");
+    expect(out.caption).toMatch(/hits different/);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/variants/s1/1/caption");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      caption: "Wait — the boil hits different\n#reels",
     });
   });
 });
@@ -298,6 +332,7 @@ describe("createJobFromDrive", () => {
       allow_creative_escalate: false,
       generate_captions: false,
       caption_prompt: "",
+      caption_prompts: [],
     });
   });
 
@@ -320,6 +355,30 @@ describe("createJobFromDrive", () => {
       allow_creative_escalate: true,
       generate_captions: true,
       caption_prompt: "POV boil #reels",
+      caption_prompts: ["POV boil #reels"],
+    });
+  });
+
+  it("sends one caption_prompts entry per Drive source", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }),
+    );
+    await api.createJobFromDrive({
+      destinationId: "dst_1",
+      fileIds: ["f1", "f2"],
+      count: 8,
+      generateCaptions: true,
+      captionPrompt: ["POV boil #reels", "Gym pull #fyp"],
+    });
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      destination_id: "dst_1",
+      file_ids: ["f1", "f2"],
+      count: 8,
+      quality_mode: "fast",
+      allow_creative_escalate: true,
+      generate_captions: true,
+      caption_prompt: "",
+      caption_prompts: ["POV boil #reels", "Gym pull #fyp"],
     });
   });
 });

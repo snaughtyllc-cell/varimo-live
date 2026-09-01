@@ -15,7 +15,7 @@ from typing import Literal
 from variant_maker.normalize import maybe_normalize_upload
 
 from .cancel import USER_CANCEL_MSG, CancelToken, JobCancelled
-from .caption_ai import captions_for_source
+from .caption_ai import briefs_for_sources, captions_for_source, strip_internal_index_lines
 from .events import VariantEvent, event_to_dict
 from .runner import Runner, normalize_quality_mode
 from .workspace import Workspace
@@ -111,11 +111,16 @@ class JobSource:
         return max(0, self.requested - self.delivered)
 
 
+def _clean_caption(text: str | None) -> str | None:
+    cleaned = strip_internal_index_lines(text or "")
+    return cleaned or None
+
+
 def _caption_for(source: JobSource, index: int) -> str | None:
     caps = source.planned_captions or []
     i = int(index) - 1
     if 0 <= i < len(caps):
-        return caps[i]
+        return _clean_caption(caps[i])
     return None
 
 
@@ -206,7 +211,7 @@ def _variant_to_dict(v: VariantInfo) -> dict:
         "platform_result": v.platform_result, "post_url": v.post_url,
         "look_status": v.look_status, "look_mae": v.look_mae,
         "look_src": v.look_src, "look_var": v.look_var,
-        "caption": v.caption,
+        "caption": _clean_caption(v.caption),
     }
 
 
@@ -260,7 +265,7 @@ def _variant_from_dict(data: dict, source_id: str) -> VariantInfo:
         look_mae=data.get("look_mae"),
         look_src=data.get("look_src"),
         look_var=data.get("look_var"),
-        caption=data.get("caption") or None,
+        caption=_clean_caption(data.get("caption")),
     )
 
 
@@ -306,7 +311,9 @@ def _job_to_dict(job: Job) -> dict:
                 "filename": s.filename,
                 "requested": s.requested,
                 "runpod_job_id": s.runpod_job_id,
-                "planned_captions": list(s.planned_captions or []),
+                "planned_captions": [
+                    strip_internal_index_lines(str(c)) for c in (s.planned_captions or [])
+                ],
                 "variants": [_variant_to_dict(v) for v in s.variants],
             }
             for s in job.sources
@@ -326,7 +333,13 @@ def _job_from_dict(data: dict) -> Job:
             filename=str(raw.get("filename") or sid),
             requested=int(raw.get("requested") or 0),
             runpod_job_id=raw.get("runpod_job_id"),
-            planned_captions=[str(c) for c in (raw.get("planned_captions") or []) if str(c).strip()],
+            planned_captions=[
+                c for c in (
+                    strip_internal_index_lines(str(item))
+                    for item in (raw.get("planned_captions") or [])
+                )
+                if c
+            ],
         )
         for v in raw.get("variants") or []:
             if isinstance(v, dict):
@@ -394,7 +407,8 @@ class JobStore:
                     allow_creative_escalate: bool = True,
                     quality_mode: str = "fast",
                     generate_captions: bool = False,
-                    caption_prompt: str = "") -> Job:
+                    caption_prompt: str = "",
+                    caption_prompts: list[str] | None = None) -> Job:
         job_id = uuid.uuid4().hex[:12]
         sources = []
         for filename, data in uploads:
@@ -406,13 +420,15 @@ class JobStore:
             job_id, sources, count, allow_creative_escalate, quality_mode,
             generate_captions=generate_captions,
             caption_prompt=caption_prompt,
+            caption_prompts=caption_prompts,
         )
 
     def create_job_from_paths(self, paths: list[tuple[str, str]], count: int,
                                allow_creative_escalate: bool = True,
                                quality_mode: str = "fast",
                                generate_captions: bool = False,
-                               caption_prompt: str = "") -> Job:
+                               caption_prompt: str = "",
+                               caption_prompts: list[str] | None = None) -> Job:
         """Create a job from already-staged files: [(filename, abs_path), ...]."""
         job_id = uuid.uuid4().hex[:12]
         sources = []
@@ -427,18 +443,25 @@ class JobStore:
             job_id, sources, count, allow_creative_escalate, quality_mode,
             generate_captions=generate_captions,
             caption_prompt=caption_prompt,
+            caption_prompts=caption_prompts,
         )
 
     def _start_job(self, job_id: str, sources: list[JobSource], count: int,
                     allow_creative_escalate: bool, quality_mode: str = "fast",
                     generate_captions: bool = False,
-                    caption_prompt: str = "") -> Job:
-        brief = (caption_prompt or "").strip()
-        if generate_captions and brief:
-            for source in sources:
-                source.planned_captions = captions_for_source(
-                    source.filename, source.requested, prompt=brief,
-                )
+                    caption_prompt: str = "",
+                    caption_prompts: list[str] | None = None) -> Job:
+        briefs = briefs_for_sources(
+            len(sources),
+            caption_prompt=caption_prompt,
+            caption_prompts=caption_prompts,
+        )
+        if generate_captions:
+            for source, brief in zip(sources, briefs, strict=True):
+                if brief:
+                    source.planned_captions = captions_for_source(
+                        source.filename, source.requested, prompt=brief,
+                    )
         with self._lock:
             self._seq += 1
             created_seq = self._seq
@@ -1007,6 +1030,29 @@ class JobStore:
             return None
         variant.post_url = url
         self._rewrite_manifest_fields(job_id, source_id, index, post_url=url)
+        job = self._jobs.get(job_id)
+        if job is not None:
+            self._persist(job)
+        return variant
+
+    def set_caption(self, source_id: str, index: int, caption: str | None) -> VariantInfo | None:
+        loc = self._locate(source_id)
+        if loc is None:
+            return None
+        job_id, source = loc
+        variant = next((v for v in source.variants if v.index == index), None)
+        if variant is None:
+            return None
+        text = _clean_caption(caption)
+        variant.caption = text
+        caps = list(source.planned_captions or [])
+        slot = int(index) - 1
+        if slot >= 0:
+            while len(caps) <= slot:
+                caps.append("")
+            caps[slot] = text or ""
+            source.planned_captions = caps
+        self._rewrite_manifest_fields(job_id, source_id, index, caption=text)
         job = self._jobs.get(job_id)
         if job is not None:
             self._persist(job)

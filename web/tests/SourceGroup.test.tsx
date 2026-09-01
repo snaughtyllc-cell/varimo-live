@@ -8,6 +8,7 @@ vi.mock("@/lib/api", () => ({
   sourceUrl: () => "/api/source/s1",
   sourceZipUrl: () => "/api/sources/s1/zip",
   removeSource: vi.fn(),
+  rewriteSourceCaptions: vi.fn(),
 }));
 
 import { SourceGroup } from "@/components/gallery/SourceGroup";
@@ -86,6 +87,7 @@ describe("SourceGroup phone save/share", () => {
       phoneShareHintCopy(),
     );
     expect(screen.getByRole("button", { name: /select all/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^options$/i })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Diagnostics/i);
   });
 

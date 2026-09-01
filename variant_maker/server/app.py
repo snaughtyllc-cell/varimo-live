@@ -94,6 +94,7 @@ from .models import (
     CaptionIn,
     CaptionOut,
     CaptionPreviewOut,
+    CaptionRewriteIn,
     CreateJobResponse,
     DestinationCreateIn,
     DestinationOut,
@@ -283,6 +284,7 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
         files_ready=files_ready,
         copy_status=copy_status,
         job_id=job_id,
+        caption_prompt=(s.caption_prompt or None),
     )
 
 
@@ -319,6 +321,7 @@ def _workflow_out(w: Workflow) -> WorkflowOut:
         last_summary=_workflow_summary_out(w.last_summary),
         auto_caption=w.auto_caption,
         caption_bank_id=w.caption_bank_id or None,
+        caption_from_filename=bool(w.caption_from_filename),
     )
 
 
@@ -1417,6 +1420,15 @@ def create_app(
         if not store.delete_source(source_id):
             raise HTTPException(status_code=404, detail="source not found")
 
+    @app.post("/api/sources/{source_id}/captions", response_model=SourceOut)
+    def rewrite_captions(source_id: str, body: CaptionRewriteIn) -> SourceOut:
+        source = store.rewrite_captions(source_id, body.prompt)
+        if source is None:
+            raise HTTPException(status_code=404, detail="source not found")
+        loc = store._locate(source_id)
+        job = store.get(loc[0]) if loc else None
+        return _source_out(source, ok_only=True, job=job, ws=store._ws)
+
     @app.post("/api/variants/{source_id}/{index}/platform-result", response_model=VariantOut)
     def set_platform_result(source_id: str, index: int, body: PlatformResultIn) -> VariantOut:
         variant = store.set_platform_result(source_id, index, body.result)
@@ -1716,6 +1728,7 @@ def create_app(
                 poll_seconds=body.poll_seconds,
                 auto_caption=body.auto_caption,
                 caption_bank_id=body.caption_bank_id or "",
+                caption_from_filename=body.caption_from_filename,
             )
         except WorkflowError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
@@ -1742,6 +1755,7 @@ def create_app(
                 poll_seconds=body.poll_seconds,
                 auto_caption=body.auto_caption,
                 caption_bank_id=body.caption_bank_id,
+                caption_from_filename=body.caption_from_filename,
             )
         except WorkflowError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e

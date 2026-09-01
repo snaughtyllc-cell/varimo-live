@@ -7,6 +7,9 @@ import {
   workflowAutoCaptionHint,
   workflowPageBlurb,
   workflowCanCancel,
+  workflowFilenameCaptionCardLabel,
+  workflowFilenameCaptionHint,
+  workflowFilenameCaptionLabel,
 } from "@/lib/workflowCopy";
 
 describe("workflow folder layout copy", () => {
@@ -17,10 +20,12 @@ describe("workflow folder layout copy", () => {
     expect(workflowFoldersMustDiffer()).toMatch(/different/i);
     expect(workflowNeedTwoFolders()).toMatch(/two Drive folders/i);
     expect(workflowOutputHint()).toMatch(/one subfolder per source/i);
-    expect(workflowAutoCaptionHint()).toMatch(/off by default/i);
-    expect(workflowAutoCaptionHint()).toMatch(/remaining/i);
-    expect(workflowAutoCaptionHint()).toMatch(/custom/i);
-    expect(workflowAutoCaptionHint()).not.toMatch(/always/i);
+    expect(workflowAutoCaptionHint()).toMatch(/off by default|caption folder/i);
+    expect(workflowAutoCaptionHint()).toMatch(/remaining|folder/i);
+    expect(workflowFilenameCaptionLabel()).toMatch(/filename/i);
+    expect(workflowFilenameCaptionCardLabel()).toMatch(/^filenames as captions$/i);
+    expect(workflowFilenameCaptionHint()).toMatch(/drive name|filename/i);
+    expect(workflowFilenameCaptionHint()).toMatch(/unique/i);
   });
 
   it("treats the same destination or the same Drive folder as a clash", () => {

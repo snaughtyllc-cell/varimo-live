@@ -49,6 +49,10 @@ class CaptionIn(BaseModel):
     caption: str = ""
 
 
+class CaptionRewriteIn(BaseModel):
+    prompt: str = ""
+
+
 class InFlightOut(BaseModel):
     """Live mid-variant state for proxies that buffer SSE."""
     index: int
@@ -73,6 +77,7 @@ class SourceOut(BaseModel):
     files_ready: int = 0          # ok variants whose mp4 is on Studio disk
     copy_status: Literal["ok", "copying", "missing"] = "ok"
     job_id: str | None = None
+    caption_prompt: str | None = None
 
 
 class JobSummary(BaseModel):
@@ -317,6 +322,7 @@ class WorkflowOut(BaseModel):
     last_summary: WorkflowSummaryOut | None = None
     auto_caption: bool = False
     caption_bank_id: str | None = None
+    caption_from_filename: bool = False
 
 
 class WorkflowCreateIn(BaseModel):
@@ -330,6 +336,7 @@ class WorkflowCreateIn(BaseModel):
     poll_seconds: int = 120
     auto_caption: bool = False
     caption_bank_id: str | None = None
+    caption_from_filename: bool = False
 
 
 class WorkflowUpdateIn(BaseModel):
@@ -343,6 +350,7 @@ class WorkflowUpdateIn(BaseModel):
     poll_seconds: int | None = None
     auto_caption: bool | None = None
     caption_bank_id: str | None = None
+    caption_from_filename: bool | None = None
 
 
 class CaptionOut(BaseModel):

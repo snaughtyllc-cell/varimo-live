@@ -55,6 +55,7 @@ export interface SourceOut {
   files_ready?: number;
   copy_status?: "ok" | "copying" | "missing";
   job_id?: string | null;
+  caption_prompt?: string | null;
 }
 export interface JobSummary { job_id: string; count: number; created_utc: string; state: "running" | "done"; source_count: number; }
 export interface QueueItem {
@@ -236,6 +237,7 @@ export interface Workflow {
   last_summary: WorkflowSummary | null;
   auto_caption: boolean;
   caption_bank_id?: string | null;
+  caption_from_filename?: boolean;
 }
 
 export type AuthRole = "owner" | "member";

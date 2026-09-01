@@ -60,9 +60,10 @@ old four-row list.
 | Surface | Parent | How it opens |
 |---|---|---|
 | Variant sheet | Gallery | Tap a finished copy. Compare slider, scrub, editable caption, uniqueness, platform flag, post URL, download. |
+| Pack Options | Gallery | On a pack row, **Options** rewrites every copy's caption from a seed. Videos stay the same. |
 | Send to Drive | Gallery / variant sheet | Pick destination + caption folder; split a pack across folders. |
 | Drive picker | Studio | Import source files from a saved Drive destination. |
-| Watch / queue / cancel | Studio + Workflows | Live job tiles, cancel, re-attach after reload. |
+| Watch / queue / cancel | Studio + Workflows | Live job tiles, cancel, re-attach after reload. Workflows can caption from each Drive filename. |
 
 ## What not to invent
 

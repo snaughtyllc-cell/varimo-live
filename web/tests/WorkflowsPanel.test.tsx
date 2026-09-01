@@ -16,10 +16,12 @@ vi.mock("@/lib/api", () => ({
 
 import {
   cancelWorkflow,
+  createWorkflow,
   getDriveStatus,
   listCaptionBanks,
   listDestinations,
   listWorkflows,
+  updateWorkflow,
 } from "@/lib/api";
 import { WorkflowsPanel } from "@/components/workflows/WorkflowsPanel";
 
@@ -65,6 +67,75 @@ beforeEach(() => {
   vi.mocked(cancelWorkflow).mockResolvedValue({ ...live, enabled: false, last_summary: { ...live.last_summary!, running: 0 } });
 });
 
+describe("WorkflowsPanel captions", () => {
+  it("creates a workflow with Drive filenames as the caption seed", async () => {
+    vi.mocked(listWorkflows).mockResolvedValue([]);
+    vi.mocked(createWorkflow).mockResolvedValue({
+      ...live,
+      id: "wf_new",
+      name: "Mixed inbox",
+      caption_from_filename: true,
+      auto_caption: false,
+    });
+    render(<WorkflowsPanel />);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /create workflow/i })).not.toBeDisabled();
+    });
+    const name = screen.getByPlaceholderText(/reels inbox/i);
+    fireEvent.change(name, { target: { value: "Mixed inbox" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /use drive filenames as captions/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create workflow/i }));
+    await waitFor(() => {
+      expect(createWorkflow).toHaveBeenCalledWith(expect.objectContaining({
+        name: "Mixed inbox",
+        caption_from_filename: true,
+        auto_caption: false,
+      }));
+    });
+  });
+
+  it("hides the caption folder while Drive filenames are on", async () => {
+    vi.mocked(listWorkflows).mockResolvedValue([]);
+    vi.mocked(listCaptionBanks).mockResolvedValue([
+      {
+        id: "bank_generic",
+        name: "Generic",
+        count: 4,
+        remaining: 4,
+        cursor: 0,
+        low: true,
+        is_default: true,
+      },
+    ]);
+    render(<WorkflowsPanel />);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /create workflow/i })).not.toBeDisabled();
+    });
+    expect(screen.getByText(/^caption folder$/i)).toBeInTheDocument();
+    expect(screen.getByText(/auto-caption from bank/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /use drive filenames as captions/i }));
+    expect(screen.queryByText(/^caption folder$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/auto-caption from bank/i)).not.toBeInTheDocument();
+  });
+
+  it("turns Filenames on for an existing workflow and turns the bank off", async () => {
+    vi.mocked(updateWorkflow).mockResolvedValue({
+      ...live,
+      caption_from_filename: true,
+      auto_caption: false,
+    });
+    render(<WorkflowsPanel />);
+    const box = await screen.findByRole("checkbox", { name: /^filenames as captions/i });
+    fireEvent.click(box);
+    await waitFor(() => {
+      expect(updateWorkflow).toHaveBeenCalledWith("wf_1", {
+        caption_from_filename: true,
+        auto_caption: false,
+      });
+    });
+  });
+});
+
 describe("WorkflowsPanel cancel", () => {
   it("cancels a live sweep: Watch off + stop the pack", async () => {
     render(<WorkflowsPanel />);
@@ -73,5 +144,10 @@ describe("WorkflowsPanel cancel", () => {
     await waitFor(() => {
       expect(cancelWorkflow).toHaveBeenCalledWith("wf_1");
     });
+  });
+
+  it("offers Use Drive filenames as captions", async () => {
+    render(<WorkflowsPanel />);
+    expect(await screen.findByRole("checkbox", { name: /use drive filenames as captions/i })).toBeInTheDocument();
   });
 });

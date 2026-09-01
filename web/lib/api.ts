@@ -213,6 +213,14 @@ export function setVariantCaption(sourceId: string, index: number, caption: stri
   }).then(json<VariantOut>);
 }
 
+export function rewriteSourceCaptions(sourceId: string, prompt: string): Promise<SourceOut> {
+  return fetch(`/api/sources/${sourceId}/captions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
+  }).then(json<SourceOut>);
+}
+
 export const getDriveStatus = () => fetch("/api/drive/status").then(json<DriveStatus>);
 
 export async function disconnectDriveOAuth(): Promise<void> {
@@ -375,6 +383,7 @@ export function createWorkflow(body: {
   poll_seconds?: number;
   auto_caption?: boolean;
   caption_bank_id?: string | null;
+  caption_from_filename?: boolean;
 }): Promise<Workflow> {
   return fetch("/api/workflows", {
     method: "POST",
@@ -396,6 +405,7 @@ export function updateWorkflow(
     poll_seconds: number;
     auto_caption: boolean;
     caption_bank_id: string | null;
+    caption_from_filename: boolean;
   }>,
 ): Promise<Workflow> {
   return fetch(`/api/workflows/${id}`, {

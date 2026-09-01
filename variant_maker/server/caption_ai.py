@@ -29,6 +29,16 @@ OPENERS = (
     "Keep this: ",
     "The version that hits: ",
 )
+HOOK_SHAPES = (
+    "{hook}",
+    "POV: {hook}",
+    "Wait for it — {hook}",
+    "This is why {hook}",
+    "Save this: {hook}",
+    "The honest take: {hook}",
+    "If you blinked: {hook}",
+    "Real ones know: {hook}",
+)
 
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
@@ -75,12 +85,47 @@ def anthropic_caption_model(environ: Mapping[str, str] | None = None) -> str:
     return raw
 
 
+def brief_from_filename(filename: str) -> str:
+    """Seed caption from a Drive / camera-roll filename. Hashtags stay."""
+    stem = source_stem(filename)
+    tags = HASHTAG_RE.findall(stem)
+    hook = HASHTAG_RE.sub("", stem)
+    hook = re.sub(r"[_-]+", " ", hook)
+    hook = re.sub(r"\s+", " ", hook).strip(" .")
+    if len(hook) > 120:
+        hook = hook[:120].rstrip()
+    extras = " ".join(tags[:8])
+    if hook and extras:
+        return f"{hook}\n\n{extras}"
+    return hook or extras or "New clip"
+
+
+def hook_key(text: str) -> str:
+    """First-line fingerprint so 'Wait — same hook' still counts as a copy."""
+    hook, _tags = _split_hook_tags(strip_internal_index_lines(text))
+    for opener in sorted((item for item in OPENERS if item), key=len, reverse=True):
+        if hook.startswith(opener):
+            hook = hook[len(opener):].lstrip(" —–-")
+            break
+    return " ".join(_norm_caption(hook).split()[:5])
+
+
+def too_similar(parts: list[str], count: int) -> bool:
+    keys = [hook_key(part) for part in parts if strip_internal_index_lines(part)]
+    n = max(0, int(count))
+    if len(keys) < n:
+        return True
+    unique = {key for key in keys if key}
+    return len(unique) < max(2, (n + 1) // 2)
+
+
 def captions_for_source(
     filename: str,
     count: int,
     *,
     prompt: str | None = None,
     environ: Mapping[str, str] | None = None,
+    avoid: list[str] | None = None,
 ) -> list[str]:
     n = max(0, int(count))
     brief = (prompt or "").strip()
@@ -90,13 +135,13 @@ def captions_for_source(
     anthropic_key = (env.get("ANTHROPIC_API_KEY") or env.get("VARIANT_ANTHROPIC_API_KEY") or "").strip()
     if anthropic_key:
         try:
-            return _anthropic_captions(filename, n, anthropic_key, env, brief)
+            return _anthropic_captions(filename, n, anthropic_key, env, brief, avoid=avoid)
         except (OSError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
             pass
     openai_key = (env.get("OPENAI_API_KEY") or env.get("VARIANT_OPENAI_API_KEY") or "").strip()
     if openai_key:
         try:
-            return _openai_captions(filename, n, openai_key, env, brief)
+            return _openai_captions(filename, n, openai_key, env, brief, avoid=avoid)
         except (OSError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
             pass
     return _fill_unique([], brief, n)
@@ -155,28 +200,43 @@ def publishable_unique_caption(
     text = strip_internal_index_lines(brief) or "New clip"
     hook, tags = _split_hook_tags(text)
     tag_src = tags or ["#fyp", "#viral"]
-    n_open = len(OPENERS)
+    n_shape = len(HOOK_SHAPES)
     n_tag = len(tag_src)
-    for shift in range(max(int(total), n_open, n_tag) + 2):
-        opener = OPENERS[(index - 1 + shift) % n_open]
+    for shift in range(max(int(total), n_shape, n_tag) + 2):
+        shape = HOOK_SHAPES[(index - 1 + shift) % n_shape]
         rot = (index - 1 + shift) % n_tag
         rotated = tag_src[rot:] + tag_src[:rot]
-        cand = strip_internal_index_lines(f"{opener}{hook}\n\n{' '.join(rotated)}")
-        key = _norm_caption(cand)
+        cand = strip_internal_index_lines(f"{shape.format(hook=hook)}\n\n{' '.join(rotated)}")
+        key = hook_key(cand) or _norm_caption(cand)
         if key and key not in seen:
             return cand
     return text
 
 
-def _prompt(filename: str, count: int, brief: str) -> str:
+def _prompt(
+    filename: str,
+    count: int,
+    brief: str,
+    *,
+    avoid: list[str] | None = None,
+    extra: str = "",
+) -> str:
+    avoid_block = ""
+    skipped = [hook_key(item) or item[:80] for item in (avoid or []) if str(item).strip()]
+    if skipped:
+        listed = "\n".join(f"- {line}" for line in skipped[:16])
+        avoid_block = f"Do not reuse these hooks:\n{listed}\n"
+    extra_block = f"{extra.strip()}\n" if extra.strip() else ""
     return (
         "Write Instagram Reels / TikTok captions for short UGC clips.\n"
         f"Source filename: {source_stem(filename)}\n"
         "The operator wrote this seed caption:\n"
         f"{brief.strip()}\n\n"
+        f"{avoid_block}{extra_block}"
         f"Write exactly {count} DISTINCT captions, one unique rewrite per variant.\n"
         "Each caption must use different hook wording — not a copy-paste of the seed, "
-        "not the same sentence with a number tacked on.\n"
+        "not the same sentence with a number or prefix tacked on.\n"
+        "The first five words of each caption must be different.\n"
         "Keep the same meaning, topic, and hashtag set (order may change).\n"
         "Do not output the seed caption verbatim more than once.\n"
         "Never write lines like Copy 1 of 20 or Take 2 of 8 — those are internal and must not appear.\n"
@@ -263,13 +323,11 @@ def _fill_unique(parts: list[str], brief: str, count: int) -> list[str]:
     for slot in range(n):
         cand = unused[slot] if slot < len(unused) else ""
         cand = strip_internal_index_lines(cand)
-        if not cand or _norm_caption(cand) in seen:
+        key = hook_key(cand) or _norm_caption(cand)
+        if not cand or key in seen:
             cand = publishable_unique_caption(brief, slot + 1, n, seen)
-        cand = strip_internal_index_lines(cand)
-        key = _norm_caption(cand)
-        if key in seen:
-            cand = publishable_unique_caption(brief, slot + 1, n, seen)
-            key = _norm_caption(cand)
+            cand = strip_internal_index_lines(cand)
+            key = hook_key(cand) or _norm_caption(cand)
         if key:
             seen.add(key)
         out.append(cand)
@@ -293,48 +351,90 @@ def _caption_max_tokens(count: int) -> int:
     return min(8192, max(2048, int(count) * 400))
 
 
-def _openai_captions(filename: str, count: int, key: str, env: Mapping[str, str], brief: str) -> list[str]:
+def _pick_unique(first: list[str], retry: list[str], count: int) -> list[str]:
+    if not too_similar(retry, count) or len({hook_key(item) for item in retry}) > len(
+        {hook_key(item) for item in first}
+    ):
+        return retry
+    return first
+
+
+def _generate_with_retry(call, count: int, brief: str) -> list[str]:
+    """Retry once if the model copy-pasted the same hook. Compare *extracted*
+    parts — local uniquify would hide the repeat and skip the second call.
+    """
+    extracted = extract_caption_parts(call())
+    if too_similar(extracted, count):
+        retry = extract_caption_parts(call(
+            "The previous batch repeated the same first line. "
+            "Every caption MUST start with a different hook."
+        ))
+        extracted = _pick_unique(extracted, retry, count)
+    return _fill_unique(extracted, brief, count)
+
+
+def _openai_captions(
+    filename: str,
+    count: int,
+    key: str,
+    env: Mapping[str, str],
+    brief: str,
+    avoid: list[str] | None = None,
+) -> list[str]:
     raw = (env.get("VARIANT_CAPTION_MODEL") or "").strip()
     model = raw if raw.lower().startswith("gpt-") else DEFAULT_OPENAI_CAPTION_MODEL
-    payload = json.dumps({
-        "model": model or DEFAULT_OPENAI_CAPTION_MODEL,
-        "messages": [
-            {"role": "system", "content": "You write short social captions. Each copy must be a unique rewrite."},
-            {"role": "user", "content": _prompt(filename, count, brief)},
-        ],
-        "temperature": 0.9,
-    }).encode()
-    req = urllib.request.Request(
-        OPENAI_URL,
-        data=payload,
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=CAPTION_TIMEOUT_SEC) as resp:
-        body = json.loads(resp.read().decode())
-    text = body["choices"][0]["message"]["content"]
-    return split_ai_captions(text, count, brief)
+
+    def call(extra: str = "") -> str:
+        payload = json.dumps({
+            "model": model or DEFAULT_OPENAI_CAPTION_MODEL,
+            "messages": [
+                {"role": "system", "content": "You write short social captions. Each copy must be a unique rewrite."},
+                {"role": "user", "content": _prompt(filename, count, brief, avoid=avoid, extra=extra)},
+            ],
+            "temperature": 0.95,
+        }).encode()
+        req = urllib.request.Request(
+            OPENAI_URL,
+            data=payload,
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=CAPTION_TIMEOUT_SEC) as resp:
+            body = json.loads(resp.read().decode())
+        return body["choices"][0]["message"]["content"]
+
+    return _generate_with_retry(call, count, brief)
 
 
-def _anthropic_captions(filename: str, count: int, key: str, env: Mapping[str, str], brief: str) -> list[str]:
+def _anthropic_captions(
+    filename: str,
+    count: int,
+    key: str,
+    env: Mapping[str, str],
+    brief: str,
+    avoid: list[str] | None = None,
+) -> list[str]:
     model = anthropic_caption_model(env)
-    payload = json.dumps({
-        "model": model,
-        "max_tokens": _caption_max_tokens(count),
-        "temperature": 0.9,
-        "messages": [{"role": "user", "content": _prompt(filename, count, brief)}],
-    }).encode()
-    req = urllib.request.Request(
-        ANTHROPIC_URL,
-        data=payload,
-        headers={
-            "x-api-key": key,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=CAPTION_TIMEOUT_SEC) as resp:
-        body = json.loads(resp.read().decode())
-    text = body["content"][0]["text"]
-    return split_ai_captions(text, count, brief)
+
+    def call(extra: str = "") -> str:
+        payload = json.dumps({
+            "model": model,
+            "max_tokens": _caption_max_tokens(count),
+            "temperature": 0.95,
+            "messages": [{"role": "user", "content": _prompt(filename, count, brief, avoid=avoid, extra=extra)}],
+        }).encode()
+        req = urllib.request.Request(
+            ANTHROPIC_URL,
+            data=payload,
+            headers={
+                "x-api-key": key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=CAPTION_TIMEOUT_SEC) as resp:
+            body = json.loads(resp.read().decode())
+        return body["content"][0]["text"]
+
+    return _generate_with_retry(call, count, brief)

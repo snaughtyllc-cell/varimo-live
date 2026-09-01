@@ -6,13 +6,16 @@ from variant_maker.server.caption_ai import (
     DEFAULT_ANTHROPIC_CAPTION_MODEL,
     _prompt,
     anthropic_caption_model,
+    brief_from_filename,
     briefs_for_sources,
     captions_for_source,
+    hook_key,
     local_caption,
     parse_caption_prompts_field,
     source_stem,
     split_ai_captions,
     strip_internal_index_lines,
+    too_similar,
 )
 
 
@@ -166,4 +169,76 @@ def test_briefs_for_sources_are_per_source():
         "only first",
         "",
     ]
+
+
+def test_brief_from_filename_keeps_hook_and_hashtags():
+    seed = brief_from_filename("POV she said wait for it #reels #fyp.mp4")
+    assert "wait for it" in seed.lower()
+    assert "#reels" in seed
+    assert ".mp4" not in seed
+
+
+def test_hook_key_treats_opener_prefix_as_the_same_copy():
+    a = "POV the boil hits different\n#reels"
+    b = "Wait — POV the boil hits different\n#reels"
+    assert hook_key(a) == hook_key(b)
+
+
+def test_too_similar_when_the_same_hook_repeats():
+    same = ["POV the boil hits different\n#reels"] * 8
+    assert too_similar(same, 8) is True
+    mixed = [
+        "POV the boil hits different\n#reels",
+        "She said wait for the drop\n#reels",
+        "Real ones know this clip\n#reels",
+        "If you blinked you missed it\n#reels",
+    ]
+    assert too_similar(mixed, 4) is False
+
+
+def test_split_drops_repeated_hooks_instead_of_keeping_copies():
+    raw = json.dumps(["POV the boil hits different\n#reels"] * 4)
+    out = split_ai_captions(raw, 4, "POV the boil hits different #reels")
+    assert len(out) == 4
+    keys = {hook_key(item) for item in out}
+    assert len(keys) >= 3
+
+
+def test_anthropic_retries_when_hooks_repeat(monkeypatch):
+    calls = []
+
+    class FakeResp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            if len(calls) == 1:
+                return json.dumps({"content": [{"text": json.dumps(["same hook #reels"] * 3)}]}).encode()
+            return json.dumps({
+                "content": [{
+                    "text": json.dumps([
+                        "POV the boil hits different\n#reels",
+                        "She said wait for the drop\n#reels",
+                        "Real ones know this clip\n#reels",
+                    ]),
+                }],
+            }).encode()
+
+    def fake_urlopen(req, timeout=None):
+        calls.append((req.full_url, json.loads(req.data.decode())))
+        return FakeResp()
+
+    monkeypatch.setattr("variant_maker.server.caption_ai.urllib.request.urlopen", fake_urlopen)
+    out = captions_for_source(
+        "boil.mp4",
+        3,
+        prompt="POV boil #reels",
+        environ={"ANTHROPIC_API_KEY": "sk-ant-test"},
+    )
+    assert len(calls) == 2
+    assert "previous batch" in calls[1][1]["messages"][0]["content"].lower()
+    assert len({hook_key(item) for item in out}) >= 3
 

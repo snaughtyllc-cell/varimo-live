@@ -201,6 +201,23 @@ describe("setVariantCaption", () => {
   });
 });
 
+describe("rewriteSourceCaptions", () => {
+  it("POSTs a seed to rewrite every copy", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        source_id: "s1", filename: "a.mp4", requested: 2, delivered: 2, shortfall: 0,
+        variants: [], caption_prompt: "Gym pump #fyp",
+      }), { status: 200 }),
+    );
+    const out = await api.rewriteSourceCaptions("s1", "Gym pump #fyp");
+    expect(out.caption_prompt).toBe("Gym pump #fyp");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/sources/s1/captions");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ prompt: "Gym pump #fyp" });
+  });
+});
+
 describe("removeSource", () => {
   it("DELETEs /api/sources/:id", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -417,10 +434,17 @@ describe("workflows API", () => {
       name: "Inbox → Out",
       inbox_destination_id: "dst_in",
       output_destination_id: "dst_out",
+      caption_from_filename: true,
     });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/workflows");
     expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      name: "Inbox → Out",
+      inbox_destination_id: "dst_in",
+      output_destination_id: "dst_out",
+      caption_from_filename: true,
+    });
   });
 
   it("updateWorkflow PATCHes /api/workflows/:id", async () => {

@@ -23,6 +23,9 @@ import {
   workflowOutputHint,
   workflowAutoCaptionHint,
   workflowCanCancel,
+  workflowFilenameCaptionHint,
+  workflowFilenameCaptionLabel,
+  workflowFilenameCaptionCardLabel,
 } from "@/lib/workflowCopy";
 
 const DEFAULT_POLL_MINUTES = 2;
@@ -65,6 +68,7 @@ export function WorkflowsPanel() {
   const [pollMinutes, setPollMinutes] = useState(DEFAULT_POLL_MINUTES);
   const [enabled, setEnabled] = useState(true);
   const [autoCaption, setAutoCaption] = useState(false);
+  const [captionFromFilename, setCaptionFromFilename] = useState(false);
   const [captionBankId, setCaptionBankId] = useState("");
   const [banks, setBanks] = useState<CaptionBankFolder[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
@@ -135,6 +139,7 @@ export function WorkflowsPanel() {
         poll_seconds: Math.round(pollMinutes * 60),
         auto_caption: autoCaption,
         caption_bank_id: captionBankId || null,
+        caption_from_filename: captionFromFilename,
       });
       setWorkflows((prev) => [...prev, created]);
       setName("");
@@ -160,10 +165,30 @@ export function WorkflowsPanel() {
   async function handleToggleAutoCaption(wf: Workflow) {
     setActionId(wf.id);
     try {
-      const updated = await updateWorkflow(wf.id, { auto_caption: !wf.auto_caption });
+      const next = !wf.auto_caption;
+      const updated = await updateWorkflow(wf.id, {
+        auto_caption: next,
+        caption_from_filename: next ? false : Boolean(wf.caption_from_filename),
+      });
       setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
     } catch (err) {
       console.error("Failed to toggle auto-caption", err);
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  async function handleToggleFilenameCaption(wf: Workflow) {
+    setActionId(wf.id);
+    try {
+      const next = !wf.caption_from_filename;
+      const updated = await updateWorkflow(wf.id, {
+        caption_from_filename: next,
+        auto_caption: next ? false : wf.auto_caption,
+      });
+      setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
+    } catch (err) {
+      console.error("Failed to toggle filename captions", err);
     } finally {
       setActionId(null);
     }
@@ -348,6 +373,66 @@ export function WorkflowsPanel() {
           <span style={{ fontSize: 11, color: "var(--color-muted2)" }}>{workflowOutputHint()}</span>
         </label>
 
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12.5, color: "var(--color-text)" }}>
+          <input
+            type="checkbox"
+            checked={captionFromFilename}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setCaptionFromFilename(on);
+              if (on) setAutoCaption(false);
+            }}
+            disabled={destinations.length === 0 || driveNotReady}
+            style={{ accentColor: "#0caab8", marginTop: 2 }}
+          />
+          <span>
+            {workflowFilenameCaptionLabel()}
+            <span style={{ display: "block", fontSize: 11, color: "var(--color-muted2)", marginTop: 2 }}>
+              {workflowFilenameCaptionHint()}
+            </span>
+          </span>
+        </label>
+
+        {captionFromFilename ? null : (
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12.5, color: "var(--color-text)" }}>
+          <input
+            type="checkbox"
+            checked={autoCaption}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setAutoCaption(on);
+              if (on) setCaptionFromFilename(false);
+            }}
+            disabled={destinations.length === 0 || driveNotReady}
+            style={{ accentColor: "#0caab8", marginTop: 2 }}
+          />
+          <span>
+            Auto-caption from bank
+            <span style={{ display: "block", fontSize: 11, color: "var(--color-muted2)", marginTop: 2 }}>
+              {workflowAutoCaptionHint()}
+            </span>
+          </span>
+        </label>
+        )}
+
+        {banks.length > 0 && !captionFromFilename && (
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Caption folder</span>
+            <select
+              value={captionBankId}
+              onChange={(e) => setCaptionBankId(e.target.value)}
+              disabled={destinations.length === 0 || driveNotReady}
+              style={inputStyle(destinations.length === 0 || driveNotReady)}
+            >
+              {banks.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {captionFolderSelectLabel(b.name, b.count, b.remaining)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 120px" }}>
             <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Variants per clip</span>
@@ -403,40 +488,6 @@ export function WorkflowsPanel() {
           />
           Watch folder (auto-poll)
         </label>
-
-        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12.5, color: "var(--color-text)" }}>
-          <input
-            type="checkbox"
-            checked={autoCaption}
-            onChange={(e) => setAutoCaption(e.target.checked)}
-            disabled={destinations.length === 0 || driveNotReady}
-            style={{ accentColor: "#0caab8", marginTop: 2 }}
-          />
-          <span>
-            Auto-caption from bank
-            <span style={{ display: "block", fontSize: 11, color: "var(--color-muted2)", marginTop: 2 }}>
-              {workflowAutoCaptionHint()}
-            </span>
-          </span>
-        </label>
-
-        {banks.length > 0 && (
-          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Caption folder</span>
-            <select
-              value={captionBankId}
-              onChange={(e) => setCaptionBankId(e.target.value)}
-              disabled={destinations.length === 0 || driveNotReady}
-              style={inputStyle(destinations.length === 0 || driveNotReady)}
-            >
-              {banks.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {captionFolderSelectLabel(b.name, b.count, b.remaining)}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
 
         {formError && <div style={{ fontSize: 12, color: "var(--color-red)" }}>{formError}</div>}
 
@@ -504,8 +555,9 @@ export function WorkflowsPanel() {
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 4 }}>
                   {wf.count} variants · {wf.quality_mode} · poll every {Math.round(wf.poll_seconds / 60)} min
-                  {wf.auto_caption ? " · auto-caption on" : ""}
-                  {wf.auto_caption ? ` · ${bankLabel(banks, wf.caption_bank_id)}` : ""}
+                  {wf.caption_from_filename ? " · filenames as captions" : ""}
+                  {wf.auto_caption && !wf.caption_from_filename ? " · auto-caption on" : ""}
+                  {wf.auto_caption && !wf.caption_from_filename ? ` · ${bankLabel(banks, wf.caption_bank_id)}` : ""}
                 </div>
                 <div style={{ fontSize: 11.5, color: "var(--color-muted2)", marginTop: 6 }}>
                   Last sweep: {formatSummary(wf.last_summary)}
@@ -531,38 +583,6 @@ export function WorkflowsPanel() {
                   />
                   Watch
                 </label>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 12,
-                    color: "var(--color-text)",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!wf.auto_caption}
-                    disabled={busy}
-                    onChange={() => handleToggleAutoCaption(wf)}
-                    style={{ accentColor: "#0caab8" }}
-                  />
-                  Auto-caption
-                </label>
-                {banks.length > 0 && (
-                  <select
-                    value={wf.caption_bank_id || banks.find((b) => b.is_default)?.id || ""}
-                    disabled={busy}
-                    onChange={(e) => handleCaptionBank(wf, e.target.value)}
-                    style={{ ...inputStyle(busy), minWidth: 140 }}
-                  >
-                    {banks.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {captionFolderSelectLabel(b.name, b.count, b.remaining)}
-                      </option>
-                    ))}
-                  </select>
-                )}
                 <button
                   type="button"
                   onClick={() => handleRun(wf)}
@@ -590,6 +610,48 @@ export function WorkflowsPanel() {
                   Delete
                 </button>
               </div>
+            </div>
+            <div className="workflow-card-captions">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={!!wf.caption_from_filename}
+                  disabled={busy}
+                  onChange={() => handleToggleFilenameCaption(wf)}
+                  style={{ accentColor: "#0caab8" }}
+                />
+                <span>
+                  {workflowFilenameCaptionCardLabel()}
+                  <span className="workflow-card-captions__hint">{workflowFilenameCaptionHint()}</span>
+                </span>
+              </label>
+              {!wf.caption_from_filename && (
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={!!wf.auto_caption}
+                    disabled={busy}
+                    onChange={() => handleToggleAutoCaption(wf)}
+                    style={{ accentColor: "#0caab8" }}
+                  />
+                  Auto-caption from bank
+                </label>
+              )}
+              {banks.length > 0 && !wf.caption_from_filename && (
+                <select
+                  value={wf.caption_bank_id || banks.find((b) => b.is_default)?.id || ""}
+                  disabled={busy}
+                  onChange={(e) => handleCaptionBank(wf, e.target.value)}
+                  style={{ ...inputStyle(busy), minWidth: 140 }}
+                  aria-label="Caption folder"
+                >
+                  {banks.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {captionFolderSelectLabel(b.name, b.count, b.remaining)}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
         );

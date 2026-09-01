@@ -63,19 +63,29 @@ def source_stem(filename: str) -> str:
     return STEM_RE.sub("", name).strip() or "clip"
 
 
+def strip_hashtags(text: str) -> str:
+    """Drop #tags from generated captions. The hook stays."""
+    cleaned = HASHTAG_RE.sub(" ", text or "")
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    cleaned = re.sub(r"[ \t]*\n[ \t]*", "\n", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip(" \t\n.-")
+
+
+def _publish(text: str) -> str:
+    return strip_hashtags(strip_internal_index_lines(text))
+
+
 def local_caption(filename: str, index: int, total: int) -> str:
     """Deterministic caption when no AI key is set. Safe for Drive filenames."""
     stem = source_stem(filename)
-    tags = HASHTAG_RE.findall(stem)
     hook = HASHTAG_RE.sub("", stem)
     hook = re.sub(r"[_-]+", " ", hook)
     hook = re.sub(r"\s+", " ", hook).strip(" .") or "New clip"
     if len(hook) > 80:
         hook = hook[:80].rstrip()
-    extras = tags[:6] if tags else ["#fyp", "#viral"]
-    rotated = extras[(index - 1) % len(extras):] + extras[: (index - 1) % len(extras)]
     opener = OPENERS[(index - 1) % len(OPENERS)]
-    return strip_internal_index_lines(f"{opener}{hook}\n\n{' '.join(rotated)}")
+    return strip_hashtags(strip_internal_index_lines(f"{opener}{hook}"))
 
 
 def _retired_haiku(model: str) -> bool:
@@ -97,18 +107,14 @@ def anthropic_caption_model(environ: Mapping[str, str] | None = None) -> str:
 
 
 def brief_from_filename(filename: str) -> str:
-    """Seed caption from a Drive / camera-roll filename. Hashtags stay."""
+    """Seed caption from a Drive / camera-roll filename. Hashtags are dropped."""
     stem = source_stem(filename)
-    tags = HASHTAG_RE.findall(stem)
     hook = HASHTAG_RE.sub("", stem)
     hook = re.sub(r"[_-]+", " ", hook)
     hook = re.sub(r"\s+", " ", hook).strip(" .")
     if len(hook) > 120:
         hook = hook[:120].rstrip()
-    extras = " ".join(tags[:8])
-    if hook and extras:
-        return f"{hook}\n\n{extras}"
-    return hook or extras or "New clip"
+    return hook or "New clip"
 
 
 def hook_key(text: str) -> str:
@@ -146,16 +152,19 @@ def captions_for_source(
     anthropic_key = (env.get("ANTHROPIC_API_KEY") or env.get("VARIANT_ANTHROPIC_API_KEY") or "").strip()
     if anthropic_key:
         try:
-            return _anthropic_captions(filename, n, anthropic_key, env, brief, avoid=avoid)
+            return [
+                _publish(item)
+                for item in _anthropic_captions(filename, n, anthropic_key, env, brief, avoid=avoid)
+            ]
         except _CAPTION_API_ERRORS:
             pass
     openai_key = (env.get("OPENAI_API_KEY") or env.get("VARIANT_OPENAI_API_KEY") or "").strip()
     if openai_key:
         try:
-            return _openai_captions(filename, n, openai_key, env, brief, avoid=avoid)
+            return [_publish(item) for item in _openai_captions(filename, n, openai_key, env, brief, avoid=avoid)]
         except _CAPTION_API_ERRORS:
             pass
-    return _fill_unique([], brief, n)
+    return [_publish(item) for item in _fill_unique([], brief, n)]
 
 
 def parse_caption_prompts_field(raw: str | None) -> list[str]:
@@ -209,19 +218,15 @@ def publishable_unique_caption(
 ) -> str:
     """A Drive-safe rewrite of `brief` with no internal Copy/Take index lines."""
     text = strip_internal_index_lines(brief) or "New clip"
-    hook, tags = _split_hook_tags(text)
-    tag_src = tags or ["#fyp", "#viral"]
+    hook, _tags = _split_hook_tags(text)
     n_shape = len(HOOK_SHAPES)
-    n_tag = len(tag_src)
-    for shift in range(max(int(total), n_shape, n_tag) + 2):
+    for shift in range(max(int(total), n_shape) + 2):
         shape = HOOK_SHAPES[(index - 1 + shift) % n_shape]
-        rot = (index - 1 + shift) % n_tag
-        rotated = tag_src[rot:] + tag_src[:rot]
-        cand = strip_internal_index_lines(f"{shape.format(hook=hook)}\n\n{' '.join(rotated)}")
+        cand = _publish(shape.format(hook=hook))
         key = hook_key(cand) or _norm_caption(cand)
         if key and key not in seen:
             return cand
-    return text
+    return _publish(text)
 
 
 def _prompt(
@@ -238,22 +243,24 @@ def _prompt(
         listed = "\n".join(f"- {line}" for line in skipped[:16])
         avoid_block = f"Do not reuse these hooks:\n{listed}\n"
     extra_block = f"{extra.strip()}\n" if extra.strip() else ""
+    seed = strip_hashtags(brief.strip()) or brief.strip()
     return (
         "Write Instagram Reels / TikTok captions for short UGC clips.\n"
         f"Source filename: {source_stem(filename)}\n"
         "The operator wrote this seed caption:\n"
-        f"{brief.strip()}\n\n"
+        f"{seed}\n\n"
         f"{avoid_block}{extra_block}"
         f"Write exactly {count} DISTINCT captions, one unique rewrite per variant.\n"
         "Each caption must use different hook wording — not a copy-paste of the seed, "
         "not the same sentence with a number or prefix tacked on.\n"
         "The first five words of each caption must be different.\n"
-        "Keep the same meaning, topic, and hashtag set (order may change).\n"
+        "Keep the same meaning and topic.\n"
         "Do not output the seed caption verbatim more than once.\n"
         "Never write lines like Copy 1 of 20 or Take 2 of 8 — those are internal and must not appear.\n"
-        "Each caption: 1-2 short hook lines, then 3-8 hashtags. No / or \\ characters.\n"
+        "Each caption: 1-2 short hook lines only. Never include # characters. "
+        "No / or \\ characters.\n"
         f"Output ONLY a JSON array of {count} strings, like "
-        "[\"hook\\n\\n#tags\",\"other hook\\n\\n#tags\"].\n"
+        "[\"hook\",\"other hook\"].\n"
         "No markdown fences. No intro."
     )
 
@@ -329,15 +336,15 @@ def extract_caption_parts(raw: str) -> list[str]:
 def _fill_unique(parts: list[str], brief: str, count: int) -> list[str]:
     n = max(0, int(count))
     seen: set[str] = set()
-    unused = [strip_internal_index_lines(p) for p in parts if strip_internal_index_lines(p)]
+    unused = [_publish(p) for p in parts if _publish(p)]
     out: list[str] = []
     for slot in range(n):
         cand = unused[slot] if slot < len(unused) else ""
-        cand = strip_internal_index_lines(cand)
+        cand = _publish(cand)
         key = hook_key(cand) or _norm_caption(cand)
         if not cand or key in seen:
             cand = publishable_unique_caption(brief, slot + 1, n, seen)
-            cand = strip_internal_index_lines(cand)
+            cand = _publish(cand)
             key = hook_key(cand) or _norm_caption(cand)
         if key:
             seen.add(key)

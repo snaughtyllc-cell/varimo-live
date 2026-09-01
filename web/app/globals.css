@@ -308,6 +308,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .drops-page, .workflow-page, .drive-page, .team-page, .admin-page, .diagnostics-page { background: linear-gradient(180deg, #effafb 0%, var(--aqua) 100%); min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 28px; }
 .drops-page > div, .workflow-page > div, .drive-page > div, .team-page > div, .admin-page > div, .diagnostics-page > div { margin-left: auto; margin-right: auto; max-width: 1120px; }
 .workflow-page > div:last-child, .drive-page > div:last-child, .team-page > div:last-child, .admin-page > div:last-child, .diagnostics-page > div:last-child { background: rgba(251, 253, 253, 0.9); border: 1px solid #d2e4e7; border-radius: 16px; box-shadow: var(--card-shadow); padding: 18px !important; }
+.workflow-card-captions { border-top: 1px solid var(--color-line); display: flex; flex-direction: column; gap: 10px; margin-top: 12px; padding-top: 12px; }
+.workflow-card-captions label { align-items: flex-start; color: var(--color-text); display: flex; font-size: 12.5px; gap: 8px; line-height: 1.35; }
+.workflow-card-captions input { margin-top: 2px; }
+.workflow-card-captions__hint { color: var(--color-muted2); display: block; font-size: 11px; font-weight: 500; margin-top: 2px; }
 .drive-page > div:last-child { max-width: 900px; }
 .team-page > div:last-child, .admin-page > div:last-child { max-width: 1120px; overflow-x: auto; }
 .workflow-page [style*="#0d0d13"], .drive-page [style*="#0d0d13"], .team-page [style*="#0d0d13"], .admin-page [style*="#0d0d13"] { background: #f7fbfb !important; }
@@ -387,6 +391,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   .variant-sheet__header { padding: max(14px, env(safe-area-inset-top, 0px)) 16px 14px !important; }
   .variant-sheet__body { padding: 16px 14px max(28px, env(safe-area-inset-bottom, 0px)) !important; }
   .workflow-page > div:last-child, .drive-page > div:last-child, .team-page > div:last-child, .admin-page > div:last-child, .diagnostics-page > div:last-child { padding: 14px !important; }
+  .workflow-card-captions label { min-height: 44px; }
   .vf-viewing-banner { padding: 8px 14px; }
 }
 

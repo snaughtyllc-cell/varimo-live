@@ -42,6 +42,10 @@ export function workflowFilenameCaptionLabel(): string {
   return "Use Drive filenames as captions";
 }
 
+export function workflowFilenameCaptionCardLabel(): string {
+  return "Filenames as captions";
+}
+
 export function workflowFoldersClash(
   inbox: { id: string; folder_id: string },
   output: { id: string; folder_id: string },

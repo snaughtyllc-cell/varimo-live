@@ -25,6 +25,7 @@ import {
   workflowCanCancel,
   workflowFilenameCaptionHint,
   workflowFilenameCaptionLabel,
+  workflowFilenameCaptionCardLabel,
 } from "@/lib/workflowCopy";
 
 const DEFAULT_POLL_MINUTES = 2;
@@ -372,62 +373,6 @@ export function WorkflowsPanel() {
           <span style={{ fontSize: 11, color: "var(--color-muted2)" }}>{workflowOutputHint()}</span>
         </label>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 120px" }}>
-            <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Variants per clip</span>
-            <input
-              type="number"
-              min={1}
-              max={MAX_PER_VIDEO}
-              value={count}
-              onChange={(e) => setCount(Math.min(MAX_PER_VIDEO, Math.max(1, Number(e.target.value) || 1)))}
-              disabled={destinations.length === 0 || driveNotReady}
-              style={inputStyle(destinations.length === 0 || driveNotReady)}
-            />
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 120px" }}>
-            <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Quality</span>
-            <select
-              value="fast"
-              onChange={() => setQualityMode("fast")}
-              disabled={destinations.length === 0 || driveNotReady}
-              style={inputStyle(destinations.length === 0 || driveNotReady)}
-            >
-              <option value="fast">Fast</option>
-              <option value="hq" disabled>
-                HQ — coming soon
-              </option>
-            </select>
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 120px" }}>
-            <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Poll every (minutes)</span>
-            <input
-              type="number"
-              min={1}
-              max={MAX_POLL_MINUTES}
-              value={pollMinutes}
-              onChange={(e) =>
-                setPollMinutes(Math.min(MAX_POLL_MINUTES, Math.max(1, Number(e.target.value) || 1)))
-              }
-              disabled={destinations.length === 0 || driveNotReady}
-              style={inputStyle(destinations.length === 0 || driveNotReady)}
-            />
-          </label>
-        </div>
-
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--color-text)" }}>
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={(e) => setEnabled(e.target.checked)}
-            disabled={destinations.length === 0 || driveNotReady}
-            style={{ accentColor: "#0caab8" }}
-          />
-          Watch folder (auto-poll)
-        </label>
-
         <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12.5, color: "var(--color-text)" }}>
           <input
             type="checkbox"
@@ -487,6 +432,62 @@ export function WorkflowsPanel() {
             </select>
           </label>
         )}
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 120px" }}>
+            <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Variants per clip</span>
+            <input
+              type="number"
+              min={1}
+              max={MAX_PER_VIDEO}
+              value={count}
+              onChange={(e) => setCount(Math.min(MAX_PER_VIDEO, Math.max(1, Number(e.target.value) || 1)))}
+              disabled={destinations.length === 0 || driveNotReady}
+              style={inputStyle(destinations.length === 0 || driveNotReady)}
+            />
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 120px" }}>
+            <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Quality</span>
+            <select
+              value="fast"
+              onChange={() => setQualityMode("fast")}
+              disabled={destinations.length === 0 || driveNotReady}
+              style={inputStyle(destinations.length === 0 || driveNotReady)}
+            >
+              <option value="fast">Fast</option>
+              <option value="hq" disabled>
+                HQ — coming soon
+              </option>
+            </select>
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 6, flex: "1 1 120px" }}>
+            <span style={{ fontSize: 12, color: "var(--color-muted)" }}>Poll every (minutes)</span>
+            <input
+              type="number"
+              min={1}
+              max={MAX_POLL_MINUTES}
+              value={pollMinutes}
+              onChange={(e) =>
+                setPollMinutes(Math.min(MAX_POLL_MINUTES, Math.max(1, Number(e.target.value) || 1)))
+              }
+              disabled={destinations.length === 0 || driveNotReady}
+              style={inputStyle(destinations.length === 0 || driveNotReady)}
+            />
+          </label>
+        </div>
+
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--color-text)" }}>
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+            disabled={destinations.length === 0 || driveNotReady}
+            style={{ accentColor: "#0caab8" }}
+          />
+          Watch folder (auto-poll)
+        </label>
 
         {formError && <div style={{ fontSize: 12, color: "var(--color-red)" }}>{formError}</div>}
 
@@ -582,56 +583,6 @@ export function WorkflowsPanel() {
                   />
                   Watch
                 </label>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 12,
-                    color: "var(--color-text)",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!wf.auto_caption}
-                    disabled={busy || !!wf.caption_from_filename}
-                    onChange={() => handleToggleAutoCaption(wf)}
-                    style={{ accentColor: "#0caab8" }}
-                  />
-                  Auto-caption
-                </label>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 12,
-                    color: "var(--color-text)",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!wf.caption_from_filename}
-                    disabled={busy}
-                    onChange={() => handleToggleFilenameCaption(wf)}
-                    style={{ accentColor: "#0caab8" }}
-                  />
-                  Filenames
-                </label>
-                {banks.length > 0 && !wf.caption_from_filename && (
-                  <select
-                    value={wf.caption_bank_id || banks.find((b) => b.is_default)?.id || ""}
-                    disabled={busy}
-                    onChange={(e) => handleCaptionBank(wf, e.target.value)}
-                    style={{ ...inputStyle(busy), minWidth: 140 }}
-                  >
-                    {banks.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {captionFolderSelectLabel(b.name, b.count, b.remaining)}
-                      </option>
-                    ))}
-                  </select>
-                )}
                 <button
                   type="button"
                   onClick={() => handleRun(wf)}
@@ -659,6 +610,48 @@ export function WorkflowsPanel() {
                   Delete
                 </button>
               </div>
+            </div>
+            <div className="workflow-card-captions">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={!!wf.caption_from_filename}
+                  disabled={busy}
+                  onChange={() => handleToggleFilenameCaption(wf)}
+                  style={{ accentColor: "#0caab8" }}
+                />
+                <span>
+                  {workflowFilenameCaptionCardLabel()}
+                  <span className="workflow-card-captions__hint">{workflowFilenameCaptionHint()}</span>
+                </span>
+              </label>
+              {!wf.caption_from_filename && (
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={!!wf.auto_caption}
+                    disabled={busy}
+                    onChange={() => handleToggleAutoCaption(wf)}
+                    style={{ accentColor: "#0caab8" }}
+                  />
+                  Auto-caption from bank
+                </label>
+              )}
+              {banks.length > 0 && !wf.caption_from_filename && (
+                <select
+                  value={wf.caption_bank_id || banks.find((b) => b.is_default)?.id || ""}
+                  disabled={busy}
+                  onChange={(e) => handleCaptionBank(wf, e.target.value)}
+                  style={{ ...inputStyle(busy), minWidth: 140 }}
+                  aria-label="Caption folder"
+                >
+                  {banks.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {captionFolderSelectLabel(b.name, b.count, b.remaining)}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
         );

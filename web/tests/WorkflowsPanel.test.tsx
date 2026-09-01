@@ -125,7 +125,7 @@ describe("WorkflowsPanel captions", () => {
       auto_caption: false,
     });
     render(<WorkflowsPanel />);
-    const box = await screen.findByRole("checkbox", { name: /^filenames$/i });
+    const box = await screen.findByRole("checkbox", { name: /^filenames as captions/i });
     fireEvent.click(box);
     await waitFor(() => {
       expect(updateWorkflow).toHaveBeenCalledWith("wf_1", {

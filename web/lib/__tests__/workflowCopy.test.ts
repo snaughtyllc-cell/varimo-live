@@ -7,6 +7,7 @@ import {
   workflowAutoCaptionHint,
   workflowPageBlurb,
   workflowCanCancel,
+  workflowFilenameCaptionCardLabel,
   workflowFilenameCaptionHint,
   workflowFilenameCaptionLabel,
 } from "@/lib/workflowCopy";
@@ -22,6 +23,7 @@ describe("workflow folder layout copy", () => {
     expect(workflowAutoCaptionHint()).toMatch(/off by default|caption folder/i);
     expect(workflowAutoCaptionHint()).toMatch(/remaining|folder/i);
     expect(workflowFilenameCaptionLabel()).toMatch(/filename/i);
+    expect(workflowFilenameCaptionCardLabel()).toMatch(/^filenames as captions$/i);
     expect(workflowFilenameCaptionHint()).toMatch(/drive name|filename/i);
     expect(workflowFilenameCaptionHint()).toMatch(/unique/i);
   });

@@ -94,6 +94,30 @@ describe("WorkflowsPanel captions", () => {
     });
   });
 
+  it("hides the caption folder while Drive filenames are on", async () => {
+    vi.mocked(listWorkflows).mockResolvedValue([]);
+    vi.mocked(listCaptionBanks).mockResolvedValue([
+      {
+        id: "bank_generic",
+        name: "Generic",
+        count: 4,
+        remaining: 4,
+        cursor: 0,
+        low: true,
+        is_default: true,
+      },
+    ]);
+    render(<WorkflowsPanel />);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /create workflow/i })).not.toBeDisabled();
+    });
+    expect(screen.getByText(/^caption folder$/i)).toBeInTheDocument();
+    expect(screen.getByText(/auto-caption from bank/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /use drive filenames as captions/i }));
+    expect(screen.queryByText(/^caption folder$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/auto-caption from bank/i)).not.toBeInTheDocument();
+  });
+
   it("turns Filenames on for an existing workflow and turns the bank off", async () => {
     vi.mocked(updateWorkflow).mockResolvedValue({
       ...live,

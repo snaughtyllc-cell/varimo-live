@@ -448,6 +448,7 @@ export function WorkflowsPanel() {
           </span>
         </label>
 
+        {captionFromFilename ? null : (
         <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12.5, color: "var(--color-text)" }}>
           <input
             type="checkbox"
@@ -457,7 +458,7 @@ export function WorkflowsPanel() {
               setAutoCaption(on);
               if (on) setCaptionFromFilename(false);
             }}
-            disabled={destinations.length === 0 || driveNotReady || captionFromFilename}
+            disabled={destinations.length === 0 || driveNotReady}
             style={{ accentColor: "#0caab8", marginTop: 2 }}
           />
           <span>
@@ -467,6 +468,7 @@ export function WorkflowsPanel() {
             </span>
           </span>
         </label>
+        )}
 
         {banks.length > 0 && !captionFromFilename && (
           <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>

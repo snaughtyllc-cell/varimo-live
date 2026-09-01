@@ -19,6 +19,9 @@ import {
   uniquenessCoverageChips,
   uniquenessCoverageSubcopy,
   uniquenessGalleryBadgeTitle,
+  packCaptionSeed,
+  packOptionsLabel,
+  rewriteCaptionsLabel,
 } from "@/lib/prepareCopy";
 
 describe("prepare copy", () => {
@@ -72,5 +75,14 @@ describe("prepare copy", () => {
     expect(stripInternalIndexLines("POV boil\n\nCopy 1 of 20\n#reels")).toBe("POV boil\n\n#reels");
     expect(stripInternalIndexLines("Gym pull\nTake 2 of 8\n#fyp")).toBe("Gym pull\n#fyp");
     expect(captionSnippet("POV boil\n\nCopy 1 of 20\n#reels")).toBe("POV boil #reels");
+  });
+
+  it("names Gallery pack Options for rewriting captions", () => {
+    expect(packOptionsLabel()).toMatch(/options/i);
+    expect(rewriteCaptionsLabel()).toMatch(/rewrite captions/i);
+    expect(packCaptionSeed({ caption_prompt: "POV boil #reels" })).toBe("POV boil #reels");
+    expect(packCaptionSeed({
+      variants: [{ caption: "Gym pump\n\nCopy 1 of 8\n#fyp" }],
+    })).toBe("Gym pump\n\n#fyp");
   });
 });

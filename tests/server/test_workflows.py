@@ -56,6 +56,7 @@ def test_workflow_crud(tmp_path):
     assert wf["count"] == 5
     assert wf["enabled"] is True
     assert wf["auto_caption"] is False
+    assert wf["caption_from_filename"] is False
     listed = client.get("/api/workflows").json()
     assert len(listed) == 1
     patched = client.patch(f"/api/workflows/{wf['id']}", json={"enabled": False}).json()
@@ -274,6 +275,94 @@ def test_workflow_auto_caption_uses_selected_folder_not_generic(tmp_path):
     folders = {f["name"]: f for f in client.get("/api/caption-banks").json()}
     assert folders["Generic"]["remaining"] == 1
     assert folders["Gym"]["count"] == 1
+
+
+def test_workflow_filename_captions_seed_from_drive_name(tmp_path):
+    drive = FakeDrive()
+    client, store, _ = _app(tmp_path, drive)
+    inbox_dest, inbox = _dest(client, drive, "Inbox")
+    out_dest, out = _dest(client, drive, "Out")
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"clip-bytes")
+    drive.put_file("POV she said wait for it #reels.mp4", str(clip), parent=inbox)
+    wf = client.post("/api/workflows", json={
+        "name": "Filename caps",
+        "inbox_destination_id": inbox_dest["id"],
+        "output_destination_id": out_dest["id"],
+        "count": 2,
+        "poll_seconds": 60,
+        "caption_from_filename": True,
+    }).json()
+    assert wf["caption_from_filename"] is True
+    _sweep_until_subfolders(client, store, wf["id"], drive, out, 1)
+    packed = {c.name for c in drive.list_files(_folders(drive, out)[0].id)}
+    mp4s = {n for n in packed if n.endswith(".mp4")}
+    assert len(mp4s) == 2
+    assert "v01.mp4" not in mp4s
+    joined = " ".join(mp4s).lower()
+    assert "wait for it" in joined or "pov" in joined
+    assert len(mp4s) == len(set(mp4s))
+
+
+def test_workflow_filename_mode_wins_over_bank_and_leaves_bank_untouched(tmp_path):
+    drive = FakeDrive()
+    client, store, _ = _app(tmp_path, drive)
+    inbox_dest, inbox = _dest(client, drive, "Inbox")
+    out_dest, out = _dest(client, drive, "Out")
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"clip-bytes")
+    drive.put_file("POV she said wait for it #reels.mp4", str(clip), parent=inbox)
+    client.post("/api/captions", json={"text": "bank hook that must stay #reels"})
+    before = client.get("/api/caption-banks").json()
+    remaining = next(b["remaining"] for b in before if b.get("is_default"))
+    wf = client.post("/api/workflows", json={
+        "name": "Filename over bank",
+        "inbox_destination_id": inbox_dest["id"],
+        "output_destination_id": out_dest["id"],
+        "count": 1,
+        "poll_seconds": 60,
+        "auto_caption": True,
+        "caption_from_filename": True,
+    }).json()
+    assert wf["caption_from_filename"] is True
+    assert wf["auto_caption"] is False
+    _sweep_until_subfolders(client, store, wf["id"], drive, out, 1)
+    packed = {c.name for c in drive.list_files(_folders(drive, out)[0].id)}
+    joined = " ".join(packed).lower()
+    assert "bank hook" not in joined
+    assert "wait for it" in joined or "pov" in joined
+    after = client.get("/api/caption-banks").json()
+    remaining_after = next(b["remaining"] for b in after if b.get("is_default"))
+    assert remaining_after == remaining
+
+
+def test_workflow_filename_captions_follow_each_clip(tmp_path):
+    drive = FakeDrive()
+    client, store, _ = _app(tmp_path, drive)
+    inbox_dest, inbox = _dest(client, drive, "Inbox")
+    out_dest, out = _dest(client, drive, "Out")
+    for name, payload in (
+        ("Gym pump night #gymtok.mp4", b"gym-bytes"),
+        ("POV she said wait for it #reels.mp4", b"boil-bytes"),
+    ):
+        clip = tmp_path / name.replace(" ", "_")
+        clip.write_bytes(payload)
+        drive.put_file(name, str(clip), parent=inbox)
+    wf = client.post("/api/workflows", json={
+        "name": "Mixed inbox",
+        "inbox_destination_id": inbox_dest["id"],
+        "output_destination_id": out_dest["id"],
+        "count": 1,
+        "poll_seconds": 60,
+        "caption_from_filename": True,
+    }).json()
+    _sweep_until_subfolders(client, store, wf["id"], drive, out, 2)
+    names = []
+    for folder in _folders(drive, out):
+        names.extend(c.name.lower() for c in drive.list_files(folder.id) if c.name.endswith(".mp4"))
+    joined = " ".join(names)
+    assert "gym" in joined
+    assert "wait for it" in joined or "pov" in joined
 
 
 def test_workflow_does_not_mark_exported_when_variant_files_are_missing(tmp_path):

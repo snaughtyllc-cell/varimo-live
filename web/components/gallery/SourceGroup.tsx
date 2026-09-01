@@ -22,6 +22,7 @@ import {
 import { postedCountCopy } from "@/lib/postUrl";
 import { uniquenessCustomerLabel } from "@/lib/prepareCopy";
 import { VariantCard } from "./VariantCard";
+import { PackOptions } from "./PackOptions";
 
 interface SourceGroupProps {
   source: SourceOut;
@@ -493,7 +494,9 @@ export function SourceGroup({
 
       {/* Variant grid — 8-across responsive */}
       {open && (
-        <div style={{ padding: 16 }}>
+        <>
+          <PackOptions source={source} disabled={stillRunning} onRewritten={onRegenerate} />
+          <div style={{ padding: 16 }}>
           <div className="grid grid-cols-3 min-[700px]:grid-cols-5 min-[1100px]:grid-cols-8 gap-2.5">
             {source.variants.map((variant) => {
               const key = `${source.source_id}:${variant.index}`;
@@ -510,6 +513,7 @@ export function SourceGroup({
             })}
           </div>
         </div>
+        </>
       )}
     </div>
   );

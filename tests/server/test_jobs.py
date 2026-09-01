@@ -538,6 +538,24 @@ def test_set_caption_strips_copy_n_of_m(tmp_path):
     assert "copy 1 of" not in (updated.caption or "").lower()
 
 
+def test_rewrite_captions_replaces_every_copy(tmp_path):
+    store = _store(tmp_path)
+    job = store.create_job(
+        [("boil.mp4", b"x")], count=2, generate_captions=True, caption_prompt="POV boil #reels",
+    )
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    rewritten = store.rewrite_captions(src.source_id, "Gym pump #fyp")
+    assert rewritten is not None
+    assert rewritten.caption_prompt == "Gym pump #fyp"
+    caps = [v.caption or "" for v in rewritten.variants]
+    assert all(caps)
+    assert caps[0] != caps[1]
+    joined = "\n".join(caps).lower()
+    assert "gym" in joined or "pump" in joined
+    assert "copy 1 of" not in joined
+
+
 def test_gallery_keep_boots_oldest_finished_job(tmp_path):
     store = JobStore(
         Workspace(str(tmp_path)), FakeRunner({}), gallery_keep_jobs=2,

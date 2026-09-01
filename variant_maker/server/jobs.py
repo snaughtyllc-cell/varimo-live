@@ -15,7 +15,7 @@ from typing import Literal
 from variant_maker.normalize import maybe_normalize_upload
 
 from .cancel import USER_CANCEL_MSG, CancelToken, JobCancelled
-from .caption_ai import briefs_for_sources, captions_for_source, strip_internal_index_lines
+from .caption_ai import brief_from_filename, briefs_for_sources, captions_for_source, strip_internal_index_lines
 from .events import VariantEvent, event_to_dict
 from .runner import Runner, normalize_quality_mode
 from .workspace import Workspace
@@ -101,6 +101,7 @@ class JobSource:
     variants: list[VariantInfo] = field(default_factory=list)
     runpod_job_id: str | None = None
     planned_captions: list[str] = field(default_factory=list)
+    caption_prompt: str = ""
 
     @property
     def delivered(self) -> int:
@@ -314,6 +315,7 @@ def _job_to_dict(job: Job) -> dict:
                 "planned_captions": [
                     strip_internal_index_lines(str(c)) for c in (s.planned_captions or [])
                 ],
+                "caption_prompt": s.caption_prompt or "",
                 "variants": [_variant_to_dict(v) for v in s.variants],
             }
             for s in job.sources
@@ -340,6 +342,7 @@ def _job_from_dict(data: dict) -> Job:
                 )
                 if c
             ],
+            caption_prompt=str(raw.get("caption_prompt") or ""),
         )
         for v in raw.get("variants") or []:
             if isinstance(v, dict):
@@ -456,12 +459,12 @@ class JobStore:
             caption_prompt=caption_prompt,
             caption_prompts=caption_prompts,
         )
-        if generate_captions:
-            for source, brief in zip(sources, briefs, strict=True):
-                if brief:
-                    source.planned_captions = captions_for_source(
-                        source.filename, source.requested, prompt=brief,
-                    )
+        for source, brief in zip(sources, briefs, strict=True):
+            source.caption_prompt = brief
+            if generate_captions and brief:
+                source.planned_captions = captions_for_source(
+                    source.filename, source.requested, prompt=brief,
+                )
         with self._lock:
             self._seq += 1
             created_seq = self._seq
@@ -1057,6 +1060,38 @@ class JobStore:
         if job is not None:
             self._persist(job)
         return variant
+
+    def rewrite_captions(self, source_id: str, prompt: str | None = None) -> JobSource | None:
+        """Replace every copy's caption. Videos stay put."""
+        loc = self._locate(source_id)
+        if loc is None:
+            return None
+        job_id, source = loc
+        brief = (prompt or source.caption_prompt or "").strip()
+        if not brief:
+            for variant in source.variants:
+                cleaned = _clean_caption(variant.caption)
+                if cleaned:
+                    brief = cleaned
+                    break
+        if not brief:
+            brief = brief_from_filename(source.filename)
+        n = max(int(source.requested), len(source.variants), 1)
+        source.caption_prompt = brief
+        source.planned_captions = captions_for_source(
+            source.filename,
+            n,
+            prompt=brief,
+            avoid=list(source.planned_captions or []),
+        )
+        for variant in source.variants:
+            variant.caption = _caption_for(source, variant.index)
+            self._rewrite_manifest_fields(job_id, source_id, variant.index, caption=variant.caption)
+        job = self._jobs.get(job_id)
+        if job is not None:
+            job.generate_captions = True
+            self._persist(job)
+        return source
 
     def _rewrite_manifest_fields(self, job_id: str, source_id: str, index: int,
                                  **fields: object) -> None:

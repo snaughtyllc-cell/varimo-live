@@ -26,10 +26,20 @@ export function workflowOutputHint(): string {
 
 export function workflowAutoCaptionHint(): string {
   return (
-    "Off by default. When on, each file is named from the caption folder you pick " +
-    "(Generic if none). Remaining on that folder counts down so you know when a " +
-    "20-pack will wrap. Gallery Send to Drive can use a folder or Custom (type the filename)."
+    "Names Drive files from a caption folder (Generic if none). All clips share that folder's vibe. " +
+    "Remaining counts down so you know when a 20-pack will wrap."
   );
+}
+
+export function workflowFilenameCaptionHint(): string {
+  return (
+    "Each inbox clip's Drive name is the seed. Claude writes a unique take per copy — " +
+    "mixed vibes in one folder work. Caption folder is ignored while this is on."
+  );
+}
+
+export function workflowFilenameCaptionLabel(): string {
+  return "Use Drive filenames as captions";
 }
 
 export function workflowFoldersClash(

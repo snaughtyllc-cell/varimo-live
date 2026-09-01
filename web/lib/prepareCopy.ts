@@ -87,6 +87,40 @@ export function captionStatusHint(): string {
   );
 }
 
+export function packOptionsLabel(): string {
+  return "Options";
+}
+
+export function rewriteCaptionsLabel(): string {
+  return "Rewrite captions";
+}
+
+export function rewriteCaptionsBusy(): string {
+  return "Rewriting…";
+}
+
+export function rewriteCaptionsHint(): string {
+  return "Writes a new unique take for every copy in this pack. Videos stay the same.";
+}
+
+export function rewriteCaptionsSeedLabel(): string {
+  return "Seed caption";
+}
+
+export function packCaptionSeed(source: {
+  caption_prompt?: string | null;
+  filename?: string;
+  variants?: Array<{ caption?: string | null }>;
+}): string {
+  const stored = (source.caption_prompt || "").trim();
+  if (stored) return stored;
+  for (const variant of source.variants || []) {
+    const caption = stripInternalIndexLines(variant.caption);
+    if (caption) return caption;
+  }
+  return "";
+}
+
 export function uniquenessCustomerLabel(): string {
   return "Originality";
 }

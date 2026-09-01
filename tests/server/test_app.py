@@ -609,6 +609,24 @@ def test_variant_caption_api_strips_copy_n_of_m(tmp_path):
     assert "copy 1 of" not in listed.lower()
 
 
+def test_rewrite_source_captions_http(tmp_path):
+    client, store = _client(tmp_path)
+    job_id = client.post(
+        "/api/jobs",
+        files=[("files", ("boil.mp4", b"x", "video/mp4"))],
+        data={"count": "2", "generate_captions": "true", "caption_prompt": "POV boil #reels"},
+    ).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    sid = client.get(f"/api/jobs/{job_id}").json()["sources"][0]["source_id"]
+    resp = client.post(f"/api/sources/{sid}/captions", json={"prompt": "Gym pump #fyp"})
+    assert resp.status_code == 200
+    caps = [v.get("caption") or "" for v in resp.json()["variants"]]
+    assert len(caps) == 2
+    assert caps[0] != caps[1]
+    assert resp.json()["caption_prompt"] == "Gym pump #fyp"
+    assert "copy 1 of" not in "\n".join(caps).lower()
+
+
 def test_zip_contains_ok_variants(tmp_path):
     client, store = _client(tmp_path, plan={2: "best_effort"})
     job_id = client.post("/api/jobs",

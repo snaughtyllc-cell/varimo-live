@@ -15,6 +15,7 @@ from variant_maker.farm.drive import DriveClient, is_video_file
 from variant_maker.farm.layout import source_output_subfolder
 from variant_maker.farm.ledger import Ledger
 from variant_maker.probe import sha256_file
+from variant_maker.server.caption_ai import brief_from_filename, captions_for_source
 from variant_maker.server.captions import CaptionStore, caption_filename
 from variant_maker.server.jobs import COPY_FAILED_MSG, Job, JobSource, JobStore
 from variant_maker.server.workflows import Workflow
@@ -64,6 +65,31 @@ def _md5_for_file(ledger: Ledger, file_id: str | None) -> str | None:
     return entry.get("md5") if entry else None
 
 
+def _captions_for_export(
+    source: JobSource,
+    variants: list,
+    *,
+    caption_store: CaptionStore | None,
+    caption_bank_id: str | None,
+    from_filename: bool,
+) -> list[str | None]:
+    if from_filename:
+        planned = list(source.planned_captions or [])
+        if len(planned) >= len(variants) and any(planned):
+            return [(planned[i] if i < len(planned) else None) for i in range(len(variants))]
+        if any(v.caption for v in variants):
+            return [v.caption for v in variants]
+        generated = captions_for_source(
+            source.filename,
+            len(variants),
+            prompt=brief_from_filename(source.filename),
+        )
+        return [(generated[i] if i < len(generated) else None) for i in range(len(variants))]
+    if caption_store is not None:
+        return caption_store.take(len(variants), bank_id=caption_bank_id)
+    return [None] * len(variants)
+
+
 def _export_source(
     drive: DriveClient,
     job_store: JobStore,
@@ -75,6 +101,7 @@ def _export_source(
     output_folder_id: str,
     caption_store: CaptionStore | None = None,
     caption_bank_id: str | None = None,
+    from_filename: bool = False,
 ) -> tuple[str, int]:
     variants = _uploadable(source)
     if not variants:
@@ -83,9 +110,12 @@ def _export_source(
     sub_id = drive.find_or_create_folder(sub_name, output_folder_id)
     if not sub_id or sub_id == output_folder_id:
         raise RuntimeError("refusing to dump variants into the parent output folder")
-    captions = (
-        caption_store.take(len(variants), bank_id=caption_bank_id)
-        if caption_store is not None else []
+    captions = _captions_for_export(
+        source,
+        variants,
+        caption_store=caption_store,
+        caption_bank_id=caption_bank_id,
+        from_filename=from_filename,
     )
     uploaded = 0
     for i, v in enumerate(variants):
@@ -112,6 +142,7 @@ def _harvest(
     max_attempts: int,
     caption_store: CaptionStore | None = None,
     caption_bank_id: str | None = None,
+    from_filename: bool = False,
 ) -> int:
     """Finish exports for jobs that left `running`. Returns how many are still in flight."""
     still = 0
@@ -145,6 +176,7 @@ def _harvest(
                 stem=stem, sha=sha, output_folder_id=output_folder_id,
                 caption_store=caption_store,
                 caption_bank_id=caption_bank_id,
+                from_filename=from_filename,
             )
         except Exception as e:  # noqa: BLE001 — isolate one clip, keep the sweep going
             ledger.mark_failed(sha, error=f"{type(e).__name__}: {e}", file_id=file_id, md5=md5)
@@ -200,6 +232,10 @@ def _queue_new(
                 count=workflow.count,
                 allow_creative_escalate=workflow.allow_creative_escalate,
                 quality_mode=workflow.quality_mode,
+                generate_captions=bool(workflow.caption_from_filename),
+                caption_prompt=(
+                    brief_from_filename(f.name) if workflow.caption_from_filename else ""
+                ),
             )
             ledger.mark_running(
                 sha, job_id=job.job_id, file_id=f.id, md5=f.md5, filename=f.name,
@@ -259,10 +295,11 @@ def tick_workflow(
     if inbox_folder_id == output_folder_id:
         summary.error = "inbox and output folders must be different"
         return summary
-    bank = caption_store if workflow.auto_caption else None
+    bank = caption_store if (workflow.auto_caption and not workflow.caption_from_filename) else None
     bank_id = workflow.caption_bank_id or None
     still = _harvest(ledger, job_store, drive, output_folder_id, summary, max_attempts,
-                     caption_store=bank, caption_bank_id=bank_id)
+                     caption_store=bank, caption_bank_id=bank_id,
+                     from_filename=workflow.caption_from_filename)
     _queue_new(
         workflow, drive, inbox_folder_id, job_store, ledger, work_dir, summary,
         max_attempts=max_attempts, slots=max(0, max_inflight - still),
@@ -278,6 +315,7 @@ def tick_workflow(
         # Don't double-count running from the first harvest; reset running then re-harvest.
         summary.running = 0
         still = _harvest(ledger, job_store, drive, output_folder_id, summary, max_attempts,
-                         caption_store=bank, caption_bank_id=bank_id)
+                         caption_store=bank, caption_bank_id=bank_id,
+                         from_filename=workflow.caption_from_filename)
         summary.running = still
     return summary

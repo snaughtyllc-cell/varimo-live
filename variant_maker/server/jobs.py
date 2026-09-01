@@ -15,7 +15,12 @@ from typing import Literal
 from variant_maker.normalize import maybe_normalize_upload
 
 from .cancel import USER_CANCEL_MSG, CancelToken, JobCancelled
-from .caption_ai import brief_from_filename, briefs_for_sources, captions_for_source, strip_internal_index_lines
+from .caption_ai import (
+    brief_from_filename,
+    briefs_for_sources,
+    captions_for_source,
+    strip_internal_index_lines,
+)
 from .events import VariantEvent, event_to_dict
 from .runner import Runner, normalize_quality_mode
 from .workspace import Workspace

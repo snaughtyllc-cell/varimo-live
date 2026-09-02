@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { VariantCard } from "@/components/gallery/VariantCard";
 import type { VariantOut } from "@/lib/types";
 import { ESCALATED_TITLE } from "@/lib/format";
-import { captionCopyLabel } from "@/lib/prepareCopy";
+import { captionCopiedLabel, captionCopyLabel } from "@/lib/prepareCopy";
 
 function variant(over: Partial<VariantOut> & { caption?: string | null } = {}): VariantOut {
   return {
@@ -185,6 +185,26 @@ describe("VariantCard uniqueness", () => {
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(caption);
     });
+    expect(screen.getByRole("button", { name: captionCopiedLabel() })).toBeInTheDocument();
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("keeps Copied on the card even if the clipboard API rejects", async () => {
+    vi.stubGlobal("navigator", {
+      clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+    });
+    const onOpen = vi.fn();
+    render(
+      <VariantCard
+        variant={variant({ caption: "POV the boil hits different" })}
+        sourceId="s1"
+        onOpen={onOpen}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: captionCopyLabel() }));
+    expect(await screen.findByRole("button", { name: captionCopiedLabel() })).toBeInTheDocument();
     expect(onOpen).not.toHaveBeenCalled();
   });
 });

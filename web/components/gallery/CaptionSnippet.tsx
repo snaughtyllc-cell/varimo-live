@@ -1,5 +1,5 @@
 "use client";
-import { useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { writeClipboardText } from "@/lib/clipboard";
 import {
   captionCopyLabel,
@@ -12,15 +12,25 @@ export function CaptionSnippet({ caption }: { caption?: string | null }) {
   const preview = captionSnippet(caption);
   const full = stripInternalIndexLines(caption);
   const [copied, setCopied] = useState(false);
+  const copiedReset = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (copiedReset.current) window.clearTimeout(copiedReset.current);
+    };
+  }, []);
   if (!preview || !full) return null;
 
   async function copyCaption(e: MouseEvent) {
     e.stopPropagation();
     e.preventDefault();
-    const ok = await writeClipboardText(full);
-    if (!ok) return;
     setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+    if (copiedReset.current) window.clearTimeout(copiedReset.current);
+    copiedReset.current = window.setTimeout(() => setCopied(false), 2000);
+    const ok = await writeClipboardText(full);
+    if (!ok) {
+      setCopied(false);
+      if (copiedReset.current) window.clearTimeout(copiedReset.current);
+    }
   }
 
   return (

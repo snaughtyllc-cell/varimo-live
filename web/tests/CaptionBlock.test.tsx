@@ -45,6 +45,7 @@ describe("CaptionBlock", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 

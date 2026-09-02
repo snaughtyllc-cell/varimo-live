@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { VariantOut } from "@/lib/types";
 import { setVariantCaption } from "@/lib/api";
 import { writeClipboardText } from "@/lib/clipboard";
@@ -38,10 +38,18 @@ export function CaptionBlock({ sourceId, variant, onSaved }: CaptionBlockProps) 
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const boxRef = useRef<HTMLTextAreaElement>(null);
+  const copiedReset = useRef<number | null>(null);
 
   useEffect(() => {
     setDraft(saved);
   }, [saved, variant.index, sourceId]);
+
+  useEffect(() => {
+    return () => {
+      if (copiedReset.current) window.clearTimeout(copiedReset.current);
+    };
+  }, []);
 
   const cleanedDraft = stripInternalIndexLines(draft);
   const canCopy = Boolean(cleanedDraft);
@@ -60,17 +68,33 @@ export function CaptionBlock({ sourceId, variant, onSaved }: CaptionBlockProps) 
     }
   }
 
+  function markCopied() {
+    setCopied(true);
+    if (copiedReset.current) window.clearTimeout(copiedReset.current);
+    copiedReset.current = window.setTimeout(() => setCopied(false), 2000);
+  }
+
   async function copyCaption() {
     if (!canCopy) return;
     setError(null);
-    const ok = await writeClipboardText(cleanedDraft);
-    if (!ok) {
-      setError(captionCopyBlockedCopy());
-      setCopied(false);
-      return;
+    markCopied();
+    const box = boxRef.current;
+    let ok = false;
+    if (box) {
+      try {
+        box.focus();
+        box.select();
+        ok = typeof document.execCommand === "function" && document.execCommand("copy");
+      } catch {
+        ok = false;
+      }
     }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+    if (!ok) ok = await writeClipboardText(cleanedDraft);
+    if (!ok) {
+      setCopied(false);
+      if (copiedReset.current) window.clearTimeout(copiedReset.current);
+      setError(captionCopyBlockedCopy());
+    }
   }
 
   return (
@@ -104,6 +128,7 @@ export function CaptionBlock({ sourceId, variant, onSaved }: CaptionBlockProps) 
         placeholder={captionEmptyCopy()}
         aria-label={captionPreviewLabel()}
         disabled={busy}
+        ref={boxRef}
         style={{ marginTop: 0, minHeight: 110 }}
       />
       <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>

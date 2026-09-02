@@ -74,6 +74,7 @@ describe("VariantCard platform badges", () => {
 
 describe("VariantCard uniqueness", () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 

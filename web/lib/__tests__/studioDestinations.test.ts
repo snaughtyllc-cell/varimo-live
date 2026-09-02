@@ -39,7 +39,12 @@ describe("studioDestinations", () => {
     ]);
   });
 
-  it("does not hide Team, Admin, or Diagnostics from the catalog", () => {
-    expect(EXTRA_TABS.map((d) => d.label)).toEqual(["Team", "Admin", "Diagnostics"]);
+  it("does not hide Team, Analytics, Admin, or Diagnostics from the catalog", () => {
+    expect(EXTRA_TABS.map((d) => d.label)).toEqual([
+      "Team",
+      "Analytics",
+      "Admin",
+      "Diagnostics",
+    ]);
   });
 });

@@ -20,9 +20,9 @@ describe v1 only. Do not treat them as the current product.
 
 | Audience | Tabs |
 |---|---|
-| Solo creator | **Studio · Gallery · Drive** (no Team, no invite) |
-| Agency member | **Studio · Gallery · Drops · Workflows · Drive** |
-| Agency owner | + **Team** (invite VAs into this studio) |
+| Solo creator | **Studio · Gallery · Drive** + **Analytics** (More; owner) |
+| Agency member | **Studio · Gallery · Drops · Workflows · Drive** (no Analytics) |
+| Agency owner | + **Team** (invite VAs) + **Analytics** |
 | Site admin (`SITE_ADMIN_EMAILS`) | all of the above + **Admin · Diagnostics** |
 | Unauthenticated | **Login** only |
 
@@ -31,8 +31,10 @@ operator studios keep Team. New-studio invites write **solo**. Flip a
 workspace to Agency in Admin when that studio should invite VAs.
 
 Phone (`< 640px`) only has room for the primary tabs that audience
-can see. Team / Admin / Diagnostics sit under **More**. Desktop shows
-extras in the top row when the session is allowed to see them.
+can see. Team / Analytics / Admin / Diagnostics sit under **More**.
+Desktop shows extras in the top row when the session is allowed to
+see them. Analytics is owner-only (solo owners included). VAs never
+see it.
 
 Watch is **not** a tab. It lives inside Studio + Workflows as a job
 row + progress card.
@@ -45,8 +47,9 @@ row + progress card.
 | Gallery | `/gallery` | everyone | yes | 7-day packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
 | Drops | `/drops` | agency | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | Workflows | `/workflows` | agency | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
-| Drive | `/settings/drive` | everyone | yes | Share varimo Drive email, paste folder link, captions, Drop Ledger, password. |
+| Drive | `/settings/drive` | everyone | yes | Share varimo Drive email, paste folder link, captions, Drop Ledger, password. Owners also Connect Instagram testers here. |
 | Team | `/team` | agency owner / site admin | More | Workspace owner invites VAs. Solo creators cannot invite. |
+| Analytics | `/analytics` | workspace owner / site admin (or auth off) | More (label **Stats**) | Instagram Insights: Connect testers, Sync views onto packs, unmatched Reel picker. VAs cannot open this. |
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | Diagnostics | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
 | Login | `/login` | unauthenticated | — | Invite-only email + password or Google. No app tabs. |
@@ -64,13 +67,16 @@ old four-row list.
 | Send to Drive | Gallery / variant sheet | Pick destination + caption folder; split a pack across folders. |
 | Drive picker | Studio | Import source files from a saved Drive destination. |
 | Watch / queue / cancel | Studio + Workflows | Live job tiles, cancel, re-attach after reload. Workflows can caption from each Drive filename. |
+| Unmatched Reel picker | Analytics | After Sync, pick the Gallery copy for Reels that caption-match skipped. |
 
 ## What not to invent
 
 - Do not add a Watch tab. Watch stays inside Studio + Workflows.
-- Do not remove Drops, Workflows, Drive, Team, or Admin from the
-  catalog — they are live. Solo chrome hides Drops, Workflows, and Team.
-- Do not put Admin / Diagnostics in the phone bottom bar. They stay
-  under More.
+- Do not remove Drops, Workflows, Drive, Team, Analytics, or Admin from
+  the catalog — they are live. Solo chrome hides Drops, Workflows, and
+  Team. Analytics stays under More for owners (including solo).
+- Do not put Admin / Diagnostics / Analytics in the phone bottom bar.
+  They stay under More so VAs never get a sixth primary tab.
 - Auth gating stays in `web/lib/navAccess.ts` (`showTeamNav`,
-  `showDiagnosticsNav`). Site admin is `SITE_ADMIN_EMAILS`.
+  `showAnalyticsNav`, `showDiagnosticsNav`). Site admin is
+  `SITE_ADMIN_EMAILS`. Instagram Connect/Sync is owners only.

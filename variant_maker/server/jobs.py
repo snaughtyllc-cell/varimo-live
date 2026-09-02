@@ -94,6 +94,9 @@ class VariantInfo:
     escalated: bool = False
     platform_result: str | None = None
     post_url: str | None = None
+    ig_media_id: str | None = None
+    ig_user_id: str | None = None
+    ig_insights: dict | None = None
     look_status: str | None = None
     look_mae: float | None = None
     look_src: str | None = None
@@ -218,6 +221,8 @@ def _variant_to_dict(v: VariantInfo) -> dict:
         "uniqueness_target": v.uniqueness_target, "preset_used": v.preset_used,
         "strength_final": v.strength_final, "escalated": v.escalated,
         "platform_result": v.platform_result, "post_url": v.post_url,
+        "ig_media_id": v.ig_media_id, "ig_user_id": v.ig_user_id,
+        "ig_insights": v.ig_insights,
         "look_status": v.look_status, "look_mae": v.look_mae,
         "look_src": v.look_src, "look_var": v.look_var,
         "caption": _clean_caption(v.caption),
@@ -270,6 +275,9 @@ def _variant_from_dict(data: dict, source_id: str) -> VariantInfo:
         escalated=bool(data.get("escalated") or False),
         platform_result=data.get("platform_result"),
         post_url=data.get("post_url") or None,
+        ig_media_id=data.get("ig_media_id") or None,
+        ig_user_id=data.get("ig_user_id") or None,
+        ig_insights=data.get("ig_insights") if isinstance(data.get("ig_insights"), dict) else None,
         look_status=data.get("look_status"),
         look_mae=data.get("look_mae"),
         look_src=data.get("look_src"),
@@ -908,6 +916,9 @@ class JobStore:
                         escalated=bool(v.get("escalated") or False),
                         platform_result=v.get("platform_result"),
                         post_url=v.get("post_url") or None,
+                        ig_media_id=v.get("ig_media_id") or None,
+                        ig_user_id=v.get("ig_user_id") or None,
+                        ig_insights=v.get("ig_insights") if isinstance(v.get("ig_insights"), dict) else None,
                         look_status=v.get("look_status") or quality.get("look_status"),
                         look_mae=v.get("look_mae") if v.get("look_mae") is not None else quality.get("look_mae"),
                         look_src=v.get("look_src"),
@@ -1118,6 +1129,40 @@ class JobStore:
             caps[slot] = text or ""
             source.planned_captions = caps
         self._rewrite_manifest_fields(job_id, source_id, index, caption=text)
+        job = self._jobs.get(job_id)
+        if job is not None:
+            self._persist(job)
+        return variant
+
+    def set_ig_insights(
+        self,
+        source_id: str,
+        index: int,
+        *,
+        ig_media_id: str | None,
+        ig_user_id: str | None,
+        insights: dict | None,
+        post_url: str | None = None,
+    ) -> VariantInfo | None:
+        loc = self._locate(source_id)
+        if loc is None:
+            return None
+        job_id, source = loc
+        variant = next((v for v in source.variants if v.index == index), None)
+        if variant is None:
+            return None
+        variant.ig_media_id = ig_media_id
+        variant.ig_user_id = ig_user_id
+        variant.ig_insights = insights
+        fields: dict[str, object] = {
+            "ig_media_id": ig_media_id,
+            "ig_user_id": ig_user_id,
+            "ig_insights": insights,
+        }
+        if post_url and not variant.post_url:
+            variant.post_url = post_url
+            fields["post_url"] = post_url
+        self._rewrite_manifest_fields(job_id, source_id, index, **fields)
         job = self._jobs.get(job_id)
         if job is not None:
             self._persist(job)

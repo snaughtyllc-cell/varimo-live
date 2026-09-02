@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { showDiagnosticsNav, showTeamNav, visiblePrimaryTabs } from "@/lib/navAccess";
+import { showAnalyticsNav, showDiagnosticsNav, showTeamNav, visiblePrimaryTabs } from "@/lib/navAccess";
 import { PRIMARY_TABS } from "@/lib/studioDestinations";
 
 describe("showDiagnosticsNav", () => {
@@ -35,6 +35,29 @@ describe("showTeamNav", () => {
         auth_required: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe("showAnalyticsNav", () => {
+  it("shows for workspace owners including solo", () => {
+    expect(
+      showAnalyticsNav({ role: "owner", is_admin: false, auth_required: true }),
+    ).toBe(true);
+  });
+
+  it("hides for VAs", () => {
+    expect(
+      showAnalyticsNav({ role: "member", is_admin: false, auth_required: true }),
+    ).toBe(false);
+  });
+
+  it("shows for site admin and when login is off", () => {
+    expect(
+      showAnalyticsNav({ role: "member", is_admin: true, auth_required: true }),
+    ).toBe(true);
+    expect(
+      showAnalyticsNav({ role: null, is_admin: false, auth_required: false }),
+    ).toBe(true);
   });
 });
 

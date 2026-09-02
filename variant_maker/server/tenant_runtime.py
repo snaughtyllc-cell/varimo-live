@@ -11,6 +11,7 @@ from .destinations import DestinationStore
 from .drive_config import resolve_drive_status
 from .drive_exports import ExportStore
 from .drive_oauth import OAuthPendingStore, OAuthTokenStore
+from .instagram_oauth import InstagramAccountStore
 from .jobs import JobStore
 from .runner import Runner
 from .tenants import tenant_root
@@ -29,6 +30,8 @@ class TenantBundle:
     exports: ExportStore
     oauth_token_store: OAuthTokenStore
     oauth_pending: OAuthPendingStore
+    instagram_accounts: InstagramAccountStore
+    instagram_pending: OAuthPendingStore
     drive: Any = None
     sheets: Any = None
 
@@ -71,6 +74,8 @@ class TenantHub:
                 exports=ExportStore(ws.exports_dir()),
                 oauth_token_store=OAuthTokenStore(ws.oauth_token_path()),
                 oauth_pending=OAuthPendingStore(ws.oauth_pending_path()),
+                instagram_accounts=InstagramAccountStore(ws.instagram_dir()),
+                instagram_pending=OAuthPendingStore(ws.instagram_pending_path()),
             )
             self._bundles[workspace_id] = built
             return built

@@ -21,6 +21,7 @@ import {
 } from "@/lib/shareVideos";
 import { postedCountCopy } from "@/lib/postUrl";
 import { uniquenessCustomerLabel } from "@/lib/prepareCopy";
+import { packSuggestionHint, packViewsCopy } from "@/lib/instagram";
 import { VariantCard } from "./VariantCard";
 import { PackOptions } from "./PackOptions";
 
@@ -93,7 +94,15 @@ export function SourceGroup({
       : source.variants.length === 0
         ? "no variants yet"
         : "";
-  const summaryLine = [originalitySummary, postedCopy].filter(Boolean).join(" · ");
+  const viewsCopy = packViewsCopy(
+    source.insights_views,
+    source.insights_linked ?? 0,
+    source.variants.length,
+  );
+  const suggestionHint = packSuggestionHint(source.suggestion_kind);
+  const summaryLine = [originalitySummary, postedCopy, viewsCopy, suggestionHint]
+    .filter(Boolean)
+    .join(" · ");
 
   function handleSaveShare(e: React.MouseEvent) {
     e.preventDefault();
@@ -269,7 +278,10 @@ export function SourceGroup({
             {source.filename}
           </div>
           {summaryLine ? (
-            <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 1 }}>
+            <div
+              style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 1 }}
+              title={source.suggestion_copy || undefined}
+            >
               {summaryLine}
             </div>
           ) : null}

@@ -5,6 +5,7 @@ import { isFileReady } from "@/lib/gallery";
 import { ESCALATED_BADGE, ESCALATED_TITLE } from "@/lib/format";
 import { uniquenessGalleryBadgeTitle } from "@/lib/prepareCopy";
 import { CaptionSnippet } from "./CaptionSnippet";
+import { variantViewsCopy } from "@/lib/instagram";
 
 interface VariantCardProps {
   variant: VariantOut;
@@ -23,6 +24,10 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
   const uniquenessPct = variant.uniqueness != null ? Math.round(variant.uniqueness * 100) : null;
   const uniquenessOk = variant.uniqueness_status === "ok";
   const uniquenessFloorFail = variant.uniqueness_status === "below_floor";
+  const viewsLabel = variantViewsCopy(
+    variant.ig_insights?.views,
+    Boolean(variant.ig_media_id || variant.ig_insights),
+  );
 
   const badge = (
     <div
@@ -113,6 +118,22 @@ export function VariantCard({ variant, onOpen, selected, onToggle }: VariantCard
           }}
         >
           link
+        </span>
+      )}
+      {viewsLabel && (
+        <span
+          title="Instagram Insights views"
+          style={{
+            fontSize: 8,
+            fontWeight: 800,
+            padding: "1px 5px",
+            borderRadius: 5,
+            background: "#072830",
+            color: "#e8f8f0",
+            border: "1px solid #0c3d47",
+          }}
+        >
+          {viewsLabel}
         </span>
       )}
     </div>

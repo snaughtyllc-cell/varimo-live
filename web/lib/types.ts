@@ -29,6 +29,17 @@ export interface VariantOut {
   look_src_url?: string | null;
   look_var_url?: string | null;
   caption?: string | null;
+  ig_media_id?: string | null;
+  ig_user_id?: string | null;
+  ig_insights?: {
+    views?: number;
+    reach?: number;
+    likes?: number;
+    comments?: number;
+    shares?: number;
+    saved?: number;
+    fetched_at?: string;
+  } | null;
 }
 export interface InFlightOut {
   index: number;
@@ -56,6 +67,11 @@ export interface SourceOut {
   copy_status?: "ok" | "copying" | "missing";
   job_id?: string | null;
   caption_prompt?: string | null;
+  insights_views?: number | null;
+  insights_linked?: number;
+  insights_unknown?: number;
+  suggestion_kind?: string | null;
+  suggestion_copy?: string | null;
 }
 export interface JobSummary { job_id: string; count: number; created_utc: string; state: "running" | "done"; source_count: number; }
 export interface QueueItem {
@@ -313,4 +329,59 @@ export interface DropLedgerSync {
   inserted: number;
   updated: number;
   unchanged: number;
+}
+
+export interface InstagramAccount {
+  user_id: string;
+  username: string;
+  name: string;
+  connected_utc?: string | null;
+}
+
+export interface InstagramStatus {
+  oauth_available: boolean;
+  connected: boolean;
+  accounts: InstagramAccount[];
+  message: string;
+}
+
+export interface InstagramPackRow {
+  source_id: string;
+  filename: string;
+  insights_views: number | null;
+  insights_linked: number;
+  insights_unknown?: number;
+}
+
+export interface InstagramSuggestion {
+  kind: string;
+  source_id: string;
+  filename: string;
+  copy: string;
+}
+
+export interface InstagramUnmatched {
+  media_id: string;
+  permalink?: string | null;
+  caption?: string | null;
+  username?: string | null;
+  ig_user_id?: string | null;
+}
+
+export interface InstagramAnalytics {
+  insights_views: number | null;
+  insights_linked: number;
+  packs?: InstagramPackRow[];
+  ranked: InstagramPackRow[];
+  suggestions?: InstagramSuggestion[];
+  accounts: InstagramAccount[];
+}
+
+export interface InstagramSync {
+  matched: number;
+  accounts: number;
+  media: number;
+  unmatched?: InstagramUnmatched[];
+  errors?: string[];
+  analytics: InstagramAnalytics;
 }

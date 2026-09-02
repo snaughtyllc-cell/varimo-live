@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  ChartColumn,
   Cloud,
   FolderOpen,
   GalleryHorizontalEnd,
@@ -18,7 +19,7 @@ import {
 import { logout, setAdminView } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
 import { experienceLabel, normalizeExperience } from "@/lib/experience";
-import { showDiagnosticsNav, showTeamNav, visiblePrimaryTabs } from "@/lib/navAccess";
+import { extraTabVisible, visiblePrimaryTabs } from "@/lib/navAccess";
 import { EXTRA_TABS } from "@/lib/studioDestinations";
 import { StatusStrip } from "./StatusStrip";
 import { VarimoMark } from "../brand/VarimoMark";
@@ -31,26 +32,10 @@ const ICONS = {
   "/workflows": Workflow,
   "/settings/drive": Cloud,
   "/team": UsersRound,
+  "/analytics": ChartColumn,
   "/admin": ShieldCheck,
   "/diagnostics": Settings2,
 } as const;
-
-function extraTabVisible(
-  href: string,
-  me:
-    | {
-        auth_required?: boolean;
-        is_admin?: boolean;
-        role?: string | null;
-        experience?: string | null;
-      }
-    | undefined,
-): boolean {
-  if (href === "/diagnostics") return showDiagnosticsNav(me);
-  if (href === "/team") return showTeamNav(me);
-  if (href === "/admin") return Boolean(me?.is_admin);
-  return false;
-}
 
 function linkActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);

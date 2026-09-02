@@ -731,6 +731,107 @@ describe("workspace team API", () => {
   });
 });
 
+describe("Instagram API", () => {
+  const status = {
+    oauth_available: true,
+    connected: true,
+    accounts: [{ user_id: "178", username: "lab.ig", name: "Lab", connected_utc: "2026-09-02T00:00:00Z" }],
+    message: "1 Instagram account connected — Connect another tester anytime",
+  };
+
+  it("getInstagramStatus GETs /api/instagram/status", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(status), { status: 200 }),
+    );
+    const out = await api.getInstagramStatus();
+    expect(out.connected).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/instagram/status");
+  });
+
+  it("getInstagramAnalytics GETs /api/instagram/analytics", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        insights_views: null,
+        insights_linked: 0,
+        ranked: [],
+        accounts: status.accounts,
+      }), { status: 200 }),
+    );
+    const out = await api.getInstagramAnalytics();
+    expect(out.insights_linked).toBe(0);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/instagram/analytics");
+  });
+
+  it("syncInstagram POSTs /api/instagram/sync", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        matched: 1,
+        accounts: 1,
+        media: 3,
+        analytics: { insights_views: 500, insights_linked: 1, ranked: [] },
+      }), { status: 200 }),
+    );
+    const out = await api.syncInstagram();
+    expect(out.matched).toBe(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/instagram/sync");
+    expect((init as RequestInit).method).toBe("POST");
+  });
+
+  it("disconnectInstagram POSTs the encoded account id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ...status, accounts: [] }), { status: 200 }),
+    );
+    await api.disconnectInstagram("178/alt");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/instagram/accounts/178%2Falt/disconnect");
+    expect((init as RequestInit).method).toBe("POST");
+  });
+
+  it("pasteInstagramToken POSTs access_token JSON", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(status), { status: 200 }),
+    );
+    await api.pasteInstagramToken("pasted-long-token");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/instagram/token");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      access_token: "pasted-long-token",
+    });
+  });
+
+  it("linkInstagramMedia POSTs the unmatched Reel onto a Gallery copy", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        insights_views: 50,
+        insights_linked: 1,
+        ranked: [],
+        suggestions: [],
+        accounts: status.accounts,
+      }), { status: 200 }),
+    );
+    const out = await api.linkInstagramMedia({
+      source_id: "s1",
+      index: 2,
+      media_id: "orphan",
+      ig_user_id: "178",
+      permalink: "https://www.instagram.com/reel/OrphanReel/",
+    });
+    expect(out.insights_linked).toBe(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/instagram/link");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      source_id: "s1",
+      index: 2,
+      media_id: "orphan",
+      ig_user_id: "178",
+      permalink: "https://www.instagram.com/reel/OrphanReel/",
+    });
+  });
+});
+
 describe("error responses surface FastAPI `detail`", () => {
   it("throws the detail string from a JSON error body", async () => {
     const detail = "Cannot write to this folder — share it as Editor with sa@example.iam.gserviceaccount.com";

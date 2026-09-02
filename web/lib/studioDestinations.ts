@@ -69,6 +69,15 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     summary: "Agency owner invites VAs into this studio. Solo creators cannot invite.",
   },
   {
+    href: "/analytics",
+    label: "Analytics",
+    short: "Stats",
+    audience: "owner",
+    tab: "extra",
+    summary:
+      "Owner-only Instagram Insights: Connect testers, Sync views onto packs, unmatched Reel picker.",
+  },
+  {
     href: "/admin",
     label: "Admin",
     audience: "admin",
@@ -94,7 +103,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
 /** Phone bottom bar + desktop primary row. */
 export const PRIMARY_TABS = STUDIO_DESTINATIONS.filter((d) => d.tab === "primary");
 
-/** Team / Admin / Diagnostics — role-gated in TopNav. */
+/** Team / Analytics / Admin / Diagnostics — role-gated in TopNav. */
 export const EXTRA_TABS = STUDIO_DESTINATIONS.filter((d) => d.tab === "extra");
 
 /** Surfaces that are not top-level tabs but must be in any redesign. */
@@ -118,5 +127,10 @@ export const STUDIO_NESTED_SURFACES = [
     name: "Watch progress",
     opens_from: "/ and /workflows",
     summary: "Live job tiles, cancel, re-attach after reload.",
+  },
+  {
+    name: "Analytics unmatched picker",
+    opens_from: "/analytics",
+    summary: "Match Reels that Sync could not join by caption. Identity is the Reel id after Link.",
   },
 ] as const;

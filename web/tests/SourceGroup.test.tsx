@@ -228,3 +228,28 @@ describe("SourceGroup live post count", () => {
     expect(screen.getByText(/2 live posts/i)).toBeInTheDocument();
   });
 });
+
+describe("SourceGroup insights line", () => {
+  it("shows pack views when copies are linked", () => {
+    render(
+      <SourceGroup
+        source={source({
+          insights_views: 1234,
+          insights_linked: 2,
+          variants: [
+            variant({ ig_media_id: "1", ig_insights: { views: 1000 } }),
+            variant({
+              index: 2,
+              filename: "v02.mp4",
+              file_url: "/api/variants/s1/v02.mp4",
+              ig_media_id: "2",
+              ig_insights: { views: 234 },
+            }),
+          ],
+        })}
+        {...props}
+      />,
+    );
+    expect(screen.getByText(/1\.2k views/i)).toBeInTheDocument();
+  });
+});

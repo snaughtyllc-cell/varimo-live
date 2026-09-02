@@ -27,6 +27,9 @@ class VariantOut(BaseModel):
     look_src_url: str | None = None
     look_var_url: str | None = None
     caption: str | None = None
+    ig_media_id: str | None = None
+    ig_user_id: str | None = None
+    ig_insights: dict | None = None
 
 
 class LookPreviewOut(BaseModel):
@@ -47,6 +50,41 @@ class PostUrlIn(BaseModel):
 
 class CaptionIn(BaseModel):
     caption: str = ""
+
+
+class InstagramTokenIn(BaseModel):
+    access_token: str
+
+
+class InstagramLinkIn(BaseModel):
+    source_id: str
+    index: int
+    media_id: str
+    ig_user_id: str | None = None
+    permalink: str | None = None
+
+
+class InstagramAccountOut(BaseModel):
+    user_id: str
+    username: str
+    name: str = ""
+    connected_utc: str | None = None
+
+
+class InstagramStatusOut(BaseModel):
+    oauth_available: bool
+    connected: bool
+    accounts: list[InstagramAccountOut] = []
+    message: str = ""
+
+
+class InstagramSyncOut(BaseModel):
+    matched: int = 0
+    accounts: int = 0
+    media: int = 0
+    unmatched: list[dict] = []
+    errors: list[str] = []
+    analytics: dict = {}
 
 
 class CaptionRewriteIn(BaseModel):
@@ -78,6 +116,11 @@ class SourceOut(BaseModel):
     copy_status: Literal["ok", "copying", "missing"] = "ok"
     job_id: str | None = None
     caption_prompt: str | None = None
+    insights_views: int | None = None
+    insights_linked: int = 0
+    insights_unknown: int = 0
+    suggestion_kind: str | None = None
+    suggestion_copy: str | None = None
 
 
 class JobSummary(BaseModel):

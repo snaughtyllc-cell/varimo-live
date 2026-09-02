@@ -142,6 +142,22 @@ describe("VariantCard uniqueness", () => {
     expect(screen.getByText("link")).toBeInTheDocument();
   });
 
+  it("shows Insights views on a linked copy", () => {
+    render(
+      <VariantCard
+        variant={variant({
+          ig_media_id: "178",
+          ig_insights: { views: 312400 },
+        })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    expect(screen.getByText("312k")).toBeInTheDocument();
+  });
+
   it("shows a caption snippet under the clip when present", () => {
     render(
       <VariantCard

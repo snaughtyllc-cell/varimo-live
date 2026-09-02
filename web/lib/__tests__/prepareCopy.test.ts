@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   PREPARING_JOB_ID,
+  captionCopyBlockedCopy,
+  captionCopyLabel,
+  captionCopiedLabel,
   captionEmptyCopy,
   captionNeedSourcesCopy,
   captionPromptLabel,
@@ -46,6 +49,9 @@ describe("prepare copy", () => {
 
   it("lets Gallery edit captions without tying status to Instagram copy", () => {
     expect(captionSaveLabel()).toMatch(/save caption/i);
+    expect(captionCopyLabel()).toMatch(/^copy caption$/i);
+    expect(captionCopiedLabel()).toMatch(/^copied$/i);
+    expect(captionCopyBlockedCopy()).toMatch(/clipboard blocked/i);
     expect(captionEmptyCopy()).toMatch(/no caption/i);
     expect(captionStatusHint()).toMatch(/before/i);
     expect(captionStatusHint()).toMatch(/instagram/i);

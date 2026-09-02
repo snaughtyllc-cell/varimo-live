@@ -1,8 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { VariantOut } from "@/lib/types";
 import { setVariantCaption } from "@/lib/api";
+import { writeClipboardText } from "@/lib/clipboard";
 import {
+  captionCopyBlockedCopy,
+  captionCopyLabel,
+  captionCopiedLabel,
   captionEmptyCopy,
   captionPreviewLabel,
   captionSaveLabel,
@@ -16,15 +20,31 @@ interface CaptionBlockProps {
   onSaved: () => void;
 }
 
+const actionBtnStyle = (opts: { muted?: boolean }): CSSProperties => ({
+  marginTop: 0,
+  fontSize: 12.5,
+  fontWeight: 700,
+  padding: "10px 12px",
+  borderRadius: 8,
+  background: "#f3f8f9",
+  border: "1px solid var(--color-line)",
+  color: opts.muted ? "var(--color-muted)" : "var(--color-text)",
+  cursor: opts.muted ? "not-allowed" : "pointer",
+});
+
 export function CaptionBlock({ sourceId, variant, onSaved }: CaptionBlockProps) {
   const saved = stripInternalIndexLines(variant.caption ?? "");
   const [draft, setDraft] = useState(saved);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setDraft(saved);
   }, [saved, variant.index, sourceId]);
+
+  const cleanedDraft = stripInternalIndexLines(draft);
+  const canCopy = Boolean(cleanedDraft);
 
   async function save() {
     if (busy) return;
@@ -38,6 +58,19 @@ export function CaptionBlock({ sourceId, variant, onSaved }: CaptionBlockProps) 
     } finally {
       setBusy(false);
     }
+  }
+
+  async function copyCaption() {
+    if (!canCopy) return;
+    setError(null);
+    const ok = await writeClipboardText(cleanedDraft);
+    if (!ok) {
+      setError(captionCopyBlockedCopy());
+      setCopied(false);
+      return;
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
   }
 
   return (
@@ -73,24 +106,24 @@ export function CaptionBlock({ sourceId, variant, onSaved }: CaptionBlockProps) 
         disabled={busy}
         style={{ marginTop: 0, minHeight: 110 }}
       />
-      <button
-        type="button"
-        onClick={() => void save()}
-        disabled={busy}
-        style={{
-          marginTop: 8,
-          fontSize: 12.5,
-          fontWeight: 700,
-          padding: "10px 12px",
-          borderRadius: 8,
-          background: "#f3f8f9",
-          border: "1px solid var(--color-line)",
-          color: busy ? "var(--color-muted)" : "var(--color-text)",
-          cursor: busy ? "not-allowed" : "pointer",
-        }}
-      >
-        {busy ? "Saving…" : captionSaveLabel()}
-      </button>
+      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={() => void copyCaption()}
+          disabled={!canCopy}
+          style={actionBtnStyle({ muted: !canCopy })}
+        >
+          {copied ? captionCopiedLabel() : captionCopyLabel()}
+        </button>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={busy}
+          style={actionBtnStyle({ muted: busy })}
+        >
+          {busy ? "Saving…" : captionSaveLabel()}
+        </button>
+      </div>
       {error && (
         <div style={{ marginTop: 8, fontSize: 12, color: "var(--color-red)" }}>{error}</div>
       )}

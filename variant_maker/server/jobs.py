@@ -733,7 +733,7 @@ class JobStore:
                         quality_mode=job.quality_mode,
                         cancel_token=token,
                     )
-                source.variants = [
+                new_variants = [
                     VariantInfo(
                         source_id=source.source_id, index=v.index, filename=v.filename,
                         status=v.status, quality=v.quality,
@@ -749,6 +749,20 @@ class JobStore:
                     )
                     for v in result.variants
                 ]
+                if new_variants:
+                    source.variants = new_variants
+                elif source.variants:
+                    # RunPod /stream often drops the final result chunk. Progress
+                    # already recorded the ok rows — wiping them made Retry copy
+                    # a no-op and Gallery show empty packs.
+                    print(
+                        f"job {job.job_id} source {source.source_id}: "
+                        f"empty GPU result, keeping {len(source.variants)} "
+                        "progress variants",
+                        flush=True,
+                    )
+                else:
+                    source.variants = []
                 source.runpod_job_id = None
                 self._persist(job)
         except JobCancelled:

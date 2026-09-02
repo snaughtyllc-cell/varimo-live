@@ -75,6 +75,43 @@ def test_process_job_streams_progress_then_uploads_and_results(monkeypatch, tmp_
     assert res["variants"][0]["key"] == "outputs/s1/v01.mp4"
 
 
+def test_process_job_uploads_each_mp4_when_done_fires(monkeypatch, tmp_path):
+    """Studio can copy as soon as a variant is done — do not wait for the pack result."""
+    store = FakeObjectStore()
+    src = tmp_path / "src.mp4"
+    src.write_bytes(b"SRC")
+    store.put("inputs/s1/src.mp4", str(src))
+
+    class FakeRecord:
+        def __init__(self, index, filename, status, quality):
+            self.index, self.filename, self.status, self.quality = index, filename, status, quality
+
+    class FakeManifest:
+        def __init__(self, variants):
+            self.variants = variants
+
+    def fake_run(config, *, on_event=None):
+        out = config["out"]
+        fname = "v01.mp4"
+        with open(os.path.join(out, fname), "wb") as f:
+            f.write(b"EARLY-MP4")
+        rec = FakeRecord(1, fname, "ok", {"vmaf": 95.0})
+        on_event("done", index=1, status="ok", quality={"vmaf": 95.0}, filename=fname)
+        open(os.path.join(out, "manifest.json"), "w").close()
+        return FakeManifest([rec])
+
+    monkeypatch.setattr(gpu_worker.pipeline, "run", fake_run)
+    job_input = {
+        "source_key": "inputs/s1/src.mp4", "source_id": "s1", "count": 1,
+    }
+    saw_done = False
+    for chunk in gpu_worker.process_job(job_input, store, work_dir=str(tmp_path / "work")):
+        if chunk.get("type") == "progress" and chunk["event"]["state"] == "done":
+            assert "outputs/s1/v01.mp4" in store.list_prefix("outputs/s1/")
+            saw_done = True
+    assert saw_done
+
+
 def _capture_jobs(monkeypatch, tmp_path, job_input):
     store = FakeObjectStore()
     src = tmp_path / "src.mp4"

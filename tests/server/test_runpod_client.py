@@ -74,6 +74,75 @@ def test_http_client_resume_polls_without_new_run(monkeypatch):
     assert out[-1]["type"] == "result"
 
 
+def test_http_client_drains_completed_output_when_stream_omits_result(monkeypatch):
+    """RunPod /stream often ends COMPLETED with an empty stream; the result sits on output."""
+    import variant_maker.server.runpod_client as rc
+
+    class FakeResp:
+        def __init__(self, payload): self._p = payload
+        def raise_for_status(self): pass
+        def json(self): return self._p
+
+    class FakeHttp:
+        def __enter__(self): return self
+        def __exit__(self, *_): pass
+        def post(self, url, json, headers):
+            return FakeResp({"id": "job123"})
+        def get(self, url, headers):
+            return FakeResp({
+                "status": "COMPLETED",
+                "stream": [],
+                "output": {
+                    "type": "result",
+                    "variants": [{"index": 1, "filename": "v01.mp4", "key": "outputs/s1/v01.mp4"}],
+                    "manifest_key": "outputs/s1/manifest.json",
+                },
+            })
+
+    monkeypatch.setattr(rc, "_http", lambda: FakeHttp())
+    client = rc.HttpRunPodClient(endpoint_id="ep", api_key="k", poll_interval=0)
+    out = list(client.stream_run({"input": {}}))
+    assert out[-1]["type"] == "result"
+    assert out[-1]["variants"][0]["filename"] == "v01.mp4"
+
+
+def test_http_client_fetches_status_when_stream_and_output_lack_result(monkeypatch):
+    import variant_maker.server.runpod_client as rc
+
+    posted = {}
+
+    class FakeResp:
+        def __init__(self, payload): self._p = payload
+        def raise_for_status(self): pass
+        def json(self): return self._p
+
+    class FakeHttp:
+        def __enter__(self): return self
+        def __exit__(self, *_): pass
+        def post(self, url, json, headers):
+            return FakeResp({"id": "job123"})
+        def get(self, url, headers):
+            posted.setdefault("gets", []).append(url)
+            if "/status/" in url:
+                return FakeResp({
+                    "status": "COMPLETED",
+                    "output": [
+                        {"type": "progress", "event": {"index": 1, "state": "done"}},
+                        {"type": "result", "variants": [{"index": 1, "filename": "v01.mp4"}],
+                         "manifest_key": "m"},
+                    ],
+                })
+            return FakeResp({"status": "COMPLETED", "stream": []})
+
+    monkeypatch.setattr(rc, "_http", lambda: FakeHttp())
+    client = rc.HttpRunPodClient(endpoint_id="ep", api_key="k", poll_interval=0)
+    out = list(client.stream_run({"input": {}}))
+    assert any("/status/job123" in u for u in posted["gets"])
+    results = [c for c in out if c.get("type") == "result"]
+    assert len(results) == 1
+    assert results[0]["variants"][0]["filename"] == "v01.mp4"
+
+
 def test_http_client_cancel_posts_runpod_cancel(monkeypatch):
     import httpx
     import variant_maker.server.runpod_client as rc

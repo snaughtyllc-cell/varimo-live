@@ -39,6 +39,9 @@ COPY_FAILED_MSG = (
     "GPU finished, but videos didn't copy back to Studio. "
     "Retry copy, or Regenerate if that still fails."
 )
+# Haiku can retry once at 45s. Join after encode so a hung caption call cannot
+# keep the job "running" forever, but still attach copy when it lands.
+CAPTION_JOIN_SEC = 180.0
 
 
 def variant_on_disk(ws: Workspace, job_id: str, source_id: str, filename: str) -> bool:
@@ -466,10 +469,6 @@ class JobStore:
         )
         for source, brief in zip(sources, briefs, strict=True):
             source.caption_prompt = brief
-            if generate_captions and brief:
-                source.planned_captions = captions_for_source(
-                    source.filename, source.requested, prompt=brief,
-                )
         with self._lock:
             self._seq += 1
             created_seq = self._seq
@@ -607,8 +606,49 @@ class JobStore:
                 return
             os.replace(tmp, path)
 
+    def _plan_captions(self, job: Job) -> None:
+        """Haiku/OpenAI copy. Never raises — a caption miss must not fail the pack."""
+        if not job.generate_captions:
+            return
+        for source in job.sources:
+            if source.planned_captions:
+                continue
+            brief = (source.caption_prompt or "").strip()
+            if not brief:
+                continue
+            try:
+                source.planned_captions = captions_for_source(
+                    source.filename, source.requested, prompt=brief,
+                )
+            except Exception as exc:  # noqa: BLE001
+                print(
+                    f"job {job.job_id} captions {source.source_id} failed "
+                    f"({type(exc).__name__}: {exc}); encode continues",
+                    flush=True,
+                )
+            self._persist(job)
+
+    def _attach_planned_captions(self, job: Job) -> None:
+        changed = False
+        for source in job.sources:
+            for variant in source.variants:
+                text = _caption_for(source, variant.index)
+                if text and variant.caption != text:
+                    variant.caption = text
+                    changed = True
+        if changed:
+            self._persist(job)
+
     def _run_job(self, job: Job, token: CancelToken, *, skip_finished: bool = False) -> None:
+        captions_thread: threading.Thread | None = None
         try:
+            if job.generate_captions:
+                captions_thread = threading.Thread(
+                    target=self._plan_captions, args=(job,),
+                    name=f"captions-{job.job_id}", daemon=True,
+                )
+                captions_thread.start()
+
             def on_event(e: VariantEvent) -> None:
                 job.events.append(e)
                 if token.runpod_job_id:
@@ -723,6 +763,9 @@ class JobStore:
                 job.error = _public_job_error(exc)
                 print(f"job {job.job_id} failed: {type(exc).__name__}: {exc}", flush=True)
         finally:
+            if captions_thread is not None:
+                captions_thread.join(timeout=CAPTION_JOIN_SEC)
+                self._attach_planned_captions(job)
             if job.job_id not in self._jobs:
                 return
             job.state = "cancelled" if token.is_set() else "done"

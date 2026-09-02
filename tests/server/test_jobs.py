@@ -819,6 +819,50 @@ def test_delete_job_drops_r2_prefixes(tmp_path):
     assert objects.list_prefix("outputs/other/") == ["outputs/other/v01.mp4"]
 
 
+def test_create_job_returns_before_captions_finish(tmp_path, monkeypatch):
+    """Haiku can take 45–90s. Generate must queue the encode first — Railway
+    kills the HTTP request if captions run on the create path."""
+    gate = threading.Event()
+
+    def slow_captions(filename, count, *, prompt=None, environ=None, avoid=None):
+        del filename, count, prompt, environ, avoid
+        gate.wait(timeout=10)
+        return ["POV boil #reels", "Wait — the boil hits"]
+
+    monkeypatch.setattr("variant_maker.server.jobs.captions_for_source", slow_captions)
+    store = _store(tmp_path)
+    t0 = time.monotonic()
+    job = store.create_job(
+        [("boil.mp4", b"x")], count=2, generate_captions=True, caption_prompt="POV boil #reels",
+    )
+    assert time.monotonic() - t0 < 0.75
+    assert job.state == "running"
+    assert not job.sources[0].planned_captions
+    gate.set()
+    assert store.wait(job.job_id, timeout=5)
+    done = store.get(job.job_id)
+    assert done.state == "done"
+    assert done.error is None
+    caps = [v.caption for v in done.sources[0].variants]
+    assert caps[0] and caps[1]
+
+
+def test_caption_crash_does_not_fail_the_encode(tmp_path, monkeypatch):
+    def boom(*args, **kwargs):
+        raise RuntimeError("haiku exploded")
+
+    monkeypatch.setattr("variant_maker.server.jobs.captions_for_source", boom)
+    store = _store(tmp_path)
+    job = store.create_job(
+        [("boil.mp4", b"x")], count=1, generate_captions=True, caption_prompt="POV boil #reels",
+    )
+    assert store.wait(job.job_id, timeout=5)
+    done = store.get(job.job_id)
+    assert done.state == "done"
+    assert done.error is None
+    assert done.sources[0].variants[0].status == "ok"
+
+
 def test_create_job_generate_captions_is_unique_per_index(tmp_path):
     store = _store(tmp_path)
     job = store.create_job(

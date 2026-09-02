@@ -14,6 +14,7 @@ from variant_maker.server.caption_ai import (
     parse_caption_prompts_field,
     source_stem,
     split_ai_captions,
+    strip_hashtags,
     strip_internal_index_lines,
     too_similar,
 )
@@ -25,7 +26,10 @@ def test_local_caption_is_unique_per_index():
     assert a != b
     assert "copy 1 of" not in a.lower()
     assert "copy 2 of" not in b.lower()
-    assert "#viral" in a
+    assert "#" not in a
+    assert "#" not in b
+    assert "viral" not in a.lower()
+    assert "good boil" in a.lower()
     assert "/" not in a and "\\" not in a
 
 
@@ -42,6 +46,7 @@ def test_captions_for_source_needs_operator_prompt(monkeypatch):
     assert "copy 1 of" not in joined
     assert "copy 2 of" not in joined
     assert "take 1 of" not in joined
+    assert "#" not in "\n".join(out)
 
 
 def test_source_stem_strips_extension():
@@ -102,6 +107,7 @@ def test_captions_prefer_anthropic_haiku_4_5_over_openai(monkeypatch):
     assert "POV she said wait for it" in calls[0][1]["messages"][0]["content"]
     assert "POV boil" in out[0]
     assert "Wait for it" in out[1]
+    assert "#" not in "\n".join(out)
 
 
 def test_captions_for_source_falls_back_when_anthropic_body_is_empty(monkeypatch):
@@ -142,6 +148,7 @@ def test_split_numbered_list_without_dashes_is_one_caption_each():
     assert "Real ones" in out[2]
     assert len(set(out)) == 3
     assert "Copy 2 of 3" not in out[1]
+    assert all("#" not in item for item in out)
 
 
 def test_split_json_array_captions():
@@ -154,6 +161,7 @@ def test_split_json_array_captions():
     assert out[0].startswith("POV the boil")
     assert "wait for it" in out[1]
     assert "Real ones" in out[2]
+    assert all("#" not in item for item in out)
 
 
 def test_duplicate_ai_captions_are_uniquified():
@@ -172,7 +180,10 @@ def test_prompt_demands_distinct_rewrites_not_copy_paste():
     lower = text.lower()
     assert "distinct" in lower or "unique" in lower
     assert "json" in lower
-    assert "pov boil #reels" in lower
+    assert "pov boil" in lower
+    assert "3-8" not in lower
+    assert "#tags" not in lower
+    assert "never include #" in lower
     assert "copy 1 of 20" in lower
 
 
@@ -196,11 +207,16 @@ def test_briefs_for_sources_are_per_source():
     ]
 
 
-def test_brief_from_filename_keeps_hook_and_hashtags():
+def test_brief_from_filename_keeps_hook_drops_hashtags():
     seed = brief_from_filename("POV she said wait for it #reels #fyp.mp4")
     assert "wait for it" in seed.lower()
-    assert "#reels" in seed
+    assert "#" not in seed
     assert ".mp4" not in seed
+
+
+def test_strip_hashtags_keeps_the_hook():
+    assert strip_hashtags("POV the boil hits different\n\n#reels #fyp") == "POV the boil hits different"
+    assert strip_hashtags("Gym pump #gymtok") == "Gym pump"
 
 
 def test_hook_key_treats_opener_prefix_as_the_same_copy():

@@ -365,6 +365,42 @@ def test_retry_copy_pulls_missing_and_clears_copy_error(tmp_path):
     assert store.retry_copy("nope") is None
 
 
+class _EmptyResultKeepsProgressRunner:
+    """GPU-style: done events recorded, then an empty result (stream dropped the last chunk)."""
+
+    def run(self, source_path, *, count, out_dir, source_id, on_event,
+            allow_creative_escalate=True, quality_mode="fast", cancel_token=None):
+        os.makedirs(out_dir, exist_ok=True)
+        for i in range(1, count + 1):
+            fname = f"v{i:02d}.mp4"
+            quality = {"vmaf": 95.0, "passed": True}
+            on_event(VariantEvent(
+                source_id=source_id, index=i, state="done",
+                status="ok", quality=quality, filename=fname,
+            ))
+        return SourceResult(variants=[], manifest_path=os.path.join(out_dir, "manifest.json"))
+
+    def fetch_outputs(self, source_id, out_dir, filenames):
+        os.makedirs(out_dir, exist_ok=True)
+        got = 0
+        for name in filenames:
+            dest = os.path.join(out_dir, os.path.basename(name))
+            with open(dest, "wb") as f:
+                f.write(b"PULLED")
+            got += 1
+        return got
+
+
+def test_empty_gpu_result_keeps_progress_variants_and_pulls(tmp_path):
+    store = JobStore(Workspace(str(tmp_path)), _EmptyResultKeepsProgressRunner())
+    job = store.create_job([("a.mp4", b"x")], count=2)
+    store.wait(job.job_id, timeout=5)
+    src = job.sources[0]
+    assert [v.filename for v in src.variants] == ["v01.mp4", "v02.mp4"]
+    assert source_files_ready(src, store._ws, job.job_id) == 2
+    assert job.error is None
+
+
 def test_delete_source_drops_pack_from_gallery_and_disk(tmp_path):
     store = _store(tmp_path)
     job = store.create_job([("a.mp4", b"x")], count=2)

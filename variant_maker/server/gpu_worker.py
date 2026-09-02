@@ -92,9 +92,22 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
     holder: dict = {}
 
     def emit(state: str, **kw) -> None:
-        if state == "looking":
-            _put_named(store, source_id, out_dir, kw.get("look_src"))
-            _put_named(store, source_id, out_dir, kw.get("look_var"))
+        try:
+            if state == "looking":
+                _put_named(store, source_id, out_dir, kw.get("look_src"))
+                _put_named(store, source_id, out_dir, kw.get("look_var"))
+            elif state == "done":
+                # Upload before the done chunk leaves the worker. Studio copies on
+                # that event; waiting until the pack result is how Gallery got
+                # "GPU finished, but videos didn't copy back".
+                _put_named(store, source_id, out_dir, kw.get("filename"))
+                _put_named(store, source_id, out_dir, kw.get("look_src"))
+                _put_named(store, source_id, out_dir, kw.get("look_var"))
+        except Exception as exc:
+            print(
+                f"gpu_worker upload {source_id} {state}: {type(exc).__name__}: {exc}",
+                flush=True,
+            )
         q.put(_progress_chunk(state, kw))
 
     def work() -> None:

@@ -54,6 +54,47 @@ def test_runner_uploads_source_streams_events_downloads_variants(tmp_path):
     assert os.path.isfile(result.manifest_path)
 
 
+def _stage(store, tmp_path, key, body):
+    p = tmp_path / "stage" / key.replace("/", "_")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(body)
+    store.put(key, str(p))
+
+
+def test_runner_downloads_when_stream_omits_result_chunk(tmp_path):
+    """GPU finished (done events + R2 objects) but RunPod never forwarded the result chunk."""
+    store = FakeObjectStore()
+    _stage(store, tmp_path, "outputs/srcA/v01.mp4", b"V1")
+    _stage(store, tmp_path, "outputs/srcA/manifest.json", b"{}")
+    chunks = [
+        {"type": "progress", "event": {"index": 1, "state": "done", "status": "ok",
+                                       "quality": {"vmaf": 95.0}, "filename": "v01.mp4",
+                                       "uniqueness": 0.42, "look_src": None, "look_var": None}},
+    ]
+    src = tmp_path / "in.mp4"
+    src.write_bytes(b"SRC")
+    events: list[VariantEvent] = []
+    out_dir = str(tmp_path / "out")
+    runner = RunPodServerlessRunner(store, FakeRunPodClient(chunks))
+    result = runner.run(str(src), count=1, out_dir=out_dir, source_id="srcA",
+                        on_event=events.append)
+    assert [v.status for v in result.variants] == ["ok"]
+    with open(result.variants[0].path, "rb") as f:
+        assert f.read() == b"V1"
+    assert os.path.isfile(result.manifest_path)
+
+
+def test_fetch_outputs_matches_basename_when_exact_key_missing(tmp_path):
+    store = FakeObjectStore()
+    _stage(store, tmp_path, "outputs/srcA/nested/v01.mp4", b"NESTED")
+    runner = RunPodServerlessRunner(store, FakeRunPodClient([]))
+    out_dir = str(tmp_path / "out")
+    got = runner.fetch_outputs("srcA", out_dir, ["v01.mp4"])
+    assert got == 1
+    with open(os.path.join(out_dir, "v01.mp4"), "rb") as f:
+        assert f.read() == b"NESTED"
+
+
 def test_runner_sends_hq_defaults_in_payload(tmp_path):
     captured = {}
 

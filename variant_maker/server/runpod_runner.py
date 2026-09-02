@@ -81,31 +81,113 @@ class RunPodServerlessRunner:
             out_dir=out_dir, source_id=source_id, on_event=on_event,
         )
 
-    def _fetch_named(self, source_id: str, out_dir: str, name: str | None) -> None:
+    def _file_ready(self, dest: str) -> bool:
+        return os.path.isfile(dest) and os.path.getsize(dest) > 0
+
+    def _try_get(self, key: str, dest: str) -> bool:
+        try:
+            self._store.get(key, dest)
+        except Exception as exc:
+            print(f"object get {key}: {type(exc).__name__}: {exc}", flush=True)
+            return False
+        return self._file_ready(dest)
+
+    def _fetch_named(self, source_id: str, out_dir: str, name: str | None) -> bool:
         if not name:
-            return
+            return False
         base = os.path.basename(str(name))
         if base in ("", ".", "..") or base != str(name):
-            return
+            return False
         dest = os.path.join(out_dir, base)
-        if os.path.isfile(dest) and os.path.getsize(dest) > 0:
-            return
+        if self._file_ready(dest):
+            return True
+        if self._try_get(f"outputs/{source_id}/{base}", dest):
+            return True
         try:
-            self._store.get(f"outputs/{source_id}/{base}", dest)
-        except Exception:
-            return
+            keys = self._store.list_prefix(f"outputs/{source_id}/")
+        except Exception as exc:
+            print(
+                f"list_prefix outputs/{source_id}/: {type(exc).__name__}: {exc}",
+                flush=True,
+            )
+            return False
+        for key in keys:
+            if os.path.basename(key) == base and self._try_get(key, dest):
+                return True
+        return False
+
+    def _meta_from_event(self, source_id: str, e: dict) -> dict | None:
+        filename = e.get("filename")
+        index = e.get("index")
+        if not filename or index is None:
+            return None
+        base = os.path.basename(str(filename))
+        if base in ("", ".", "..") or base != str(filename):
+            return None
+        return {
+            "index": index, "filename": base,
+            "status": e.get("status") or "ok",
+            "quality": e.get("quality"),
+            "key": f"outputs/{source_id}/{base}",
+            "uniqueness": e.get("uniqueness"),
+            "uniqueness_status": e.get("uniqueness_status"),
+            "uniqueness_metric": e.get("uniqueness_metric"),
+            "uniqueness_target": e.get("uniqueness_target"),
+            "preset_used": e.get("preset_used"),
+            "strength_final": e.get("strength_final"),
+            "escalated": bool(e.get("escalated", False)),
+            "platform_result": e.get("platform_result"),
+            "look_status": e.get("look_status"),
+            "look_mae": e.get("look_mae"),
+            "look_src": e.get("look_src"),
+            "look_var": e.get("look_var"),
+        }
+
+    def _recover_variants_meta(self, source_id: str, done_events: list[dict]) -> list[dict]:
+        by_index: dict[object, dict] = {}
+        for e in done_events:
+            meta = self._meta_from_event(source_id, e)
+            if meta is None:
+                continue
+            by_index[meta["index"]] = meta
+        if by_index:
+            return [by_index[i] for i in sorted(by_index, key=lambda x: int(x))]
+        try:
+            keys = self._store.list_prefix(f"outputs/{source_id}/")
+        except Exception as exc:
+            print(
+                f"list_prefix outputs/{source_id}/: {type(exc).__name__}: {exc}",
+                flush=True,
+            )
+            return []
+        found: list[dict] = []
+        for key in keys:
+            base = os.path.basename(key)
+            stem, ext = os.path.splitext(base)
+            if ext.lower() != ".mp4" or not stem.startswith("v") or not stem[1:].isdigit():
+                continue
+            found.append({
+                "index": int(stem[1:]), "filename": base, "status": "ok",
+                "quality": {}, "key": key,
+            })
+        found.sort(key=lambda v: v["index"])
+        return found
 
     def _consume_stream(self, chunks, *, out_dir: str, source_id: str,
                         on_event: Callable[[VariantEvent], None]) -> SourceResult:
         os.makedirs(out_dir, exist_ok=True)
         variants_meta: list[dict] = []
         manifest_key = None
+        done_events: list[dict] = []
         for chunk in chunks:
             if chunk.get("type") == "progress":
                 e = chunk["event"]
                 if e.get("state") == "looking":
                     self._fetch_named(source_id, out_dir, e.get("look_src"))
                     self._fetch_named(source_id, out_dir, e.get("look_var"))
+                if e.get("state") == "done" and e.get("filename"):
+                    self._fetch_named(source_id, out_dir, e.get("filename"))
+                    done_events.append(e)
                 on_event(VariantEvent(
                     source_id=source_id, index=e["index"], state=e["state"],
                     attempt=e.get("attempt", 0), max_attempts=e.get("max_attempts", 0),
@@ -125,18 +207,28 @@ class RunPodServerlessRunner:
                     look_var=e.get("look_var"),
                 ))
             elif chunk.get("type") == "result":
-                variants_meta = chunk.get("variants", [])
+                variants_meta = list(chunk.get("variants") or [])
                 manifest_key = chunk.get("manifest_key")
+
+        if not variants_meta:
+            variants_meta = self._recover_variants_meta(source_id, done_events)
+            if not manifest_key:
+                manifest_key = f"outputs/{source_id}/manifest.json"
 
         variants = []
         for v in variants_meta:
-            local = os.path.join(out_dir, v["filename"])
-            self._store.get(v["key"], local)
+            filename = v.get("filename")
+            if not filename:
+                continue
+            local = os.path.join(out_dir, filename)
+            key = v.get("key") or f"outputs/{source_id}/{filename}"
+            if not self._file_ready(local) and not self._try_get(key, local):
+                self._fetch_named(source_id, out_dir, filename)
             self._fetch_named(source_id, out_dir, v.get("look_src"))
             self._fetch_named(source_id, out_dir, v.get("look_var"))
             variants.append(VariantResult(
-                index=v["index"], filename=v["filename"],
-                status=v["status"], quality=v["quality"], path=local,
+                index=v["index"], filename=filename,
+                status=v.get("status") or "ok", quality=v.get("quality"), path=local,
                 uniqueness=v.get("uniqueness"),
                 uniqueness_status=v.get("uniqueness_status"),
                 uniqueness_metric=v.get("uniqueness_metric"),
@@ -151,8 +243,9 @@ class RunPodServerlessRunner:
                 look_var=v.get("look_var"),
             ))
         manifest_path = os.path.join(out_dir, "manifest.json")
-        if manifest_key:
-            self._store.get(manifest_key, manifest_path)
+        if (manifest_key and not self._file_ready(manifest_path)
+                and not self._try_get(manifest_key, manifest_path)):
+            self._fetch_named(source_id, out_dir, "manifest.json")
         return SourceResult(variants=variants, manifest_path=manifest_path)
 
     def fetch_outputs(self, source_id: str, out_dir: str, filenames: list[str]) -> int:
@@ -164,13 +257,9 @@ class RunPodServerlessRunner:
             if not name or name in (".", ".."):
                 continue
             dest = os.path.join(out_dir, name)
-            if os.path.isfile(dest) and os.path.getsize(dest) > 0:
+            if self._file_ready(dest):
                 got += 1
                 continue
-            try:
-                self._store.get(f"outputs/{source_id}/{name}", dest)
-            except Exception:
-                continue
-            if os.path.isfile(dest) and os.path.getsize(dest) > 0:
+            if self._fetch_named(source_id, out_dir, name):
                 got += 1
         return got

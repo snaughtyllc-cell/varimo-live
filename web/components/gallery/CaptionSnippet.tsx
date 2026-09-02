@@ -55,6 +55,7 @@ export function CaptionSnippet({ caption }: { caption?: string | null }) {
       <button
         type="button"
         onClick={(e) => void copyCaption(e)}
+        onPointerDown={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
         aria-label={copied ? captionCopiedLabel() : captionCopyLabel()}
         data-copied={copied ? "true" : "false"}

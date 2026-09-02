@@ -35,7 +35,7 @@ import {
  * permission/quota errors) reach the UI instead of "400 Bad Request".
  */
 async function errorMessage(res: Response): Promise<string> {
-  if (res.status === 502 || res.status === 503) {
+  if (res.status === 502 || res.status === 503 || res.status === 504) {
     return "Upload dropped before Generate started — hit Generate again.";
   }
   const fallback = `${res.status} ${res.statusText}`;

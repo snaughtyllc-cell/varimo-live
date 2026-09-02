@@ -757,6 +757,13 @@ describe("error responses surface FastAPI `detail`", () => {
     await expect(api.getDriveStatus()).rejects.toThrow(/Generate again/i);
   });
 
+  it("maps 504 to a Generate-again timeout", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("<html>504</html>", { status: 504, statusText: "Gateway Timeout" }),
+    );
+    await expect(api.getDriveStatus()).rejects.toThrow(/Generate again/i);
+  });
+
   it("falls back to status text when the body isn't JSON", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("<html>not json</html>", { status: 500, statusText: "Internal Server Error" }),

@@ -45,6 +45,17 @@ ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 DEFAULT_ANTHROPIC_CAPTION_MODEL = "claude-haiku-4-5"
 DEFAULT_OPENAI_CAPTION_MODEL = "gpt-4o-mini"
 CAPTION_TIMEOUT_SEC = 45
+_CAPTION_API_ERRORS = (
+    OSError,
+    urllib.error.URLError,
+    TimeoutError,
+    ValueError,
+    TypeError,
+    KeyError,
+    IndexError,
+    AttributeError,
+    json.JSONDecodeError,
+)
 
 
 def source_stem(filename: str) -> str:
@@ -136,13 +147,13 @@ def captions_for_source(
     if anthropic_key:
         try:
             return _anthropic_captions(filename, n, anthropic_key, env, brief, avoid=avoid)
-        except (OSError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
+        except _CAPTION_API_ERRORS:
             pass
     openai_key = (env.get("OPENAI_API_KEY") or env.get("VARIANT_OPENAI_API_KEY") or "").strip()
     if openai_key:
         try:
             return _openai_captions(filename, n, openai_key, env, brief, avoid=avoid)
-        except (OSError, urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
+        except _CAPTION_API_ERRORS:
             pass
     return _fill_unique([], brief, n)
 
@@ -351,6 +362,41 @@ def _caption_max_tokens(count: int) -> int:
     return min(8192, max(2048, int(count) * 400))
 
 
+def _openai_message_text(body: object) -> str:
+    if not isinstance(body, dict):
+        raise TypeError("openai caption response is not an object")
+    choices = body.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise ValueError("empty openai caption response")
+    first = choices[0]
+    if not isinstance(first, dict):
+        raise TypeError("empty openai caption response")
+    message = first.get("message")
+    if not isinstance(message, dict):
+        raise TypeError("empty openai caption response")
+    text = message.get("content")
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("empty openai caption response")
+    return text
+
+
+def _anthropic_message_text(body: object) -> str:
+    if not isinstance(body, dict):
+        raise TypeError("anthropic caption response is not an object")
+    blocks = body.get("content")
+    if not isinstance(blocks, list):
+        raise TypeError("empty anthropic caption response")
+    texts = [
+        block.get("text")
+        for block in blocks
+        if isinstance(block, dict) and isinstance(block.get("text"), str)
+    ]
+    joined = "\n".join(item for item in texts if item.strip())
+    if not joined.strip():
+        raise ValueError("empty anthropic caption response")
+    return joined
+
+
 def _pick_unique(first: list[str], retry: list[str], count: int) -> list[str]:
     if not too_similar(retry, count) or len({hook_key(item) for item in retry}) > len(
         {hook_key(item) for item in first}
@@ -401,7 +447,7 @@ def _openai_captions(
         )
         with urllib.request.urlopen(req, timeout=CAPTION_TIMEOUT_SEC) as resp:
             body = json.loads(resp.read().decode())
-        return body["choices"][0]["message"]["content"]
+        return _openai_message_text(body)
 
     return _generate_with_retry(call, count, brief)
 
@@ -435,6 +481,6 @@ def _anthropic_captions(
         )
         with urllib.request.urlopen(req, timeout=CAPTION_TIMEOUT_SEC) as resp:
             body = json.loads(resp.read().decode())
-        return body["content"][0]["text"]
+        return _anthropic_message_text(body)
 
     return _generate_with_retry(call, count, brief)

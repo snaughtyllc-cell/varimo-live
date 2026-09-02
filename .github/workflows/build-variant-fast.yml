@@ -28,9 +28,12 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Live Fast is ghcr.io/snaughtyllc-cell/variant-fast. The package was
+      # created from Lab; this repo needs Actions write on it or every push
+      # dies with write_package and RunPod keeps the last digest.
       - name: Build and push Fast CPU worker
         run: |
           docker build -f deploy/runpod/Dockerfile.fast \

@@ -104,6 +104,31 @@ def test_captions_prefer_anthropic_haiku_4_5_over_openai(monkeypatch):
     assert "Wait for it" in out[1]
 
 
+def test_captions_for_source_falls_back_when_anthropic_body_is_empty(monkeypatch):
+    class FakeResp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps({"content": []}).encode()
+
+    monkeypatch.setattr(
+        "variant_maker.server.caption_ai.urllib.request.urlopen",
+        lambda req, timeout=None: FakeResp(),
+    )
+    out = captions_for_source(
+        "boil.mp4",
+        2,
+        prompt="POV boil #reels",
+        environ={"ANTHROPIC_API_KEY": "sk-ant-test"},
+    )
+    assert len(out) == 2
+    assert "boil" in out[0].lower()
+
+
 def test_split_numbered_list_without_dashes_is_one_caption_each():
     raw = (
         "1. POV the boil hits different\n#reels #fyp\n"

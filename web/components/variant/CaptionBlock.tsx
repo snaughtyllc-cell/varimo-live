@@ -20,15 +20,15 @@ interface CaptionBlockProps {
   onSaved: () => void;
 }
 
-const actionBtnStyle = (opts: { muted?: boolean }): CSSProperties => ({
+const actionBtnStyle = (opts: { muted?: boolean; copied?: boolean }): CSSProperties => ({
   marginTop: 0,
   fontSize: 12.5,
   fontWeight: 700,
   padding: "10px 12px",
   borderRadius: 8,
-  background: "#f3f8f9",
-  border: "1px solid var(--color-line)",
-  color: opts.muted ? "var(--color-muted)" : "var(--color-text)",
+  background: opts.copied ? "#d8f3f6" : "#f3f8f9",
+  border: opts.copied ? "1px solid #0caab8" : "1px solid var(--color-line)",
+  color: opts.muted ? "var(--color-muted)" : opts.copied ? "#0a6e78" : "var(--color-text)",
   cursor: opts.muted ? "not-allowed" : "pointer",
 });
 
@@ -71,7 +71,7 @@ export function CaptionBlock({ sourceId, variant, onSaved }: CaptionBlockProps) 
   function markCopied() {
     setCopied(true);
     if (copiedReset.current) window.clearTimeout(copiedReset.current);
-    copiedReset.current = window.setTimeout(() => setCopied(false), 2000);
+    copiedReset.current = window.setTimeout(() => setCopied(false), 3000);
   }
 
   async function copyCaption() {
@@ -136,7 +136,8 @@ export function CaptionBlock({ sourceId, variant, onSaved }: CaptionBlockProps) 
           type="button"
           onClick={() => void copyCaption()}
           disabled={!canCopy}
-          style={actionBtnStyle({ muted: !canCopy })}
+          style={actionBtnStyle({ muted: !canCopy, copied })}
+          data-copied={copied ? "true" : "false"}
         >
           {copied ? captionCopiedLabel() : captionCopyLabel()}
         </button>

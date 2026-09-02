@@ -25,7 +25,7 @@ export function CaptionSnippet({ caption }: { caption?: string | null }) {
     e.preventDefault();
     setCopied(true);
     if (copiedReset.current) window.clearTimeout(copiedReset.current);
-    copiedReset.current = window.setTimeout(() => setCopied(false), 2000);
+    copiedReset.current = window.setTimeout(() => setCopied(false), 3000);
     // Card has no room for a blocked-clipboard error; keep Copied for the tap.
     void writeClipboardText(full);
   }
@@ -55,16 +55,19 @@ export function CaptionSnippet({ caption }: { caption?: string | null }) {
       <button
         type="button"
         onClick={(e) => void copyCaption(e)}
+        onMouseDown={(e) => e.stopPropagation()}
         aria-label={copied ? captionCopiedLabel() : captionCopyLabel()}
+        data-copied={copied ? "true" : "false"}
         style={{
           flex: "none",
           fontSize: 11,
           fontWeight: 700,
-          padding: "6px 8px",
+          padding: "8px 10px",
+          minHeight: 32,
           borderRadius: 7,
-          background: "#f3f8f9",
-          border: "1px solid var(--color-line)",
-          color: "var(--color-text)",
+          background: copied ? "#d8f3f6" : "#f3f8f9",
+          border: copied ? "1px solid #0caab8" : "1px solid var(--color-line)",
+          color: copied ? "#0a6e78" : "var(--color-text)",
           cursor: "pointer",
         }}
       >

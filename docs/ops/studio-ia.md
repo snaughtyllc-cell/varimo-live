@@ -49,7 +49,7 @@ row + progress card.
 | Workflows | `/workflows` | agency | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | Drive | `/settings/drive` | everyone | yes | Share varimo Drive email, paste folder link, captions, Drop Ledger, password. Owners also Connect Instagram testers here. |
 | Team | `/team` | agency owner / site admin | More | Workspace owner invites VAs. Solo creators cannot invite. |
-| Analytics | `/analytics` | workspace owner / site admin (or auth off) | More (label **Stats**) | Instagram Insights: ranked originals, Connect testers, Sync views onto packs. Opening Stats pulls Graph again when the last Insights pass is ≥2 hours old. Unmatched Reels (older posts) live in a tab. VAs cannot open this. |
+| Analytics | `/analytics` | workspace owner / site admin (or auth off) | More (label **Stats**) | Instagram Insights: ranked originals, Connect testers, Sync views onto packs. Opening Stats pulls Graph again when the last Insights pass is ≥2 hours old and shows change since last look. Unmatched Reels (older posts) live in a tab. VAs cannot open this. |
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | Diagnostics | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
 | Login | `/login` | unauthenticated | — | Invite-only email + password or Google. No app tabs. |

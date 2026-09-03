@@ -10,6 +10,7 @@ from variant_maker.server.instagram_insights import (
     IgMedia,
     InstagramSyncStamp,
     VariantLink,
+    apply_look_deltas,
     caption_from_drive_filename,
     copy_hold_kind,
     export_caption_hints,
@@ -20,8 +21,10 @@ from variant_maker.server.instagram_insights import (
     list_media,
     match_media,
     merge_insight_snapshots,
+    metric_delta,
     normalize_caption,
     pack_analytics,
+    pack_look_totals,
     pack_suggestions,
     parse_insights_payload,
     permalink_key,
@@ -194,6 +197,39 @@ def test_sync_stamp_round_trips(tmp_path):
     assert stamp.read() is None
     stamp.write("2026-09-03T08:00:00Z")
     assert stamp.read() == "2026-09-03T08:00:00Z"
+
+
+def test_metric_delta_omits_unknown_instead_of_zero():
+    assert metric_delta(12000, 10000) == 2000
+    assert metric_delta(800, 1000) == -200
+    assert metric_delta(100, None) is None
+    assert metric_delta(None, 100) is None
+
+
+def test_apply_look_deltas_is_since_the_last_pack_totals():
+    body = {
+        "insights_views": 312400,
+        "ranked": [{"source_id": "winner", "insights_views": 300000, "insights_shares": 90}],
+        "packs": [{"source_id": "winner", "insights_views": 300000, "insights_shares": 90}],
+    }
+    apply_look_deltas(body, {"winner": {"insights_views": 288000, "insights_shares": 80}})
+    assert body["ranked"][0]["insights_views_delta"] == 12000
+    assert body["ranked"][0]["insights_shares_delta"] == 10
+    assert body["insights_views_delta"] == 12000
+    assert body["packs"][0]["insights_views_delta"] == 12000
+
+
+def test_sync_stamp_rotates_pack_totals_so_the_next_look_has_a_baseline(tmp_path):
+    stamp = InstagramSyncStamp(str(tmp_path / "last_sync.json"))
+    stamp.write("2026-09-03T08:00:00Z", packs={"winner": {"insights_views": 288000}})
+    assert stamp.packs()["winner"]["insights_views"] == 288000
+    assert stamp.previous_packs() == {}
+    stamp.write("2026-09-03T10:00:00Z", packs={"winner": {"insights_views": 300000}})
+    assert stamp.packs()["winner"]["insights_views"] == 300000
+    assert stamp.previous_packs()["winner"]["insights_views"] == 288000
+    assert pack_look_totals({
+        "packs": [{"source_id": "winner", "insights_views": 300000, "filename": "winner.mp4"}],
+    }) == {"winner": {"insights_views": 300000}}
 
 
 def test_tracked_copies_list_linked_variants_highest_views_first():

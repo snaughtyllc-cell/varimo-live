@@ -26,9 +26,19 @@ import {
   unmatchedTabCopy,
   variantViewsCopy,
   analyticsPackThumb,
+  formatDelta,
   insightsAreStale,
   shouldRefreshInsights,
 } from "@/lib/instagram";
+
+describe("formatDelta", () => {
+  it("signs compacted counts and hides unknown or zero", () => {
+    expect(formatDelta(12000)).toBe("+12k");
+    expect(formatDelta(-1500)).toBe("-1.5k");
+    expect(formatDelta(0)).toBeNull();
+    expect(formatDelta(null)).toBeNull();
+  });
+});
 
 describe("insightsAreStale", () => {
   const now = Date.parse("2026-09-03T08:00:00Z");
@@ -109,6 +119,12 @@ describe("galleryViewsCopy", () => {
     expect(galleryViewsCopy(null, 14, 2)).toMatch(/14 linked posts/i);
     expect(galleryViewsCopy(null, 14, 2)).toMatch(/no view counts/i);
     expect(galleryViewsCopy(null, 14, 2)).not.toMatch(/^— views/i);
+  });
+
+  it("appends since-last-look when views moved", () => {
+    expect(galleryViewsCopy(312400, 14, 2, 12000)).toMatch(/312k views across 14 linked posts/i);
+    expect(galleryViewsCopy(312400, 14, 2, 12000)).toMatch(/\+12k since last look/i);
+    expect(galleryViewsCopy(312400, 14, 2, 0)).not.toMatch(/since last look/i);
   });
 });
 

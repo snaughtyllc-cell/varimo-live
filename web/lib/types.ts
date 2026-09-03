@@ -390,6 +390,12 @@ export interface InstagramPackRow {
   insights_follows?: number | null;
   insights_linked: number;
   insights_unknown?: number;
+  insights_views_delta?: number | null;
+  insights_likes_delta?: number | null;
+  insights_comments_delta?: number | null;
+  insights_shares_delta?: number | null;
+  insights_saved_delta?: number | null;
+  insights_reach_delta?: number | null;
   hold_kind?: string | null;
   tracked?: InstagramTrackedCopy[];
 }
@@ -427,6 +433,7 @@ export interface InstagramUnmatched {
 export interface InstagramAnalytics {
   insights_views: number | null;
   insights_linked: number;
+  insights_views_delta?: number | null;
   packs?: InstagramPackRow[];
   ranked: InstagramPackRow[];
   suggestions?: InstagramSuggestion[];

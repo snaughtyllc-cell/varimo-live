@@ -16,6 +16,7 @@ import { PackThumb } from "@/components/analytics/PackThumb";
 import {
   AMPLIFY_MORE_N,
   copiesForPack,
+  formatDelta,
   formatViews,
   galleryViewsCopy,
   handleLabel,
@@ -54,12 +55,21 @@ function firstUnlinkedCopy(
 
 function packIndexMetrics(row: {
   insights_views: number | null;
+  insights_views_delta?: number | null;
   insights_shares?: number | null;
   insights_likes?: number | null;
   insights_reach?: number | null;
 }) {
-  const metrics: { label: string; value: string }[] = [];
-  if (typeof row.insights_views === "number") metrics.push({ label: "views", value: formatViews(row.insights_views) });
+  const metrics: { label: string; value: string; delta?: string | null; deltaDir?: "up" | "down" }[] = [];
+  if (typeof row.insights_views === "number") {
+    const delta = formatDelta(row.insights_views_delta);
+    metrics.push({
+      label: "views",
+      value: formatViews(row.insights_views),
+      delta,
+      deltaDir: typeof row.insights_views_delta === "number" && row.insights_views_delta < 0 ? "down" : "up",
+    });
+  }
   if (typeof row.insights_shares === "number") metrics.push({ label: "shares", value: formatViews(row.insights_shares) });
   if (typeof row.insights_likes === "number") metrics.push({ label: "likes", value: formatViews(row.insights_likes) });
   if (typeof row.insights_reach === "number") metrics.push({ label: "reach", value: formatViews(row.insights_reach) });
@@ -273,6 +283,7 @@ export function AnalyticsBoard() {
     analytics?.insights_views,
     analytics?.insights_linked ?? 0,
     accounts.length,
+    analytics?.insights_views_delta,
   );
   const packOptions = useMemo(() => packPickerOptions(gallery), [gallery]);
   const copyOptions = useMemo(() => copiesForPack(gallery, packId), [gallery, packId]);
@@ -391,7 +402,14 @@ export function AnalyticsBoard() {
                       </span>
                       <span className="analytics-pack-row__metrics">
                         {metrics.map((metric) => (
-                          <span key={metric.label}><b>{metric.value}</b> {metric.label}</span>
+                          <span key={metric.label}>
+                            <b>{metric.value}</b> {metric.label}
+                            {metric.delta ? (
+                              <span className="analytics-pack-row__delta" data-dir={metric.deltaDir}>
+                                {metric.delta}
+                              </span>
+                            ) : null}
+                          </span>
                         ))}
                         {metrics.length === 0 ? <span>views unknown</span> : null}
                         <span>{row.insights_linked} linked</span>

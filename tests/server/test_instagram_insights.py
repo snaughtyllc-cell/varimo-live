@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from io import BytesIO
+from urllib.error import HTTPError
 
 from tests.server.fakes import FakeRunner
 from variant_maker.server.instagram_insights import (
@@ -241,6 +243,15 @@ def test_parse_insights_reads_total_value_and_values():
         ]
     }
     assert parse_insights_payload(body) == {"views": 312400, "likes": 12}
+
+
+def test_parse_insights_reads_string_totals():
+    body = {
+        "data": [
+            {"name": "views", "total_value": {"value": "312400"}},
+        ]
+    }
+    assert parse_insights_payload(body)["views"] == 312400
 
 
 def test_parse_insights_keeps_skip_rate_as_a_fraction():
@@ -484,3 +495,62 @@ def test_fetch_media_insights_asks_hold_and_conversion_batches():
     joined = " ".join(urls)
     assert "ig_reels_avg_watch_time" in joined
     assert "follows" in joined
+
+
+def test_fetch_media_insights_retries_views_when_core_batch_is_empty():
+    urls: list[str] = []
+
+    def get_json(url: str):
+        urls.append(url)
+        if "reels_skip_rate" in url or "follows" in url:
+            return {"data": []}
+        if "reach" in url:
+            return {"data": []}
+        if "metric=views&" in url or url.endswith("metric=views") or "metric=views%" in url:
+            return {"data": [{"name": "views", "total_value": {"value": 312400}}]}
+        if "metric=views," in url:
+            return {"data": []}
+        return {"data": []}
+
+    out = fetch_media_insights("m1", "tok", get_json=get_json)
+    assert out["views"] == 312400
+    joined = " ".join(urls)
+    assert "metric_type=total_value" in joined
+
+
+def test_fetch_media_insights_maps_plays_when_views_missing():
+    def get_json(url: str):
+        if "metric=plays" in url:
+            return {"data": [{"name": "plays", "total_value": {"value": 88}}]}
+        return {"data": []}
+
+    out = fetch_media_insights("m1", "tok", get_json=get_json)
+    assert out["views"] == 88
+
+
+def test_fetch_media_insights_retries_views_when_core_batch_http_400s():
+    def get_json(url: str):
+        if "reach" in url:
+            raise HTTPError(
+                url,
+                400,
+                "Bad Request",
+                hdrs=None,
+                fp=BytesIO(b'{"error":{"message":"metric reach is not available"}}'),
+            )
+        if "metric=views&" in url or url.endswith("metric=views"):
+            return {"data": [{"name": "views", "total_value": {"value": 312400}}]}
+        return {"data": []}
+
+    out = fetch_media_insights("m1", "tok", get_json=get_json)
+    assert out["views"] == 312400
+
+
+def test_fetch_media_insights_retries_lifetime_when_total_value_is_empty():
+    def get_json(url: str):
+        if "period=lifetime" in url and ("metric=views&" in url or url.endswith("metric=views")):
+            return {"data": [{"name": "views", "values": [{"value": 50}]}]}
+        return {"data": []}
+
+    out = fetch_media_insights("m1", "tok", get_json=get_json)
+    assert out["views"] == 50

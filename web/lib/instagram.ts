@@ -60,7 +60,13 @@ export function galleryViewsCopy(
   if (linked <= 0) {
     return `${accounts} account${accounts === 1 ? "" : "s"} connected. Sync to match Reels to copies.`;
   }
-  const total = views == null ? "—" : formatViews(views);
+  if (views == null) {
+    return (
+      `${linked} linked post${linked === 1 ? "" : "s"}, but Instagram sent no view counts. ` +
+      "Sync again — Graph omitted views last time."
+    );
+  }
+  const total = formatViews(views);
   return `${total} views across ${linked} linked post${linked === 1 ? "" : "s"}`;
 }
 
@@ -156,6 +162,7 @@ export function syncInsightsCopy(out: {
   media?: number;
   unmatched?: unknown[];
   errors?: string[];
+  analytics?: { insights_views?: number | null; insights_linked?: number };
 }): string {
   const accounts = out.accounts;
   const accountBit = `${accounts} account${accounts === 1 ? "" : "s"}`;
@@ -174,6 +181,10 @@ export function syncInsightsCopy(out: {
   let note = `Saw ${media} Reel${media === 1 ? "" : "s"}, matched ${out.matched} across ${accountBit}.`;
   if (leftover > 0) {
     note += ` ${leftover} unmatched Reel${leftover === 1 ? "" : "s"} live on the Unmatched tab (older posts stay there).`;
+  }
+  const linked = out.analytics?.insights_linked ?? 0;
+  if (out.matched > 0 && linked > 0 && out.analytics?.insights_views == null) {
+    note += " Instagram sent no view counts this pass — ranked rows stay views unknown until Graph returns views.";
   }
   return note;
 }
@@ -243,7 +254,11 @@ export function trackedCopyMeta(copy: {
   const handle = handleLabel(copy.username || "");
   if (handle) parts.push(handle);
   if (copy.account_connected === false) parts.push("account not connected");
-  if (typeof copy.insights_views === "number") parts.push(`${formatViews(copy.insights_views)} views`);
+  if (typeof copy.insights_views === "number") {
+    parts.push(`${formatViews(copy.insights_views)} views`);
+  } else {
+    parts.push("views unknown");
+  }
   if (typeof copy.insights_shares === "number") parts.push(`${formatViews(copy.insights_shares)} shares`);
   if (typeof copy.insights_follows === "number") parts.push(`${formatViews(copy.insights_follows)} follows`);
   return parts.join(" · ");

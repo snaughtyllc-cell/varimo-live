@@ -299,4 +299,59 @@ describe("AnalyticsBoard", () => {
     });
     expect(screen.getByText("copy 03")).toBeTruthy();
   });
+
+  it("moves a tracked Reel onto another Gallery original", async () => {
+    mockGetGallery.mockResolvedValue([
+      {
+        source_id: "winner",
+        filename: "winner.mp4",
+        requested: 1,
+        delivered: 1,
+        shortfall: 0,
+        variants: [{ index: 7, filename: "v07.mp4", ig_media_id: "mck" }],
+      },
+      {
+        source_id: "jeff",
+        filename: "jeff tingz.mp4",
+        requested: 1,
+        delivered: 1,
+        shortfall: 0,
+        variants: [{ index: 1, filename: "v01.mp4", ig_media_id: null }],
+      },
+    ]);
+    mockLinkInstagramMedia.mockResolvedValue({
+      ...analytics,
+      ranked: [
+        {
+          source_id: "jeff",
+          filename: "jeff tingz.mp4",
+          insights_views: 800,
+          insights_linked: 1,
+          tracked: [{
+            index: 1,
+            ig_media_id: "mck",
+            insights_views: 800,
+            account_connected: true,
+          }],
+        },
+      ],
+    });
+
+    render(<AnalyticsBoard />);
+    fireEvent.click(await screen.findByRole("button", { name: /move copy 07 to another original/i }));
+    expect(await screen.findByLabelText(/move to gallery pack/i)).toHaveValue("jeff");
+    fireEvent.click(screen.getByRole("button", { name: /^move reel$/i }));
+
+    await waitFor(() => {
+      expect(mockLinkInstagramMedia).toHaveBeenCalledWith({
+        source_id: "jeff",
+        index: 1,
+        media_id: "mck",
+        ig_user_id: "mckenzie",
+        permalink: null,
+        username: "mckenzie.trial",
+      });
+    });
+    expect(await screen.findByText("jeff tingz.mp4")).toBeTruthy();
+  });
 });

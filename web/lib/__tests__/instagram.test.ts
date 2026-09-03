@@ -10,6 +10,7 @@ import {
   handleLabel,
   igOauthErrorMessage,
   insightSnapshotCopy,
+  moveCopyLabel,
   packConversionCopy,
   packPickerOptions,
   packSuggestionHint,
@@ -181,6 +182,7 @@ describe("trackedCopyMeta", () => {
   it("names the handle and flags a disconnected account", () => {
     expect(trackedCopyLabel(7)).toBe("copy 07");
     expect(unlinkCopyLabel(7)).toBe("Remove copy 07 from tracking");
+    expect(moveCopyLabel(7)).toBe("Move copy 07 to another original");
     expect(trackedCopyMeta({
       username: "mckenzie.trial",
       account_connected: false,

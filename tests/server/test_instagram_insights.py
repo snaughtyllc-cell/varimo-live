@@ -15,6 +15,7 @@ from variant_maker.server.instagram_insights import (
     lanes_from_sources,
     list_media,
     match_media,
+    merge_insight_snapshots,
     normalize_caption,
     pack_analytics,
     pack_suggestions,
@@ -355,6 +356,19 @@ def test_video_duration_s_skips_junk():
     assert video_duration_s({"video_duration": -1}) is None
     assert video_duration_s({"video_duration": 9000}) is None
     assert video_duration_s({}) is None
+
+
+def test_merge_insight_snapshots_keeps_counts_graph_omitted():
+    merged = merge_insight_snapshots(
+        {"views": 5000, "shares": 9, "username": "old"},
+        {"fetched_at": "2026-09-03T00:00:00Z", "username": "jeff.tingz", "reels_skip_rate": 0.2},
+    )
+    assert merged["views"] == 5000
+    assert merged["shares"] == 9
+    assert merged["username"] == "jeff.tingz"
+    assert merged["reels_skip_rate"] == 0.2
+    assert merge_insight_snapshots(None, {"views": 12}) == {"views": 12}
+    assert merge_insight_snapshots({"views": 5}, {"views": 8})["views"] == 8
 
 
 def test_copy_hold_kind_splits_bounce_from_held_without_calling_flagged():

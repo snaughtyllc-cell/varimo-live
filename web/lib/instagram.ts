@@ -228,6 +228,10 @@ export function unlinkCopyLabel(index: number): string {
   return `Remove ${trackedCopyLabel(index)} from tracking`;
 }
 
+export function moveCopyLabel(index: number): string {
+  return `Move ${trackedCopyLabel(index)} to another original`;
+}
+
 export function trackedCopyMeta(copy: {
   username?: string | null;
   account_connected?: boolean;

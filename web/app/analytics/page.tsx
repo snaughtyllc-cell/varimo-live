@@ -38,8 +38,9 @@ export default function AnalyticsPage() {
           <p className="workspace-heading__eyebrow">Pack performance</p>
           <h1>Analytics</h1>
           <div className="workspace-heading__copy">
-            Connect tester Instagram accounts, Sync views onto packs, and match
-            unmatched Reels. Workspace owners only — VAs do not see this tab.
+            Connect tester Instagram accounts, Sync views onto packs, and open
+            Unmatched Reels only when you need to attach an older post to a
+            Gallery pack. Workspace owners only — VAs do not see this tab.
           </div>
         </div>
       </div>

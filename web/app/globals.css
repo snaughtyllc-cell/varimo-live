@@ -427,9 +427,17 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .analytics-ranked__hint { font-size: 12.5px; line-height: 1.45; margin-top: 6px; max-width: 46em; }
 .analytics-ranked__hint[data-kind="winner"] { color: #0e5f66; }
 .analytics-ranked__hint[data-kind="quiet"] { color: #a9741b; }
+.analytics-tabs { width: fit-content; }
+.analytics-match { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+.analytics-match__field { display: flex; flex: 1; flex-direction: column; gap: 6px; min-width: 180px; }
+.analytics-match__field span { color: var(--color-muted); font-size: 11.5px; font-weight: 650; }
+.analytics-match__field select { background: #fff; border: 1px solid var(--color-line); border-radius: 10px; height: 34px; padding: 0 10px; }
+.analytics-match__submit { margin-top: 12px; }
 .analytics-picker { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
 .analytics-picker__row { align-items: flex-end; border-top: 1px solid #eff5f6; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; padding: 12px 0; }
 .analytics-picker__row:first-child { border-top: none; padding-top: 4px; }
+.analytics-picker__row--choice { align-items: flex-start; cursor: pointer; }
+.analytics-picker__row--choice input { margin-top: 4px; }
 .analytics-picker__caption { color: var(--ink); font-size: 14px; font-weight: 650; }
 .analytics-picker__meta { color: var(--color-muted); font-size: 12.5px; margin-top: 4px; }
 .analytics-picker__meta a { color: var(--color-violet); }

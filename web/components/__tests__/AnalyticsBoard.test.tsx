@@ -103,7 +103,42 @@ describe("AnalyticsBoard", () => {
     expect(mockRegenerate).toHaveBeenCalledWith("winner", 20);
   });
 
-  it("lets them pick the Gallery copy for an unmatched Reel", async () => {
+  it("keeps unmatched Reels off the ranked scoreboard until that tab is opened", async () => {
+    mockGetInstagramAnalytics.mockResolvedValue({
+      ...analytics,
+      unmatched: [
+        {
+          media_id: "orphan",
+          permalink: "https://www.instagram.com/reel/OrphanReel/",
+          caption: "reused bank line",
+          username: "lab.ig",
+          ig_user_id: "178",
+        },
+      ],
+    });
+    mockGetGallery.mockResolvedValue([
+      {
+        source_id: "winner",
+        filename: "winner.mp4",
+        requested: 1,
+        delivered: 1,
+        shortfall: 0,
+        variants: [{ index: 3, filename: "v03.mp4", ig_media_id: null }],
+      },
+    ]);
+
+    render(<AnalyticsBoard />);
+    expect(await screen.findByText(/Winner · winner.mp4/)).toBeTruthy();
+    expect(screen.queryByText(/reused bank line/i)).toBeNull();
+    expect(screen.getByRole("tab", { name: /unmatched reels \(1\)/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: /unmatched reels \(1\)/i }));
+    expect(await screen.findByText(/before varimo/i)).toBeTruthy();
+    expect(screen.queryByText(/reused bank line/i)).toBeNull();
+    expect(screen.getByLabelText(/pick a gallery pack/i)).toBeTruthy();
+  });
+
+  it("links an unmatched Reel after they pick the Gallery pack first", async () => {
     mockSyncInstagram.mockResolvedValue({
       matched: 1,
       accounts: 1,
@@ -117,7 +152,18 @@ describe("AnalyticsBoard", () => {
           ig_user_id: "178",
         },
       ],
-      analytics,
+      analytics: {
+        ...analytics,
+        unmatched: [
+          {
+            media_id: "orphan",
+            permalink: "https://www.instagram.com/reel/OrphanReel/",
+            caption: "reused bank line",
+            username: "lab.ig",
+            ig_user_id: "178",
+          },
+        ],
+      },
     });
     mockGetGallery.mockResolvedValue([
       {
@@ -129,20 +175,28 @@ describe("AnalyticsBoard", () => {
         variants: [{ index: 3, filename: "v03.mp4", ig_media_id: null }],
       },
     ]);
-    mockLinkInstagramMedia.mockResolvedValue(analytics);
+    mockLinkInstagramMedia.mockResolvedValue({ ...analytics, unmatched: [] });
 
     render(<AnalyticsBoard />);
     fireEvent.click(await screen.findByRole("button", { name: /sync insights/i }));
+    expect(await screen.findByText(/Winner · winner.mp4/)).toBeTruthy();
+    expect(screen.queryByText(/reused bank line/i)).toBeNull();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /unmatched reels \(1\)/i }));
+    fireEvent.change(screen.getByLabelText(/pick a gallery pack/i), {
+      target: { value: "winner" },
+    });
     expect(await screen.findByText(/reused bank line/i)).toBeTruthy();
     expect(screen.getByRole("link", { name: /open reel/i })).toHaveAttribute(
       "href",
       "https://www.instagram.com/reel/OrphanReel/",
     );
 
-    fireEvent.change(screen.getByRole("combobox"), {
+    fireEvent.change(screen.getByLabelText(/pick the copy you posted/i), {
       target: { value: "winner:3" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^link$/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /reused bank line/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^link reel$/i }));
 
     await waitFor(() => {
       expect(mockLinkInstagramMedia).toHaveBeenCalledWith({

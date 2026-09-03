@@ -5,7 +5,10 @@ once linked. Unlinked copies are unknown, not zero views.
 """
 from __future__ import annotations
 
+import json
+import os
 import re
+import tempfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -290,6 +293,58 @@ def unmatched_payload(media: Sequence[IgMedia], matches: Sequence[Match]) -> lis
             "ig_user_id": item.user_id,
         })
     return out
+
+
+class InstagramUnmatchedStore:
+    """Last Sync leftover Reels. Older posts stay here until someone Links one."""
+
+    def __init__(self, path: str) -> None:
+        self._path = path
+
+    def save(self, rows: Sequence[Mapping[str, Any]]) -> None:
+        payload = [dict(row) for row in rows if str(row.get("media_id") or "")]
+        os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
+        fd, tmp = tempfile.mkstemp(
+            dir=os.path.dirname(self._path) or ".", prefix=".ig-unmatched-", suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+            os.replace(tmp, self._path)
+        except Exception:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
+
+    def load(self) -> list[dict[str, Any]]:
+        if not os.path.isfile(self._path):
+            return []
+        try:
+            with open(self._path, encoding="utf-8") as f:
+                raw = json.load(f)
+        except (OSError, json.JSONDecodeError, ValueError):
+            return []
+        if not isinstance(raw, list):
+            return []
+        out: list[dict[str, Any]] = []
+        for row in raw:
+            if isinstance(row, dict) and str(row.get("media_id") or ""):
+                out.append(row)
+        return out
+
+    def remove(self, media_id: str) -> list[dict[str, Any]]:
+        want = str(media_id or "")
+        rows = [row for row in self.load() if str(row.get("media_id") or "") != want]
+        self.save(rows)
+        return rows
+
+    def drop_linked(self, media_ids: Iterable[str]) -> list[dict[str, Any]]:
+        used = {str(mid) for mid in media_ids if mid}
+        rows = [row for row in self.load() if str(row.get("media_id") or "") not in used]
+        self.save(rows)
+        return rows
 
 
 def _parse_utc(value: str | None) -> datetime | None:

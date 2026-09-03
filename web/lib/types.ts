@@ -375,6 +375,7 @@ export interface InstagramAnalytics {
   ranked: InstagramPackRow[];
   suggestions?: InstagramSuggestion[];
   accounts: InstagramAccount[];
+  unmatched?: InstagramUnmatched[];
 }
 
 export interface InstagramSync {

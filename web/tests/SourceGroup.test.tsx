@@ -251,5 +251,6 @@ describe("SourceGroup insights line", () => {
       />,
     );
     expect(screen.getByText(/1\.2k views/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/pack insights/i).textContent).toMatch(/1\.2k views/i);
   });
 });

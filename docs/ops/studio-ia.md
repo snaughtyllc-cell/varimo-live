@@ -49,7 +49,7 @@ row + progress card.
 | Workflows | `/workflows` | agency | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | Drive | `/settings/drive` | everyone | yes | Share varimo Drive email, paste folder link, captions, Drop Ledger, password. Owners also Connect Instagram testers here. |
 | Team | `/team` | agency owner / site admin | More | Workspace owner invites VAs. Solo creators cannot invite. |
-| Analytics | `/analytics` | workspace owner / site admin (or auth off) | More (label **Stats**) | Instagram Insights: Connect testers, Sync views onto packs, unmatched Reel picker. VAs cannot open this. |
+| Analytics | `/analytics` | workspace owner / site admin (or auth off) | More (label **Stats**) | Instagram Insights: ranked originals, Connect testers, Sync views onto packs. Unmatched Reels (older posts) live in a tab. VAs cannot open this. |
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | Diagnostics | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
 | Login | `/login` | unauthenticated | — | Invite-only email + password or Google. No app tabs. |
@@ -67,7 +67,7 @@ old four-row list.
 | Send to Drive | Gallery / variant sheet | Pick destination + caption folder; split a pack across folders. |
 | Drive picker | Studio | Import source files from a saved Drive destination. |
 | Watch / queue / cancel | Studio + Workflows | Live job tiles, cancel, re-attach after reload. Workflows can caption from each Drive filename. |
-| Unmatched Reel picker | Analytics | After Sync, pick the Gallery copy for Reels that caption-match skipped. |
+| Unmatched Reel picker | Analytics | **Unmatched Reels** tab. Pick a Gallery pack, then link the Reel that belongs to it. Pre-Varimo posts stay here and do not crowd ranked originals. |
 
 ## What not to invent
 

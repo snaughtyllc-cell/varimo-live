@@ -75,7 +75,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "owner",
     tab: "extra",
     summary:
-      "Owner-only Instagram Insights: Connect testers, Sync views onto packs, unmatched Reel picker.",
+      "Owner-only Instagram Insights: ranked originals, Sync views onto packs, Unmatched Reels tab.",
   },
   {
     href: "/admin",
@@ -131,6 +131,6 @@ export const STUDIO_NESTED_SURFACES = [
   {
     name: "Analytics unmatched picker",
     opens_from: "/analytics",
-    summary: "Match Reels that Sync could not join by caption. Identity is the Reel id after Link.",
+    summary: "Unmatched Reels tab. Pick a Gallery pack, then link the Reel you posted. Older pre-Varimo posts stay here.",
   },
 ] as const;

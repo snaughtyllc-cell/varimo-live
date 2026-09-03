@@ -77,12 +77,18 @@ from .instagram_insights import (
     InstagramSyncStamp,
     InstagramUnmatchedStore,
     VariantLink,
+    apply_look_deltas,
     export_caption_hints,
     fetch_media_insights,
     gallery_analytics,
     lanes_from_sources,
     latest_insights_fetched_at,
     list_media as list_ig_media,
+    match_media,
+    merge_insight_snapshots,
+    now_utc,
+    pack_analytics,
+    pack_look_totals,
     match_media,
     merge_insight_snapshots,
     now_utc,
@@ -1108,8 +1114,12 @@ def create_app(
         leftover = unmatched_payload(media_rows, hits)
         _ig_unmatched().save(leftover)
         if listed_any:
-            _ig_sync_stamp().write(fetched_at)
-        analytics = _ig_analytics_body()
+            stamp = _ig_sync_stamp()
+            baseline = stamp.packs()
+            analytics = _ig_analytics_body(look_baseline=baseline)
+            stamp.write(fetched_at, packs=pack_look_totals(analytics))
+        else:
+            analytics = _ig_analytics_body()
         print(
             "instagram sync "
             f"accounts={len(accounts)} media={len(media_rows)} "
@@ -1125,7 +1135,7 @@ def create_app(
             "analytics": analytics,
         }
 
-    def _ig_analytics_body() -> dict[str, Any]:
+    def _ig_analytics_body(look_baseline: Mapping[str, Any] | None = None) -> dict[str, Any]:
         sources = [s for job in store.list() for s in job.sources]
         body = gallery_analytics(sources)
         created = {
@@ -1160,9 +1170,12 @@ def create_app(
             })
         body["lanes"] = lanes
         body["unmatched"] = _ig_unmatched().drop_linked(_linked_ig_media_ids())
+        stamp = _ig_sync_stamp()
         body["insights_fetched_at"] = latest_insights_fetched_at(
-            sources, last_sync=_ig_sync_stamp().read(),
+            sources, last_sync=stamp.read(),
         )
+        baseline = look_baseline if look_baseline is not None else stamp.previous_packs()
+        apply_look_deltas(body, baseline)
         return body
 
     def _run_workflow_tick(wf: Workflow) -> Workflow:

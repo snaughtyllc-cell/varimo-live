@@ -655,6 +655,55 @@ def test_analytics_get_keeps_unmatched_reels_after_sync(tmp_path):
     assert leftover == []
 
 
+def test_second_sync_exposes_view_delta_since_the_last_look(tmp_path):
+    views = {"n": 100}
+
+    def fake_media(user_id, token):
+        return [{
+            "id": "linked",
+            "permalink": "https://www.instagram.com/reel/SyncCap/",
+            "caption": "unique lab hook",
+        }]
+
+    def fake_insights(media_id, token):
+        return {"views": views["n"]}
+
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    job = store.create_job([("a.mp4", b"x")], count=1)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    src.variants[0].caption = "Unique Lab Hook"
+    store._persist(job)
+    InstagramAccountStore(ws.instagram_dir()).save({
+        "user_id": "178", "username": "lab.ig", "access_token": "tok",
+    })
+    client = TestClient(create_app(
+        store,
+        sa_json_path="",
+        instagram_environ={
+            ENV_APP_ID: "ig-app-id",
+            ENV_APP_SECRET: "ig-app-secret",
+            ENV_REDIRECT_URI: "https://ui.example/api/instagram/oauth/callback",
+        },
+        instagram_list_media=fake_media,
+        instagram_fetch_insights=fake_insights,
+    ))
+    first = client.post("/api/instagram/sync")
+    assert first.status_code == 200
+    assert first.json()["analytics"]["ranked"][0].get("insights_views_delta") is None
+
+    views["n"] = 12100
+    second = client.post("/api/instagram/sync").json()
+    row = second["analytics"]["ranked"][0]
+    assert row["insights_views"] == 12100
+    assert row["insights_views_delta"] == 12000
+    assert second["analytics"]["insights_views_delta"] == 12000
+
+    again = client.get("/api/instagram/analytics").json()
+    assert again["ranked"][0]["insights_views_delta"] == 12000
+
+
 def test_instagram_oauth_pending_store_round_trips_workspace_id(tmp_path):
     store = InstagramOAuthPendingStore(str(tmp_path / "instagram_oauth_pending.json"))
     store.add("st-owner", workspace_id="ws_jeff")

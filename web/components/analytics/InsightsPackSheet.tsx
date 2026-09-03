@@ -3,6 +3,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { ExternalLink, X } from "lucide-react";
 import {
+  formatDelta,
   formatViews,
   handleLabel,
   moveCopyLabel,
@@ -22,6 +23,7 @@ import type {
 
 type MetricSource = {
   insights_views?: number | null;
+  insights_views_delta?: number | null;
   insights_reach?: number | null;
   insights_likes?: number | null;
   insights_comments?: number | null;
@@ -72,8 +74,16 @@ function isMetric(value: number | null | undefined): value is number {
 }
 
 function summaryMetrics(row: MetricSource, includeFollows = false) {
-  const metrics: { label: string; value: string }[] = [];
-  if (isMetric(row.insights_views)) metrics.push({ label: "views", value: formatViews(row.insights_views) });
+  const metrics: { label: string; value: string; delta?: string | null; deltaDir?: "up" | "down" }[] = [];
+  if (isMetric(row.insights_views)) {
+    const delta = formatDelta(row.insights_views_delta);
+    metrics.push({
+      label: "views",
+      value: formatViews(row.insights_views),
+      delta,
+      deltaDir: typeof row.insights_views_delta === "number" && row.insights_views_delta < 0 ? "down" : "up",
+    });
+  }
   if (isMetric(row.insights_reach)) metrics.push({ label: "reach", value: formatViews(row.insights_reach) });
   if (isMetric(row.insights_likes)) metrics.push({ label: "likes", value: formatViews(row.insights_likes) });
   if (isMetric(row.insights_comments)) metrics.push({ label: "comments", value: formatViews(row.insights_comments) });
@@ -134,13 +144,16 @@ function aggregate(copies: InstagramTrackedCopy[], key: keyof MetricSource): num
   return seen ? total : null;
 }
 
-function MetricRail({ metrics }: { metrics: { label: string; value: string }[] }) {
+function MetricRail({ metrics }: { metrics: { label: string; value: string; delta?: string | null; deltaDir?: "up" | "down" }[] }) {
   if (metrics.length === 0) return null;
   return (
     <div className="analytics-metric-rail" aria-label="Insights metrics">
       {metrics.map((metric) => (
         <span key={metric.label} className="analytics-metric-chip">
           <b>{metric.value}</b> {metric.label}
+          {metric.delta ? (
+            <span className="analytics-pack-row__delta" data-dir={metric.deltaDir}>{metric.delta}</span>
+          ) : null}
         </span>
       ))}
     </div>

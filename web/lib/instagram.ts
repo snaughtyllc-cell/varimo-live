@@ -45,6 +45,12 @@ export function formatViews(n: number | null | undefined): string {
   return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
 }
 
+export function formatDelta(n: number | null | undefined): string | null {
+  if (typeof n !== "number" || Number.isNaN(n) || n === 0) return null;
+  const compact = formatViews(Math.abs(n));
+  return n < 0 ? `-${compact}` : `+${compact}`;
+}
+
 export function packViewsCopy(
   views: number | null | undefined,
   linked: number,
@@ -107,6 +113,7 @@ export function galleryViewsCopy(
   views: number | null | undefined,
   linked: number,
   accounts: number,
+  viewsDelta?: number | null,
 ): string {
   if (accounts <= 0) {
     return "Connect Instagram testers on Analytics to pull Insights onto these packs.";
@@ -121,7 +128,9 @@ export function galleryViewsCopy(
     );
   }
   const total = formatViews(views);
-  return `${total} views across ${linked} linked post${linked === 1 ? "" : "s"}`;
+  const delta = formatDelta(viewsDelta);
+  const base = `${total} views across ${linked} linked post${linked === 1 ? "" : "s"}`;
+  return delta ? `${base} · ${delta} since last look` : base;
 }
 
 export function variantViewsCopy(views: number | null | undefined, linked: boolean): string | null {

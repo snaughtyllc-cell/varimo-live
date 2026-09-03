@@ -613,6 +613,75 @@ class InstagramUnmatchedStore:
         return rows
 
 
+LOOK_DELTA_KEYS = ("views", "likes", "comments", "shares", "saved", "reach")
+
+
+def _delta_int(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value)
+
+
+def metric_delta(current: Any, previous: Any) -> int | None:
+    """Change since the last look. Missing either side is unknown, not zero."""
+    now = _delta_int(current)
+    then = _delta_int(previous)
+    if now is None or then is None:
+        return None
+    return now - then
+
+
+def pack_look_totals(analytics: Mapping[str, Any]) -> dict[str, dict[str, int]]:
+    out: dict[str, dict[str, int]] = {}
+    rows = analytics.get("packs")
+    if not isinstance(rows, list):
+        return out
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        sid = row.get("source_id")
+        if not isinstance(sid, str) or not sid:
+            continue
+        snap: dict[str, int] = {}
+        for key in LOOK_DELTA_KEYS:
+            field = f"insights_{key}"
+            value = _delta_int(row.get(field))
+            if value is not None:
+                snap[field] = value
+        out[sid] = snap
+    return out
+
+
+def apply_look_deltas(body: dict[str, Any], previous_packs: Mapping[str, Any] | None) -> None:
+    """Stamp per-pack and headline view deltas. Mutates `body`."""
+    baseline = previous_packs if isinstance(previous_packs, Mapping) else {}
+    for group in ("packs", "ranked"):
+        rows = body.get(group)
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            sid = str(row.get("source_id") or "")
+            prev = baseline.get(sid) if isinstance(baseline.get(sid), Mapping) else {}
+            for key in LOOK_DELTA_KEYS:
+                field = f"insights_{key}"
+                row[f"{field}_delta"] = metric_delta(
+                    row.get(field),
+                    prev.get(field) if isinstance(prev, Mapping) else None,
+                )
+    view_deltas: list[int] = []
+    ranked = body.get("ranked")
+    if isinstance(ranked, list):
+        for row in ranked:
+            if not isinstance(row, dict):
+                continue
+            delta = row.get("insights_views_delta")
+            if isinstance(delta, int) and not isinstance(delta, bool):
+                view_deltas.append(delta)
+    body["insights_views_delta"] = sum(view_deltas) if view_deltas else None
+
+
 def latest_insights_fetched_at(
     sources: Sequence[Any] | None = None,
     *,
@@ -644,32 +713,59 @@ def latest_insights_fetched_at(
 
 
 class InstagramSyncStamp:
-    """Workspace clock for the last Graph Insights pass."""
+    """Workspace clock for the last Graph Insights pass, plus last-look pack totals."""
 
     def __init__(self, path: str) -> None:
         self._path = path
 
-    def read(self) -> str | None:
+    def load(self) -> dict[str, Any]:
         if not os.path.isfile(self._path):
-            return None
+            return {}
         try:
             with open(self._path, encoding="utf-8") as f:
                 raw = json.load(f)
         except (OSError, json.JSONDecodeError, ValueError):
-            return None
-        if not isinstance(raw, dict):
-            return None
-        value = raw.get("fetched_at")
+            return {}
+        return raw if isinstance(raw, dict) else {}
+
+    def read(self) -> str | None:
+        value = self.load().get("fetched_at")
         return value if isinstance(value, str) and _parse_utc(value) else None
 
-    def write(self, fetched_at: str) -> None:
+    def packs(self) -> dict[str, Any]:
+        raw = self.load().get("packs")
+        return raw if isinstance(raw, dict) else {}
+
+    def previous_packs(self) -> dict[str, Any]:
+        raw = self.load().get("previous_packs")
+        return raw if isinstance(raw, dict) else {}
+
+    def write(self, fetched_at: str, *, packs: Mapping[str, Any] | None = None) -> None:
+        prior = self.load()
+        prior_packs = prior.get("packs") if isinstance(prior.get("packs"), dict) else {}
+        prior_previous = prior.get("previous_packs") if isinstance(prior.get("previous_packs"), dict) else {}
+        if packs is not None:
+            payload_packs = {
+                str(key): dict(value) if isinstance(value, dict) else {}
+                for key, value in packs.items()
+            }
+            payload_previous = prior_packs
+        else:
+            payload_packs = prior_packs
+            payload_previous = prior_previous
+        payload = {
+            "fetched_at": fetched_at,
+            "previous_fetched_at": prior.get("fetched_at") if isinstance(prior.get("fetched_at"), str) else None,
+            "packs": payload_packs,
+            "previous_packs": payload_previous,
+        }
         os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
         fd, tmp = tempfile.mkstemp(
             dir=os.path.dirname(self._path) or ".", prefix=".ig-last-sync-", suffix=".tmp",
         )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump({"fetched_at": fetched_at}, f, indent=2)
+                json.dump(payload, f, indent=2)
             os.replace(tmp, self._path)
         except Exception:
             try:

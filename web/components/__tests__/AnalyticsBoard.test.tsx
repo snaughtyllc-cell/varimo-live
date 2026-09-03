@@ -154,6 +154,22 @@ describe("AnalyticsBoard", () => {
     expect(mockSyncInstagram).not.toHaveBeenCalled();
   });
 
+  it("shows since-last-look view change on ranked originals", async () => {
+    mockGetInstagramAnalytics.mockResolvedValue({
+      ...analytics,
+      insights_views_delta: 12000,
+      ranked: [{
+        ...analytics.ranked[0],
+        insights_views_delta: 12000,
+      }, analytics.ranked[1]],
+    });
+    render(<AnalyticsBoard />);
+    const pack = await screen.findByRole("button", { name: /winner.*winner\.mp4/i });
+    expect(pack.textContent).toMatch(/\+12k/);
+    expect(await screen.findByText(/312k views across 14 linked posts/i)).toBeTruthy();
+    expect(screen.getByText(/\+12k since last look/i)).toBeTruthy();
+  });
+
   it("syncs Insights when Stats opens on a stale pull", async () => {
     mockGetInstagramAnalytics.mockResolvedValue({
       ...analytics,

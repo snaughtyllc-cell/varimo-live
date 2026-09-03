@@ -1,8 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { VariantOut } from "@/lib/types";
 import { setVariantCaption } from "@/lib/api";
+import { writeClipboardText } from "@/lib/clipboard";
 import {
+  captionCopyBlockedCopy,
+  captionCopyLabel,
+  captionCopiedLabel,
   captionEmptyCopy,
   captionPreviewLabel,
   captionSaveLabel,
@@ -16,15 +20,39 @@ interface CaptionBlockProps {
   onSaved: () => void;
 }
 
+const actionBtnStyle = (opts: { muted?: boolean; copied?: boolean }): CSSProperties => ({
+  marginTop: 0,
+  fontSize: 12.5,
+  fontWeight: 700,
+  padding: "10px 12px",
+  borderRadius: 8,
+  background: opts.copied ? "#d8f3f6" : "#f3f8f9",
+  border: opts.copied ? "1px solid #0caab8" : "1px solid var(--color-line)",
+  color: opts.muted ? "var(--color-muted)" : opts.copied ? "#0a6e78" : "var(--color-text)",
+  cursor: opts.muted ? "not-allowed" : "pointer",
+});
+
 export function CaptionBlock({ sourceId, variant, onSaved }: CaptionBlockProps) {
   const saved = stripInternalIndexLines(variant.caption ?? "");
   const [draft, setDraft] = useState(saved);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const boxRef = useRef<HTMLTextAreaElement>(null);
+  const copiedReset = useRef<number | null>(null);
 
   useEffect(() => {
     setDraft(saved);
   }, [saved, variant.index, sourceId]);
+
+  useEffect(() => {
+    return () => {
+      if (copiedReset.current) window.clearTimeout(copiedReset.current);
+    };
+  }, []);
+
+  const cleanedDraft = stripInternalIndexLines(draft);
+  const canCopy = Boolean(cleanedDraft);
 
   async function save() {
     if (busy) return;
@@ -37,6 +65,35 @@ export function CaptionBlock({ sourceId, variant, onSaved }: CaptionBlockProps) 
       setError(e instanceof Error ? e.message : "Could not save caption");
     } finally {
       setBusy(false);
+    }
+  }
+
+  function markCopied() {
+    setCopied(true);
+    if (copiedReset.current) window.clearTimeout(copiedReset.current);
+    copiedReset.current = window.setTimeout(() => setCopied(false), 3000);
+  }
+
+  async function copyCaption() {
+    if (!canCopy) return;
+    setError(null);
+    markCopied();
+    const box = boxRef.current;
+    let ok = false;
+    if (box) {
+      try {
+        box.focus();
+        box.select();
+        ok = typeof document.execCommand === "function" && document.execCommand("copy");
+      } catch {
+        ok = false;
+      }
+    }
+    if (!ok) ok = await writeClipboardText(cleanedDraft);
+    if (!ok) {
+      setCopied(false);
+      if (copiedReset.current) window.clearTimeout(copiedReset.current);
+      setError(captionCopyBlockedCopy());
     }
   }
 
@@ -71,26 +128,28 @@ export function CaptionBlock({ sourceId, variant, onSaved }: CaptionBlockProps) 
         placeholder={captionEmptyCopy()}
         aria-label={captionPreviewLabel()}
         disabled={busy}
+        ref={boxRef}
         style={{ marginTop: 0, minHeight: 110 }}
       />
-      <button
-        type="button"
-        onClick={() => void save()}
-        disabled={busy}
-        style={{
-          marginTop: 8,
-          fontSize: 12.5,
-          fontWeight: 700,
-          padding: "10px 12px",
-          borderRadius: 8,
-          background: "#f3f8f9",
-          border: "1px solid var(--color-line)",
-          color: busy ? "var(--color-muted)" : "var(--color-text)",
-          cursor: busy ? "not-allowed" : "pointer",
-        }}
-      >
-        {busy ? "Saving…" : captionSaveLabel()}
-      </button>
+      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={() => void copyCaption()}
+          disabled={!canCopy}
+          style={actionBtnStyle({ muted: !canCopy, copied })}
+          data-copied={copied ? "true" : "false"}
+        >
+          {copied ? captionCopiedLabel() : captionCopyLabel()}
+        </button>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={busy}
+          style={actionBtnStyle({ muted: busy })}
+        >
+          {busy ? "Saving…" : captionSaveLabel()}
+        </button>
+      </div>
       {error && (
         <div style={{ marginTop: 8, fontSize: 12, color: "var(--color-red)" }}>{error}</div>
       )}

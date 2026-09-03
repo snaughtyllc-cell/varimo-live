@@ -79,6 +79,18 @@ export function captionSaveLabel(): string {
   return "Save caption";
 }
 
+export function captionCopyLabel(): string {
+  return "Copy caption";
+}
+
+export function captionCopiedLabel(): string {
+  return "Copied";
+}
+
+export function captionCopyBlockedCopy(): string {
+  return "Clipboard blocked — select the caption and copy it.";
+}
+
 export function captionStatusHint(): string {
   return (
     "Edit here before Send to Drive or a drop. After it is posted, pass / duplicate " +

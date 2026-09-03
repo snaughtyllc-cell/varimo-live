@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { VariantCard } from "@/components/gallery/VariantCard";
 import type { VariantOut } from "@/lib/types";
 import { ESCALATED_TITLE } from "@/lib/format";
+import { captionCopiedLabel, captionCopyLabel } from "@/lib/prepareCopy";
 
 function variant(over: Partial<VariantOut> & { caption?: string | null } = {}): VariantOut {
   return {
@@ -72,6 +73,11 @@ describe("VariantCard platform badges", () => {
 });
 
 describe("VariantCard uniqueness", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it("shows uniqueness percent (higher = more different)", () => {
     render(
       <VariantCard
@@ -173,6 +179,49 @@ describe("VariantCard uniqueness", () => {
     const preview = screen.getByText(/If you didnt know a good boil/);
     expect(preview).toBeInTheDocument();
     expect(preview.textContent).toMatch(/…$/);
+    expect(screen.getByRole("button", { name: captionCopyLabel() })).toBeInTheDocument();
+  });
+
+  it("copies the full caption from the card without opening the clip", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const onOpen = vi.fn();
+    const caption =
+      "If you didnt know a good boil this line is long enough to snip past eighty characters for sure";
+    render(
+      <VariantCard
+        variant={variant({ caption })}
+        sourceId="s1"
+        onOpen={onOpen}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: captionCopyLabel() }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(caption);
+    });
+    expect(screen.getByRole("button", { name: captionCopiedLabel() })).toBeInTheDocument();
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("keeps Copied on the card even if the clipboard API rejects", async () => {
+    vi.stubGlobal("navigator", {
+      clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+    });
+    const onOpen = vi.fn();
+    render(
+      <VariantCard
+        variant={variant({ caption: "POV the boil hits different" })}
+        sourceId="s1"
+        onOpen={onOpen}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: captionCopyLabel() }));
+    expect(await screen.findByRole("button", { name: captionCopiedLabel() })).toBeInTheDocument();
+    expect(onOpen).not.toHaveBeenCalled();
   });
 });
 

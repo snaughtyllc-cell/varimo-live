@@ -22,6 +22,7 @@ import {
   packPickerOptions,
   parseCopyPick,
   rankedOriginalPrefix,
+  shouldRefreshInsights,
   syncInsightsCopy,
   unmatchedCaptionPreview,
   unmatchedTabCopy,
@@ -98,6 +99,17 @@ export function AnalyticsBoard() {
     }
   }
 
+  async function pullInsights() {
+    const out = await syncInstagram();
+    const leftover = out.unmatched ?? out.analytics.unmatched ?? [];
+    if (leftover.length > 0) {
+      setGallery(await getGallery());
+    }
+    await applyAnalytics(out.analytics, leftover);
+    setNote(syncInsightsCopy(out));
+    return out;
+  }
+
   async function load() {
     try {
       const [nextStatus, nextAnalytics, nextGallery] = await Promise.all([
@@ -108,6 +120,20 @@ export function AnalyticsBoard() {
       setStatus(nextStatus);
       setGallery(nextGallery);
       await applyAnalytics(nextAnalytics);
+      if (shouldRefreshInsights({
+        connected: nextStatus.connected,
+        fetchedAt: nextAnalytics.insights_fetched_at,
+      })) {
+        setSyncing(true);
+        setError(null);
+        try {
+          await pullInsights();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Sync failed");
+        } finally {
+          setSyncing(false);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load Analytics");
     }
@@ -124,19 +150,13 @@ export function AnalyticsBoard() {
     setError(null);
     setNote(null);
     try {
-      const out = await syncInstagram();
-      const leftover = out.unmatched ?? out.analytics.unmatched ?? [];
-      if (leftover.length > 0) {
-        setGallery(await getGallery());
-      }
-      await applyAnalytics(out.analytics, leftover);
+      await pullInsights();
       setPackId("");
       setCopyPick("");
       setReelId("");
       setMoveFrom(null);
       setSelectedSourceId("");
       setTab("ranked");
-      setNote(syncInsightsCopy(out));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");
     } finally {

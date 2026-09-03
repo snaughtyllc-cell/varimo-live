@@ -26,7 +26,33 @@ import {
   unmatchedTabCopy,
   variantViewsCopy,
   analyticsPackThumb,
+  insightsAreStale,
+  shouldRefreshInsights,
 } from "@/lib/instagram";
+
+describe("insightsAreStale", () => {
+  const now = Date.parse("2026-09-03T08:00:00Z");
+
+  it("treats a missing pull as stale so Stats can hit Graph on first open", () => {
+    expect(insightsAreStale(null, now)).toBe(true);
+    expect(insightsAreStale("", now)).toBe(true);
+  });
+
+  it("is stale at two hours and fresh under that", () => {
+    expect(insightsAreStale("2026-09-03T06:00:00Z", now)).toBe(true);
+    expect(insightsAreStale("2026-09-03T06:00:01Z", now)).toBe(false);
+    expect(insightsAreStale("2026-09-03T07:00:00Z", now)).toBe(false);
+  });
+
+  it("only auto-refreshes when an account is connected", () => {
+    expect(shouldRefreshInsights({ connected: false, fetchedAt: null, nowMs: now })).toBe(false);
+    expect(shouldRefreshInsights({
+      connected: true,
+      fetchedAt: "2026-09-03T05:00:00Z",
+      nowMs: now,
+    })).toBe(true);
+  });
+});
 
 describe("analyticsPackThumb", () => {
   it("prefers a look still so ranked rows can paint on phones", () => {

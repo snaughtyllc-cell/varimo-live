@@ -433,6 +433,7 @@ export interface InstagramAnalytics {
   accounts: InstagramAccount[];
   lanes?: InstagramLane[];
   unmatched?: InstagramUnmatched[];
+  insights_fetched_at?: string | null;
 }
 
 export interface InstagramSync {

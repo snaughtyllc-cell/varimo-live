@@ -584,6 +584,7 @@ def test_analytics_get_returns_insights_without_leaking_token(tmp_path):
     body = resp.json()
     assert body["insights_views"] is None
     assert body["insights_linked"] == 0
+    assert body["insights_fetched_at"] is None
     assert body["ranked"] == []
     assert len(body["accounts"]) == 1
     assert body["accounts"][0]["username"] == "lab.ig"
@@ -635,8 +636,10 @@ def test_analytics_get_keeps_unmatched_reels_after_sync(tmp_path):
     synced = client.post("/api/instagram/sync")
     assert synced.status_code == 200
     assert [u["media_id"] for u in synced.json()["unmatched"]] == ["orphan"]
+    assert synced.json()["analytics"]["insights_fetched_at"]
 
     again = client.get("/api/instagram/analytics").json()
+    assert again["insights_fetched_at"] == synced.json()["analytics"]["insights_fetched_at"]
     assert [u["media_id"] for u in again["unmatched"]] == ["orphan"]
     assert "tok" not in json.dumps(again)
 

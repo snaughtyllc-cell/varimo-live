@@ -8,6 +8,7 @@ from urllib.error import HTTPError
 from tests.server.fakes import FakeRunner
 from variant_maker.server.instagram_insights import (
     IgMedia,
+    InstagramSyncStamp,
     VariantLink,
     caption_from_drive_filename,
     copy_hold_kind,
@@ -15,6 +16,7 @@ from variant_maker.server.instagram_insights import (
     fetch_media_insights,
     gallery_analytics,
     lanes_from_sources,
+    latest_insights_fetched_at,
     list_media,
     match_media,
     merge_insight_snapshots,
@@ -169,6 +171,29 @@ def test_gallery_analytics_ranks_the_winning_source():
     assert body["insights_views"] == 1010
     assert body["ranked"][0]["source_id"] == "winner"
     assert body["ranked"][0]["insights_views"] == 1000
+    assert body["insights_fetched_at"] is None
+
+
+def test_latest_insights_fetched_at_keeps_the_newest_stamp():
+    class V:
+        def __init__(self, fetched_at):
+            self.ig_media_id = "m"
+            self.ig_insights = {"fetched_at": fetched_at}
+
+    class S:
+        def __init__(self, variants):
+            self.variants = variants
+
+    assert latest_insights_fetched_at([
+        S([V("2026-09-03T05:00:00Z"), V("2026-09-03T07:10:00Z")]),
+    ], last_sync="2026-09-03T06:00:00Z") == "2026-09-03T07:10:00Z"
+
+
+def test_sync_stamp_round_trips(tmp_path):
+    stamp = InstagramSyncStamp(str(tmp_path / "last_sync.json"))
+    assert stamp.read() is None
+    stamp.write("2026-09-03T08:00:00Z")
+    assert stamp.read() == "2026-09-03T08:00:00Z"
 
 
 def test_tracked_copies_list_linked_variants_highest_views_first():

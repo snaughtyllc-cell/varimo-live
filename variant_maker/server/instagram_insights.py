@@ -494,6 +494,7 @@ def gallery_analytics(sources: Sequence[Any]) -> dict[str, Any]:
     return {
         "insights_views": views_sum if has_views else None,
         "insights_linked": linked,
+        "insights_fetched_at": latest_insights_fetched_at(sources),
         "packs": rows,
         "ranked": ranked,
         "suggestions": pack_suggestions(rows),
@@ -610,6 +611,72 @@ class InstagramUnmatchedStore:
         rows = [row for row in self.load() if str(row.get("media_id") or "") not in used]
         self.save(rows)
         return rows
+
+
+def latest_insights_fetched_at(
+    sources: Sequence[Any] | None = None,
+    *,
+    last_sync: str | None = None,
+) -> str | None:
+    """Newest Graph pull time. last_sync covers matched-0 passes with no snapshots."""
+    stamps: list[tuple[datetime, str]] = []
+
+    def add(raw: Any) -> None:
+        if not isinstance(raw, str):
+            return
+        dt = _parse_utc(raw)
+        if dt is not None:
+            stamps.append((dt, raw))
+
+    add(last_sync)
+    for source in sources or []:
+        variants = source.get("variants") if isinstance(source, dict) else getattr(source, "variants", None)
+        for variant in variants or []:
+            if isinstance(variant, dict):
+                snapshot = variant.get("ig_insights")
+            else:
+                snapshot = getattr(variant, "ig_insights", None)
+            if isinstance(snapshot, dict):
+                add(snapshot.get("fetched_at"))
+    if not stamps:
+        return None
+    return max(stamps, key=lambda row: row[0])[1]
+
+
+class InstagramSyncStamp:
+    """Workspace clock for the last Graph Insights pass."""
+
+    def __init__(self, path: str) -> None:
+        self._path = path
+
+    def read(self) -> str | None:
+        if not os.path.isfile(self._path):
+            return None
+        try:
+            with open(self._path, encoding="utf-8") as f:
+                raw = json.load(f)
+        except (OSError, json.JSONDecodeError, ValueError):
+            return None
+        if not isinstance(raw, dict):
+            return None
+        value = raw.get("fetched_at")
+        return value if isinstance(value, str) and _parse_utc(value) else None
+
+    def write(self, fetched_at: str) -> None:
+        os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
+        fd, tmp = tempfile.mkstemp(
+            dir=os.path.dirname(self._path) or ".", prefix=".ig-last-sync-", suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump({"fetched_at": fetched_at}, f, indent=2)
+            os.replace(tmp, self._path)
+        except Exception:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
 
 
 def _parse_utc(value: str | None) -> datetime | None:

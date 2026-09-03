@@ -140,6 +140,52 @@ describe("AnalyticsBoard", () => {
     mockGetGallery.mockResolvedValue([]);
   });
 
+  it("paints a look still on ranked originals so phones do not wait on a video frame", async () => {
+    mockGetGallery.mockResolvedValue([
+      {
+        source_id: "winner",
+        filename: "winner.mp4",
+        requested: 1,
+        delivered: 1,
+        shortfall: 0,
+        variants: [{
+          index: 1,
+          filename: "v01.mp4",
+          file_url: "/api/variants/winner/v01.mp4",
+          look_var_url: "/api/look/winner/look_v01.jpg",
+          file_ready: true,
+        }],
+      },
+    ]);
+    render(<AnalyticsBoard />);
+    const pack = await screen.findByRole("button", { name: /winner.*winner\.mp4/i });
+    expect(pack.querySelector("img")?.getAttribute("src")).toBe("/api/look/winner/look_v01.jpg");
+    expect(pack.querySelector("video")).toBeNull();
+  });
+
+  it("seeks a video frame when the pack has no look still", async () => {
+    mockGetGallery.mockResolvedValue([
+      {
+        source_id: "winner",
+        filename: "winner.mp4",
+        requested: 1,
+        delivered: 1,
+        shortfall: 0,
+        variants: [{
+          index: 1,
+          filename: "v01.mp4",
+          file_url: "/api/variants/winner/v01.mp4",
+          file_ready: true,
+        }],
+      },
+    ]);
+    render(<AnalyticsBoard />);
+    const pack = await screen.findByRole("button", { name: /winner.*winner\.mp4/i });
+    expect(pack.querySelector("video")?.getAttribute("src")).toBe(
+      "/api/variants/winner/v01.mp4#t=0.15",
+    );
+  });
+
   it("shows pack totals and ranked originals on the Analytics tab", async () => {
     render(<AnalyticsBoard />);
     expect(await screen.findByText(/312k views across 14 linked posts/i)).toBeTruthy();

@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import { InstagramPanel } from "@/components/InstagramPanel";
 import { InsightsPackSheet } from "@/components/analytics/InsightsPackSheet";
+import { PackThumb } from "@/components/analytics/PackThumb";
 import {
   AMPLIFY_MORE_N,
   copiesForPack,
@@ -351,7 +352,6 @@ export function AnalyticsBoard() {
               {ranked.map((row) => {
                 const suggestion = suggestionFor(row.source_id, suggestions);
                 const source = sourceById.get(row.source_id);
-                const thumb = source?.variants.find((variant) => Boolean(variant.file_url))?.file_url;
                 const metrics = packIndexMetrics(row);
                 const unknown = row.insights_unknown ?? 0;
                 return (
@@ -363,7 +363,7 @@ export function AnalyticsBoard() {
                     onClick={() => setSelectedSourceId(row.source_id)}
                   >
                     <span className="analytics-pack-row__thumb" aria-hidden="true">
-                      {thumb ? <video src={thumb} muted playsInline preload="metadata" /> : null}
+                      <PackThumb source={source} />
                     </span>
                     <span className="analytics-pack-row__body">
                       <span className="analytics-pack-row__name" title={row.filename}>

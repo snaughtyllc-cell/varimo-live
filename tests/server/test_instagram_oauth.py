@@ -2,23 +2,26 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
 
 from tests.server.fakes import FakeRunner
+from tests.server.test_auth_app import _env, _exchange, _login
 from variant_maker.server.app import create_app
 from variant_maker.server.instagram_oauth import (
     ENV_APP_ID,
     ENV_APP_SECRET,
     ENV_REDIRECT_URI,
     InstagramAccountStore,
+    InstagramOAuthPendingStore,
     build_authorization_url,
     status_payload,
 )
 from variant_maker.server.jobs import JobStore
-from variant_maker.server.tenants import can_manage_instagram
+from variant_maker.server.tenants import can_manage_instagram, tenant_root
 from variant_maker.server.workspace import Workspace
 
 
@@ -424,3 +427,96 @@ def test_analytics_get_returns_insights_without_leaking_token(tmp_path):
     dumped = json.dumps(body)
     assert "secret-tok" not in dumped
     assert "access_token" not in dumped
+
+
+def test_instagram_oauth_pending_store_round_trips_workspace_id(tmp_path):
+    store = InstagramOAuthPendingStore(str(tmp_path / "instagram_oauth_pending.json"))
+    store.add("st-owner", workspace_id="ws_jeff")
+    assert store.consume("missing") is None
+    pending = store.consume("st-owner")
+    assert pending is not None
+    assert pending.workspace_id == "ws_jeff"
+    assert store.consume("st-owner") is None
+
+
+def _auth_ig_app(tmp_path, *, exchange=None, fetch_profile=None):
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    env = _env()
+    env.update({
+        ENV_APP_ID: "ig-app-id",
+        ENV_APP_SECRET: "ig-app-secret",
+        ENV_REDIRECT_URI: "https://ui.example/api/instagram/oauth/callback",
+    })
+    app = create_app(
+        store,
+        hydrate=True,
+        auth_environ=env,
+        oauth_environ=env,
+        login_exchange=_exchange,
+        sa_json_path="",
+        instagram_environ=env,
+        instagram_exchange=exchange,
+        instagram_fetch_profile=fetch_profile,
+    )
+    return app, ws
+
+
+def test_instagram_oauth_start_requires_login_when_auth_on(tmp_path):
+    app, _ = _auth_ig_app(tmp_path)
+    resp = TestClient(app).get("/api/instagram/oauth/start", follow_redirects=False)
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "login required"
+
+
+def test_instagram_oauth_callback_without_cookie_bad_state_redirects(tmp_path):
+    app, _ = _auth_ig_app(tmp_path)
+    resp = TestClient(app).get(
+        "/api/instagram/oauth/callback?code=ig-code&state=nope",
+        follow_redirects=False,
+    )
+    assert resp.status_code in (302, 307), resp.text
+    loc = resp.headers["location"]
+    assert "/analytics" in loc
+    assert "ig=error" in loc
+    assert "bad_state" in loc
+
+
+def test_instagram_oauth_callback_without_session_cookie_saves_to_workspace(tmp_path):
+    """Instagram's top-level redirect often omits SameSite=Lax Studio cookies."""
+
+    def fake_exchange(*, code, client_id, client_secret, redirect_uri):
+        assert code == "ig-code"
+        return {"access_token": "long-ig", "user_id": "17841"}
+
+    def fake_profile(token):
+        assert token == "long-ig"
+        return {"user_id": "17841", "username": "connected_user", "name": "Maya"}
+
+    app, ws = _auth_ig_app(tmp_path, exchange=fake_exchange, fetch_profile=fake_profile)
+    logged_in = TestClient(app)
+    login = _login(logged_in, "jeff")
+    assert login.status_code in (302, 307), login.text
+    me = logged_in.get("/api/auth/me").json()
+    workspace_id = me["workspace_id"]
+    assert workspace_id
+
+    start = logged_in.get("/api/instagram/oauth/start", follow_redirects=False)
+    assert start.status_code in (302, 307), start.text
+    state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
+
+    anon = TestClient(app)
+    cb = anon.get(
+        f"/api/instagram/oauth/callback?code=ig-code&state={state}",
+        follow_redirects=False,
+    )
+    assert cb.status_code in (302, 307), cb.text
+    loc = cb.headers["location"]
+    assert "/analytics" in loc
+    assert "ig=connected" in loc
+
+    tenant_ig = InstagramAccountStore(
+        os.path.join(tenant_root(ws.root, workspace_id), "instagram"),
+    )
+    assert [a.username for a in tenant_ig.list_accounts()] == ["connected_user"]
+    assert InstagramAccountStore(os.path.join(ws.root, "instagram")).list_accounts() == []

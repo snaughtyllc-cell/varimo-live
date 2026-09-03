@@ -244,6 +244,37 @@ describe("AnalyticsBoard", () => {
     });
   });
 
+  it("does not show a blank dash when linked Reels have no view counts", async () => {
+    mockGetInstagramAnalytics.mockResolvedValue({
+      insights_views: null,
+      insights_linked: 3,
+      ranked: [
+        {
+          source_id: "winner",
+          filename: "winner.mp4",
+          insights_views: null,
+          insights_linked: 1,
+          insights_unknown: 0,
+          tracked: [
+            {
+              index: 1,
+              ig_media_id: "m1",
+              username: "jeff",
+              insights_views: null,
+              account_connected: true,
+            },
+          ],
+        },
+      ],
+      accounts,
+    });
+    render(<AnalyticsBoard />);
+    expect(await screen.findByText(/linked posts, but Instagram sent no view counts/i)).toBeTruthy();
+    expect(screen.getByText(/@jeff · views unknown/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /move copy 01 to another original/i })).toBeTruthy();
+    expect(screen.queryByText(/^— views/i)).toBeNull();
+  });
+
   it("splits connected handles into account lanes", async () => {
     mockGetInstagramAnalytics.mockResolvedValue({
       ...analytics,

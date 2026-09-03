@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from statistics import median
 from typing import Any
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
@@ -23,6 +24,7 @@ _CAPTION_SPACE = re.compile(r"\s+")
 _SHORTCODE = re.compile(r"/(?:reel|p|tv)/([A-Za-z0-9_-]+)", re.IGNORECASE)
 _VARIANT_FILE = re.compile(r"^v\d+$", re.IGNORECASE)
 INSIGHT_METRICS = ("views", "reach", "likes", "comments", "shares", "saved")
+INSIGHT_CORE_METRICS = ("views", "likes", "comments", "saved", "shares")
 INSIGHT_HOLD_METRICS = ("ig_reels_avg_watch_time", "reels_skip_rate")
 INSIGHT_CONV_METRICS = ("follows", "profile_visits", "reposts")
 WEAK_SKIP = 0.45
@@ -239,6 +241,14 @@ def parse_insights_payload(body: Mapping[str, Any]) -> dict[str, int | float]:
 def _insight_number(raw: object) -> int | float | None:
     if isinstance(raw, bool) or raw is None:
         return None
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if not raw:
+            return None
+        try:
+            raw = float(raw) if "." in raw else int(raw)
+        except ValueError:
+            return None
     if isinstance(raw, int):
         return raw
     if isinstance(raw, float):
@@ -666,9 +676,19 @@ def pack_suggestions(
 
 def _get_json(url: str, timeout: int = 20) -> dict[str, Any]:
     req = Request(url, headers={"Accept": "application/json"})
-    with urlopen(req, timeout=timeout) as resp:
-        raw = resp.read().decode()
-    body = __import__("json").loads(raw)
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode()
+    except HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode()[:400]
+        except OSError:
+            detail = str(exc.reason or exc)
+        raise ValueError(f"Instagram HTTP {exc.code}: {detail}") from exc
+    except URLError as exc:
+        raise ValueError(f"Instagram request failed: {exc.reason}") from exc
+    body = json.loads(raw)
     if not isinstance(body, dict):
         raise TypeError("Instagram returned a non-object payload")
     err = body.get("error")
@@ -744,28 +764,64 @@ def fetch_media_insights(
 ) -> dict[str, int | float]:
     fetch = get_json or _get_json
     out: dict[str, int | float] = {}
-    batches = (
-        INSIGHT_METRICS,
-        INSIGHT_HOLD_METRICS,
-        INSIGHT_CONV_METRICS,
-    )
-    for metrics in batches:
-        qs = urlencode({
+
+    def ask(metrics: Sequence[str], extra: dict[str, str] | None = None) -> dict[str, int | float]:
+        params: dict[str, str] = {
             "metric": ",".join(metrics),
             "access_token": access_token,
-        })
-        url = f"{GRAPH_HOST}/{media_id}/insights?{qs}"
+        }
+        if extra:
+            params.update(extra)
+        url = f"{GRAPH_HOST}/{media_id}/insights?{urlencode(params)}"
+        return parse_insights_payload(fetch(url))
+
+    def try_ask(metrics: Sequence[str], extra: dict[str, str] | None = None) -> dict[str, int | float]:
         try:
-            out.update(parse_insights_payload(fetch(url)))
-        except ValueError:
-            if metrics == INSIGHT_METRICS:
-                qs2 = urlencode({
-                    "metric": "views,likes,comments,saved,shares",
-                    "access_token": access_token,
-                })
-                try:
-                    out.update(parse_insights_payload(fetch(f"{GRAPH_HOST}/{media_id}/insights?{qs2}")))
-                except ValueError:
-                    pass
-            continue
+            return ask(metrics, extra)
+        except (ValueError, OSError):
+            # Graph 400s mixed Reel batches (HTTPError) instead of returning
+            # empty data. Keep going so the rest of the Insights set still has a chance.
+            return {}
+
+    extras_total: tuple[dict[str, str] | None, ...] = ({"metric_type": "total_value"}, None)
+    view_extras: tuple[dict[str, str] | None, ...] = (
+        {"metric_type": "total_value"},
+        None,
+        {"metric_type": "total_value", "period": "lifetime"},
+        {"period": "lifetime"},
+    )
+
+    def missing(names: Sequence[str]) -> list[str]:
+        return [name for name in names if name not in out]
+
+    def fill(metrics: Sequence[str], extras: Sequence[dict[str, str] | None]) -> None:
+        for extra in extras:
+            if metrics and not missing(metrics):
+                return
+            out.update(try_ask(metrics, extra))
+
+    # Widest batch first (includes reach). Views-only is a fallback, not the product.
+    fill(INSIGHT_METRICS, extras_total)
+    fill(INSIGHT_CORE_METRICS, extras_total)
+    if "views" not in out and "plays" not in out:
+        fill(("views",), view_extras)
+    if "views" not in out and "plays" not in out:
+        fill(("plays",), extras_total)
+    if "views" not in out and "plays" in out:
+        out["views"] = out["plays"]
+
+    leftover = missing([name for name in INSIGHT_CORE_METRICS if name != "views"])
+    if leftover:
+        fill(tuple(leftover), extras_total)
+    for name in leftover:
+        if name not in out:
+            fill((name,), extras_total)
+    if "reach" not in out:
+        fill(("reach",), extras_total)
+
+    for metrics in (INSIGHT_HOLD_METRICS, INSIGHT_CONV_METRICS):
+        got = try_ask(metrics, {"metric_type": "total_value"})
+        if not any(name in got for name in metrics):
+            got = try_ask(metrics, None)
+        out.update(got)
     return out

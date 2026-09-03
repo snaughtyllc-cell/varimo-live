@@ -52,6 +52,12 @@ describe("galleryViewsCopy", () => {
   it("asks to connect on the Analytics tab when no accounts", () => {
     expect(galleryViewsCopy(null, 0, 0)).toMatch(/Connect Instagram testers on Analytics/i);
   });
+
+  it("does not show a blank dash when copies are linked without counts", () => {
+    expect(galleryViewsCopy(null, 14, 2)).toMatch(/14 linked posts/i);
+    expect(galleryViewsCopy(null, 14, 2)).toMatch(/no view counts/i);
+    expect(galleryViewsCopy(null, 14, 2)).not.toMatch(/^— views/i);
+  });
 });
 
 describe("variantViewsCopy", () => {
@@ -138,6 +144,18 @@ describe("syncInsightsCopy", () => {
       }),
     ).toMatch(/Unmatched tab/i);
   });
+
+  it("says when matched Reels still have no view counts", () => {
+    expect(
+      syncInsightsCopy({
+        matched: 3,
+        accounts: 2,
+        media: 12,
+        unmatched: [],
+        analytics: { insights_views: null, insights_linked: 3 },
+      }),
+    ).toMatch(/no view counts/i);
+  });
 });
 
 describe("handleLabel", () => {
@@ -193,6 +211,10 @@ describe("trackedCopyMeta", () => {
       account_connected: false,
       insights_views: 800,
     })).not.toMatch(/flagged/i);
+    expect(trackedCopyMeta({
+      username: "jeff",
+      insights_views: null,
+    })).toBe("@jeff · views unknown");
   });
 });
 

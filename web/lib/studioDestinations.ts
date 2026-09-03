@@ -131,7 +131,7 @@ export const STUDIO_NESTED_SURFACES = [
   {
     name: "Analytics pack sheet",
     opens_from: "/analytics",
-    summary: "Tap a ranked original for pack totals, per-account main / trial / growth Insights, and tracked Reels.",
+    summary: "Tap a ranked original for pack totals, trial-reel Insights per @handle, and tracked Reels.",
   },
   {
     name: "Analytics unmatched picker",

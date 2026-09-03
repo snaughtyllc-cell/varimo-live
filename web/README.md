@@ -150,7 +150,7 @@ Nested (not tabs — a redesign must still include them):
 | **Send to Drive** | Gallery / variant sheet | Pick destination + caption folder; split a pack across folders. |
 | **Drive picker** | Studio | Import source files from a saved Drive destination. |
 | **Watch / queue / cancel** | Studio + Workflows | Live job tiles, cancel, re-attach after reload. |
-| **Analytics pack sheet** | Analytics | Tap a ranked original for pack totals, per-account main / trial / growth Insights, and tracked Reels. |
+| **Analytics pack sheet** | Analytics | Tap a ranked original for pack totals, trial-reel Insights per @handle, and tracked Reels. |
 
 Phone (`< 640px`) shows the five everyone-tabs. Team / Analytics / Admin /
 Diagnostics sit under **More**. Desktop shows extras in the top row

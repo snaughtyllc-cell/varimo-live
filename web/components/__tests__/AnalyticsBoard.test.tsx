@@ -164,14 +164,16 @@ describe("AnalyticsBoard", () => {
       .toBe(true);
   });
 
-  it("shows a selected pack by main, trial, and growth lane without hiding a disconnected account", async () => {
+  it("labels every account as trial reels and still names the disconnected handle", async () => {
     render(<AnalyticsBoard />);
     fireEvent.click(await screen.findByRole("button", { name: /winner.*winner\.mp4/i }));
 
     const sheet = await screen.findByRole("dialog", { name: /winner\.mp4 insights/i });
-    expect(within(sheet).getByText("Main lane")).toBeTruthy();
-    expect(within(sheet).getByText("Trial lane")).toBeTruthy();
-    expect(within(sheet).getByText("Growth lane")).toBeTruthy();
+    expect(within(sheet).getAllByText("Trial reels").length).toBe(3);
+    expect(within(sheet).queryByText("Main lane")).toBeNull();
+    expect(within(sheet).queryByText("Growth lane")).toBeNull();
+    expect(within(sheet).queryByText("Account lane")).toBeNull();
+    expect(within(sheet).getByText("@jeff.main")).toBeTruthy();
     expect(within(sheet).getAllByText(/@mckenzie\.trial · account not connected/i).length).toBeGreaterThan(0);
   });
 
@@ -401,7 +403,7 @@ describe("AnalyticsBoard", () => {
     });
     render(<AnalyticsBoard />);
     fireEvent.click(await screen.findByRole("button", { name: /winner.*winner\.mp4/i }));
-    const lanes = await screen.findByRole("region", { name: /by account/i });
+    const lanes = await screen.findByRole("region", { name: /trial reels/i });
     expect(within(lanes).getByText("@jeff.main")).toBeTruthy();
     expect(within(lanes).getByText(/@mckenzie\.trial · account not connected/i)).toBeTruthy();
     expect(within(lanes).getByText(/account not connected/i)).toBeTruthy();

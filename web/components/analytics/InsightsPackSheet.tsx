@@ -84,11 +84,40 @@ function summaryMetrics(row: MetricSource, includeFollows = false) {
   return metrics;
 }
 
-function laneLabel(handle: string): string {
-  if (/\bmain\b/i.test(handle)) return "Main lane";
-  if (/\btrial\b/i.test(handle)) return "Trial lane";
-  if (/\bgrowth\b/i.test(handle)) return "Growth lane";
-  return "Account lane";
+function packLanes(
+  copies: InstagramTrackedCopy[],
+  accountNames: Record<string, string>,
+): Lane[] {
+  const grouped = new Map<string, InstagramTrackedCopy[]>();
+  for (const copy of copies) {
+    const key = copy.ig_user_id || copy.username || `copy-${copy.index}`;
+    grouped.set(key, [...(grouped.get(key) ?? []), copy]);
+  }
+
+  return [...grouped.entries()].map(([id, items]) => {
+    const first = items[0];
+    const username = first.username || accountNames[first.ig_user_id || ""] || id;
+    const handle = handleLabel(username) || "Account not named";
+    return {
+      id,
+      label: "Trial reels",
+      handle,
+      linked: items.length,
+      accountConnected: !items.every((item) => item.account_connected === false),
+      insights_views: aggregate(items, "insights_views"),
+      insights_reach: aggregate(items, "insights_reach"),
+      insights_likes: aggregate(items, "insights_likes"),
+      insights_comments: aggregate(items, "insights_comments"),
+      insights_shares: aggregate(items, "insights_shares"),
+      insights_saved: aggregate(items, "insights_saved"),
+      insights_follows: aggregate(items, "insights_follows"),
+    };
+  }).sort((a, b) => {
+    const av = a.insights_views ?? -1;
+    const bv = b.insights_views ?? -1;
+    if (bv !== av) return bv - av;
+    return a.handle.localeCompare(b.handle);
+  });
 }
 
 function aggregate(copies: InstagramTrackedCopy[], key: keyof MetricSource): number | null {
@@ -102,44 +131,6 @@ function aggregate(copies: InstagramTrackedCopy[], key: keyof MetricSource): num
     }
   }
   return seen ? total : null;
-}
-
-function packLanes(
-  copies: InstagramTrackedCopy[],
-  accountNames: Record<string, string>,
-): Lane[] {
-  const grouped = new Map<string, InstagramTrackedCopy[]>();
-  for (const copy of copies) {
-    const key = copy.ig_user_id || copy.username || `copy-${copy.index}`;
-    grouped.set(key, [...(grouped.get(key) ?? []), copy]);
-  }
-
-  const laneOrder = (label: string) => {
-    if (label === "Main lane") return 0;
-    if (label === "Trial lane") return 1;
-    if (label === "Growth lane") return 2;
-    return 3;
-  };
-
-  return [...grouped.entries()].map(([id, items]) => {
-    const first = items[0];
-    const username = first.username || accountNames[first.ig_user_id || ""] || id;
-    const handle = handleLabel(username) || "Account not named";
-    return {
-      id,
-      label: laneLabel(username),
-      handle,
-      linked: items.length,
-      accountConnected: !items.every((item) => item.account_connected === false),
-      insights_views: aggregate(items, "insights_views"),
-      insights_reach: aggregate(items, "insights_reach"),
-      insights_likes: aggregate(items, "insights_likes"),
-      insights_comments: aggregate(items, "insights_comments"),
-      insights_shares: aggregate(items, "insights_shares"),
-      insights_saved: aggregate(items, "insights_saved"),
-      insights_follows: aggregate(items, "insights_follows"),
-    };
-  }).sort((a, b) => laneOrder(a.label) - laneOrder(b.label) || a.handle.localeCompare(b.handle));
 }
 
 function MetricRail({ metrics }: { metrics: { label: string; value: string }[] }) {
@@ -241,9 +232,9 @@ export function InsightsPackSheet({
               ) : null}
             </section>
 
-            <section className="analytics-sheet__section" aria-label="By account">
-              <h3>By account</h3>
-              <p>Compare this original across the accounts that posted it.</p>
+            <section className="analytics-sheet__section" aria-label="Trial reels">
+              <h3>Accounts</h3>
+              <p>Every connected @handle is a trial lane. Main and growth tagging comes later.</p>
               {lanes.length === 0 ? (
                 <div className="analytics-sheet__empty">No linked Reels for this original yet.</div>
               ) : (

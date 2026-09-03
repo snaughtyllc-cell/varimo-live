@@ -67,7 +67,7 @@ old four-row list.
 | Send to Drive | Gallery / variant sheet | Pick destination + caption folder; split a pack across folders. |
 | Drive picker | Studio | Import source files from a saved Drive destination. |
 | Watch / queue / cancel | Studio + Workflows | Live job tiles, cancel, re-attach after reload. Workflows can caption from each Drive filename. |
-| Analytics pack sheet | Analytics | Tap a ranked original. Pack totals, per-account trial/main/growth read, and tracked Reel Insights live here. |
+| Analytics pack sheet | Analytics | Tap a ranked original. Pack totals, trial-reel Insights per @handle, and tracked Reels live here. Main/growth tagging comes later. |
 | Unmatched Reel picker | Analytics | **Unmatched Reels** tab. Pick a Gallery pack, then link the Reel that belongs to it. Pre-Varimo posts stay here and do not crowd ranked originals. |
 
 ## What not to invent

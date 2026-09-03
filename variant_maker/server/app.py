@@ -89,6 +89,7 @@ from .instagram_oauth import (
     ENV_APP_ID,
     ENV_APP_SECRET,
     InstagramAccountStore,
+    InstagramOAuthPendingStore,
     build_authorization_url as build_ig_authorization_url,
     exchange_code_for_token as exchange_ig_code_for_token,
     fetch_profile as fetch_ig_profile,
@@ -548,7 +549,15 @@ def create_app(
 
     ig_env: Mapping[str, str] = instagram_environ if instagram_environ is not None else os.environ
     fallback_ig_accounts = InstagramAccountStore(fallback_store._ws.instagram_dir())
-    fallback_ig_pending = OAuthPendingStore(fallback_store._ws.instagram_pending_path())
+    if auth_on:
+        ig_oauth_pending = InstagramOAuthPendingStore(
+            os.path.join(data_dir, "auth", "instagram_oauth_pending.json"),
+        )
+    else:
+        ig_oauth_pending = InstagramOAuthPendingStore(
+            fallback_store._ws.instagram_pending_path(),
+        )
+    app.state.instagram_oauth_pending = ig_oauth_pending
     app.state.instagram_environ = ig_env
     app.state.instagram_exchange = instagram_exchange or exchange_ig_code_for_token
     app.state.instagram_fetch_profile = instagram_fetch_profile or fetch_ig_profile
@@ -615,11 +624,12 @@ def create_app(
             return bundle.instagram_accounts
         return fallback_ig_accounts
 
-    def _ig_pending() -> OAuthPendingStore:
-        bundle = current_bundle()
-        if bundle is not None:
-            return bundle.instagram_pending
-        return fallback_ig_pending
+    def _ig_accounts_for(workspace_id: str | None = None) -> InstagramAccountStore:
+        if workspace_id and hub is not None:
+            if tenants is not None and tenants.get_workspace(workspace_id) is None:
+                raise ValueError("unknown workspace for Instagram OAuth")
+            return hub.bundle(workspace_id).instagram_accounts
+        return _ig_accounts()
 
     def _token_path() -> str:
         return _oauth_tokens().path
@@ -921,7 +931,11 @@ def create_app(
         ):
             raise HTTPException(status_code=403, detail="owner only")
 
-    def _ig_finish_account(token_data: dict[str, Any]) -> None:
+    def _ig_finish_account(
+        token_data: dict[str, Any],
+        *,
+        workspace_id: str | None = None,
+    ) -> None:
         access = token_data.get("access_token")
         if not isinstance(access, str) or not access:
             raise ValueError("Instagram did not return an access token")
@@ -936,7 +950,7 @@ def create_app(
             "username": profile.get("username") or "",
             "name": profile.get("name") or "",
         }
-        _ig_accounts().save(payload)
+        _ig_accounts_for(workspace_id).save(payload)
 
     def _run_instagram_sync() -> dict[str, Any]:
         accounts = _ig_accounts().tokens()
@@ -1861,7 +1875,11 @@ def create_app(
                 detail="Instagram app not configured — set VARIANT_IG_APP_ID and VARIANT_IG_APP_SECRET",
             )
         state = new_oauth_state()
-        _ig_pending().add(state)
+        workspace_id = getattr(request.state, "viewing_workspace_id", None)
+        ig_oauth_pending.add(
+            state,
+            workspace_id=workspace_id if isinstance(workspace_id, str) else None,
+        )
         redirect_uri = _ig_redirect_uri_for(request)
         url = build_ig_authorization_url(
             client_id=ig_env[ENV_APP_ID],
@@ -1887,7 +1905,8 @@ def create_app(
                 url=_ig_done_url(request, "ig=error&reason=missing_code"),
                 status_code=302,
             )
-        if not _ig_pending().consume(state):
+        pending = ig_oauth_pending.consume(state)
+        if pending is None:
             return RedirectResponse(
                 url=_ig_done_url(request, "ig=error&reason=bad_state"),
                 status_code=302,
@@ -1899,7 +1918,7 @@ def create_app(
                 client_secret=ig_env.get(ENV_APP_SECRET, ""),
                 redirect_uri=_ig_redirect_uri_for(request),
             )
-            _ig_finish_account(token_data)
+            _ig_finish_account(token_data, workspace_id=pending.workspace_id)
         except Exception as exc:
             print(f"instagram oauth exchange failed: {exc}", flush=True)
             traceback.print_exc()

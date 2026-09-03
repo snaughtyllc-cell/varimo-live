@@ -16,6 +16,8 @@ PUBLIC_API_PATHS = frozenset({
     "/api/auth/password",
     "/api/auth/google/start",
     "/api/auth/google/callback",
+    # Instagram returns here from instagram.com; browsers often omit SameSite=Lax cookies.
+    "/api/instagram/oauth/callback",
 })
 
 

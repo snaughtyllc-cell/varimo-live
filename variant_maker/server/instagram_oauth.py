@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -215,6 +216,97 @@ class InstagramAccount:
         }
 
 
+_PENDING_TTL_S = 15 * 60
+
+
+@dataclass(frozen=True)
+class InstagramOAuthPending:
+    """Server-side OAuth CSRF row. workspace_id is set when Studio auth is on."""
+
+    workspace_id: str | None
+
+
+class InstagramOAuthPendingStore:
+    """Global pending map so Instagram's cross-site callback does not need a session cookie.
+
+    Start (logged-in) writes `state` → workspace_id. Callback consumes that row even when
+    the browser omits SameSite=Lax Studio cookies on the return from instagram.com.
+    """
+
+    def __init__(self, path: str) -> None:
+        self._path = path
+
+    def add(self, state: str, *, workspace_id: str | None = None) -> None:
+        data = self._load()
+        now = time.time()
+        data = {k: v for k, v in data.items() if now - v[0] < _PENDING_TTL_S}
+        data[state] = (now, workspace_id)
+        self._save(data)
+
+    def consume(self, state: str) -> InstagramOAuthPending | None:
+        data = self._load()
+        now = time.time()
+        data = {k: v for k, v in data.items() if now - v[0] < _PENDING_TTL_S}
+        if state not in data:
+            self._save(data)
+            return None
+        _ts, workspace_id = data.pop(state)
+        self._save(data)
+        return InstagramOAuthPending(workspace_id=workspace_id)
+
+    def _load(self) -> dict[str, tuple[float, str | None]]:
+        if not os.path.isfile(self._path):
+            return {}
+        try:
+            with open(self._path, encoding="utf-8") as f:
+                raw = json.load(f)
+        except (OSError, json.JSONDecodeError, ValueError):
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        out: dict[str, tuple[float, str | None]] = {}
+        for key, value in raw.items():
+            if not isinstance(key, str):
+                continue
+            parsed = _parse_pending_entry(value)
+            if parsed is not None:
+                out[key] = parsed
+        return out
+
+    def _save(self, data: Mapping[str, tuple[float, str | None]]) -> None:
+        os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
+        payload = {
+            state: {"created_at": ts, "workspace_id": workspace_id}
+            for state, (ts, workspace_id) in data.items()
+        }
+        fd, tmp = tempfile.mkstemp(
+            dir=os.path.dirname(self._path) or ".", prefix=".ig-oauth-pending-", suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(payload, f)
+            os.replace(tmp, self._path)
+        except Exception:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
+
+
+def _parse_pending_entry(value: object) -> tuple[float, str | None] | None:
+    if isinstance(value, (int, float)):
+        return float(value), None
+    if not isinstance(value, dict):
+        return None
+    ts = value.get("created_at")
+    if not isinstance(ts, (int, float)):
+        return None
+    raw_ws = value.get("workspace_id")
+    workspace_id = raw_ws if isinstance(raw_ws, str) and raw_ws else None
+    return float(ts), workspace_id
+
+
 class InstagramAccountStore:
     """One JSON file per connected professional account (multi-tester)."""
 
@@ -346,6 +438,8 @@ __all__ = [
     "SCOPES",
     "InstagramAccount",
     "InstagramAccountStore",
+    "InstagramOAuthPending",
+    "InstagramOAuthPendingStore",
     "OAuthPendingStore",
     "build_authorization_url",
     "exchange_code_for_token",

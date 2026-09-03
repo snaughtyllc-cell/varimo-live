@@ -830,6 +830,26 @@ describe("Instagram API", () => {
       permalink: "https://www.instagram.com/reel/OrphanReel/",
     });
   });
+
+  it("unlinkInstagramMedia POSTs the Gallery copy to drop", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        insights_views: 0,
+        insights_linked: 0,
+        ranked: [],
+        suggestions: [],
+        accounts: status.accounts,
+      }), { status: 200 }),
+    );
+    await api.unlinkInstagramMedia({ source_id: "s1", index: 7 });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/instagram/unlink");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      source_id: "s1",
+      index: 7,
+    });
+  });
 });
 
 describe("error responses surface FastAPI `detail`", () => {

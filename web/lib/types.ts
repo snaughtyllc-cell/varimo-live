@@ -38,6 +38,12 @@ export interface VariantOut {
     comments?: number;
     shares?: number;
     saved?: number;
+    follows?: number;
+    profile_visits?: number;
+    reposts?: number;
+    reels_skip_rate?: number;
+    ig_reels_avg_watch_time?: number;
+    video_duration?: number;
     fetched_at?: string;
   } | null;
 }
@@ -68,8 +74,11 @@ export interface SourceOut {
   job_id?: string | null;
   caption_prompt?: string | null;
   insights_views?: number | null;
+  insights_shares?: number | null;
+  insights_follows?: number | null;
   insights_linked?: number;
   insights_unknown?: number;
+  hold_kind?: string | null;
   suggestion_kind?: string | null;
   suggestion_copy?: string | null;
 }
@@ -345,12 +354,40 @@ export interface InstagramStatus {
   message: string;
 }
 
+export interface InstagramTrackedCopy {
+  index: number;
+  ig_media_id: string;
+  ig_user_id?: string | null;
+  username?: string | null;
+  post_url?: string | null;
+  insights_views?: number | null;
+  insights_shares?: number | null;
+  insights_follows?: number | null;
+  hold_kind?: string | null;
+  account_connected?: boolean;
+}
+
 export interface InstagramPackRow {
   source_id: string;
   filename: string;
   insights_views: number | null;
+  insights_shares?: number | null;
+  insights_follows?: number | null;
   insights_linked: number;
   insights_unknown?: number;
+  hold_kind?: string | null;
+  tracked?: InstagramTrackedCopy[];
+}
+
+export interface InstagramLane {
+  ig_user_id: string;
+  username?: string;
+  insights_views: number | null;
+  insights_shares?: number | null;
+  insights_follows?: number | null;
+  insights_linked: number;
+  hold_kind?: string | null;
+  account_connected?: boolean;
 }
 
 export interface InstagramSuggestion {
@@ -375,6 +412,7 @@ export interface InstagramAnalytics {
   ranked: InstagramPackRow[];
   suggestions?: InstagramSuggestion[];
   accounts: InstagramAccount[];
+  lanes?: InstagramLane[];
   unmatched?: InstagramUnmatched[];
 }
 

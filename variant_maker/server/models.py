@@ -62,6 +62,12 @@ class InstagramLinkIn(BaseModel):
     media_id: str
     ig_user_id: str | None = None
     permalink: str | None = None
+    username: str | None = None
+
+
+class InstagramUnlinkIn(BaseModel):
+    source_id: str
+    index: int
 
 
 class InstagramAccountOut(BaseModel):
@@ -117,8 +123,11 @@ class SourceOut(BaseModel):
     job_id: str | None = None
     caption_prompt: str | None = None
     insights_views: int | None = None
+    insights_shares: int | None = None
+    insights_follows: int | None = None
     insights_linked: int = 0
     insights_unknown: int = 0
+    hold_kind: str | None = None
     suggestion_kind: str | None = None
     suggestion_copy: str | None = None
 

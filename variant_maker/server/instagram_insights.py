@@ -23,6 +23,11 @@ _CAPTION_SPACE = re.compile(r"\s+")
 _SHORTCODE = re.compile(r"/(?:reel|p|tv)/([A-Za-z0-9_-]+)", re.IGNORECASE)
 _VARIANT_FILE = re.compile(r"^v\d+$", re.IGNORECASE)
 INSIGHT_METRICS = ("views", "reach", "likes", "comments", "shares", "saved")
+INSIGHT_HOLD_METRICS = ("ig_reels_avg_watch_time", "reels_skip_rate")
+INSIGHT_CONV_METRICS = ("follows", "profile_visits", "reposts")
+WEAK_SKIP = 0.45
+WEAK_WATCH_FRAC = 0.30
+MIN_DURATION_FOR_WATCH_S = 5.0
 
 
 def now_utc() -> str:
@@ -98,6 +103,25 @@ class IgMedia:
     caption: str | None = None
     username: str | None = None
     user_id: str | None = None
+    video_duration: float | None = None
+
+
+def video_duration_s(row: Mapping[str, Any] | None) -> float | None:
+    """Graph `video_duration` is seconds. Drop missing / junk values."""
+    if not isinstance(row, Mapping):
+        return None
+    raw = row.get("video_duration")
+    if isinstance(raw, str):
+        try:
+            raw = float(raw.strip())
+        except ValueError:
+            return None
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return None
+    value = float(raw)
+    if value <= 0 or value > 3600:
+        return None
+    return value
 
 
 @dataclass(frozen=True)
@@ -183,8 +207,8 @@ def match_media(variants: Sequence[VariantLink], media: Sequence[IgMedia]) -> li
     return matches
 
 
-def parse_insights_payload(body: Mapping[str, Any]) -> dict[str, int]:
-    out: dict[str, int] = {}
+def parse_insights_payload(body: Mapping[str, Any]) -> dict[str, int | float]:
+    out: dict[str, int | float] = {}
     rows = body.get("data")
     if not isinstance(rows, list):
         return out
@@ -194,29 +218,99 @@ def parse_insights_payload(body: Mapping[str, Any]) -> dict[str, int]:
         name = row.get("name")
         if not isinstance(name, str) or not name:
             continue
-        value: int | None = None
+        raw: object | None = None
         total = row.get("total_value")
-        if isinstance(total, dict) and isinstance(total.get("value"), (int, float)):
-            value = int(total["value"])
+        if isinstance(total, dict):
+            raw = total.get("value")
         else:
             values = row.get("values")
             if isinstance(values, list) and values:
                 last = values[-1]
-                if isinstance(last, dict) and isinstance(last.get("value"), (int, float)):
-                    value = int(last["value"])
-                elif isinstance(last, (int, float)):
-                    value = int(last)
-        if value is not None:
-            out[name] = value
+                if isinstance(last, dict):
+                    raw = last.get("value")
+                else:
+                    raw = last
+        number = _insight_number(raw)
+        if number is not None:
+            out[name] = number
     return out
 
 
-def pack_analytics(variants: Iterable[Any]) -> dict[str, int | None]:
+def _insight_number(raw: object) -> int | float | None:
+    if isinstance(raw, bool) or raw is None:
+        return None
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float):
+        if raw.is_integer() and abs(raw) >= 1:
+            return int(raw)
+        return raw
+    return None
+
+
+def skip_ratio(snapshot: Mapping[str, Any] | None) -> float | None:
+    if not isinstance(snapshot, dict):
+        return None
+    raw = snapshot.get("reels_skip_rate")
+    if not isinstance(raw, (int, float)) or isinstance(raw, bool):
+        return None
+    value = float(raw)
+    if value > 1.5:
+        value = value / 100.0
+    return min(1.0, max(0.0, value))
+
+
+def watch_seconds(snapshot: Mapping[str, Any] | None) -> float | None:
+    if not isinstance(snapshot, dict):
+        return None
+    raw = snapshot.get("ig_reels_avg_watch_time")
+    if not isinstance(raw, (int, float)) or isinstance(raw, bool):
+        return None
+    value = float(raw)
+    if value < 0:
+        return None
+    duration = snapshot.get("video_duration")
+    duration_s = float(duration) if isinstance(duration, (int, float)) and not isinstance(duration, bool) else None
+    if duration_s and value > duration_s * 8:
+        return value / 1000.0
+    if value > 600:
+        return value / 1000.0
+    return value
+
+
+def copy_hold_kind(snapshot: Mapping[str, Any] | None) -> str | None:
+    """weak_hold | held | None. Never a policy/flagged stamp."""
+    skip = skip_ratio(snapshot)
+    watch = watch_seconds(snapshot)
+    duration = None
+    if isinstance(snapshot, dict):
+        raw = snapshot.get("video_duration")
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool) and raw > 0:
+            duration = float(raw)
+    bounce = False
+    if skip is not None and skip >= WEAK_SKIP:
+        bounce = True
+    if (
+        watch is not None
+        and duration is not None
+        and duration >= MIN_DURATION_FOR_WATCH_S
+        and watch / duration <= WEAK_WATCH_FRAC
+    ):
+        bounce = True
+    if bounce:
+        return "weak_hold"
+    if skip is not None or watch is not None:
+        return "held"
+    return None
+
+
+def pack_analytics(variants: Iterable[Any]) -> dict[str, Any]:
     """views is None when nothing is linked — never treat unknown as 0."""
     copies = 0
     linked = 0
-    total = 0
-    has_views = False
+    totals = {"views": 0, "shares": 0, "saved": 0, "follows": 0, "reach": 0}
+    has = {key: False for key in totals}
+    hold_votes: list[str] = []
     for variant in variants:
         copies += 1
         snapshot = getattr(variant, "ig_insights", None)
@@ -225,17 +319,105 @@ def pack_analytics(variants: Iterable[Any]) -> dict[str, int | None]:
             media_id = variant.get("ig_media_id")
         else:
             media_id = getattr(variant, "ig_media_id", None)
-        if not media_id and not isinstance(snapshot, dict):
+        if not media_id:
             continue
         linked += 1
-        if isinstance(snapshot, dict) and isinstance(snapshot.get("views"), int):
-            total += snapshot["views"]
-            has_views = True
+        if isinstance(snapshot, dict):
+            for key in totals:
+                raw = snapshot.get(key)
+                if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+                    totals[key] += int(raw)
+                    has[key] = True
+            kind = copy_hold_kind(snapshot)
+            if kind:
+                hold_votes.append(kind)
+    hold_kind = None
+    if hold_votes:
+        weak = sum(1 for kind in hold_votes if kind == "weak_hold")
+        if weak * 2 >= len(hold_votes):
+            hold_kind = "weak_hold"
+        elif any(kind == "held" for kind in hold_votes):
+            hold_kind = "held"
     return {
-        "insights_views": total if has_views else None,
+        "insights_views": totals["views"] if has["views"] else None,
+        "insights_shares": totals["shares"] if has["shares"] else None,
+        "insights_saved": totals["saved"] if has["saved"] else None,
+        "insights_follows": totals["follows"] if has["follows"] else None,
+        "insights_reach": totals["reach"] if has["reach"] else None,
         "insights_linked": linked,
         "insights_unknown": max(0, copies - linked),
+        "hold_kind": hold_kind,
     }
+
+
+def _insight_int(snapshot: Mapping[str, Any], key: str) -> int | None:
+    raw = snapshot.get(key)
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        return int(raw)
+    return None
+
+
+def tracked_copies(variants: Iterable[Any]) -> list[dict[str, Any]]:
+    """Linked copies on a pack, highest views first. Unlinked copies stay off this list."""
+    rows: list[dict[str, Any]] = []
+    for variant in variants:
+        if isinstance(variant, dict):
+            index = variant.get("index")
+            media_id = variant.get("ig_media_id")
+            user_id = variant.get("ig_user_id")
+            post_url = variant.get("post_url")
+            snapshot = variant.get("ig_insights")
+        else:
+            index = getattr(variant, "index", None)
+            media_id = getattr(variant, "ig_media_id", None)
+            user_id = getattr(variant, "ig_user_id", None)
+            post_url = getattr(variant, "post_url", None)
+            snapshot = getattr(variant, "ig_insights", None)
+        if not isinstance(index, int) or not media_id:
+            continue
+        insights = snapshot if isinstance(snapshot, dict) else {}
+        username = insights.get("username") if isinstance(insights.get("username"), str) else None
+        rows.append({
+            "index": index,
+            "ig_media_id": str(media_id),
+            "ig_user_id": str(user_id) if isinstance(user_id, str) and user_id else None,
+            "username": username or None,
+            "post_url": post_url if isinstance(post_url, str) and post_url else None,
+            "insights_views": _insight_int(insights, "views"),
+            "insights_shares": _insight_int(insights, "shares"),
+            "insights_follows": _insight_int(insights, "follows"),
+            "hold_kind": copy_hold_kind(insights) if insights else None,
+        })
+    return sorted(
+        rows,
+        key=lambda r: (r["insights_views"] is None, -(r["insights_views"] or 0), r["index"]),
+    )
+
+
+def stamp_tracked_accounts(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    usernames: Mapping[str, str],
+    connected_ids: Iterable[str],
+) -> None:
+    """Mark copies whose Instagram account is still connected. Mutates `tracked`."""
+    connected = {str(uid) for uid in connected_ids if uid}
+    names = {str(uid): name for uid, name in usernames.items() if uid and name}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        tracked = row.get("tracked")
+        if not isinstance(tracked, list):
+            continue
+        for copy in tracked:
+            if not isinstance(copy, dict):
+                continue
+            uid = str(copy.get("ig_user_id") or "")
+            if uid and not copy.get("username"):
+                name = names.get(uid)
+                if name:
+                    copy["username"] = name
+            copy["account_connected"] = bool(uid and uid in connected)
 
 
 def gallery_analytics(sources: Sequence[Any]) -> dict[str, Any]:
@@ -261,8 +443,12 @@ def gallery_analytics(sources: Sequence[Any]) -> dict[str, Any]:
             "source_id": source_id,
             "filename": filename,
             "insights_views": pack["insights_views"],
+            "insights_shares": pack["insights_shares"],
+            "insights_follows": pack["insights_follows"],
             "insights_linked": pack["insights_linked"],
             "insights_unknown": pack["insights_unknown"],
+            "hold_kind": pack["hold_kind"],
+            "tracked": tracked_copies(variants),
         })
     ranked = sorted(
         [r for r in rows if r["insights_linked"]],
@@ -275,6 +461,44 @@ def gallery_analytics(sources: Sequence[Any]) -> dict[str, Any]:
         "ranked": ranked,
         "suggestions": pack_suggestions(rows),
     }
+
+
+def lanes_from_sources(sources: Sequence[Any]) -> list[dict[str, Any]]:
+    buckets: dict[str, list[Any]] = {}
+    for source in sources:
+        variants = source.get("variants") if isinstance(source, dict) else getattr(source, "variants", None)
+        for variant in variants or []:
+            if isinstance(variant, dict):
+                user_id = variant.get("ig_user_id")
+            else:
+                user_id = getattr(variant, "ig_user_id", None)
+            if not isinstance(user_id, str) or not user_id:
+                continue
+            buckets.setdefault(user_id, []).append(variant)
+    rows: list[dict[str, Any]] = []
+    for user_id, variants in buckets.items():
+        pack = pack_analytics(variants)
+        if not pack["insights_linked"]:
+            continue
+        username = None
+        for variant in variants:
+            snapshot = variant.get("ig_insights") if isinstance(variant, dict) else getattr(variant, "ig_insights", None)
+            if isinstance(snapshot, dict) and isinstance(snapshot.get("username"), str) and snapshot["username"]:
+                username = snapshot["username"]
+                break
+        rows.append({
+            "ig_user_id": user_id,
+            "username": username,
+            "insights_views": pack["insights_views"],
+            "insights_shares": pack["insights_shares"],
+            "insights_follows": pack["insights_follows"],
+            "insights_linked": pack["insights_linked"],
+            "hold_kind": pack["hold_kind"],
+        })
+    return sorted(
+        rows,
+        key=lambda r: (r["insights_views"] is None, -(r["insights_views"] or 0)),
+    )
 
 
 def unmatched_media(media: Sequence[IgMedia], matches: Sequence[Match]) -> list[IgMedia]:
@@ -368,10 +592,15 @@ QUIET_MAX_VIEWS = 1_000
 QUIET_MIN_LINKED = 3
 QUIET_MIN_AGE_HOURS = 24
 WINNER_COPY = "This original is carrying the week. Generate 20 more of this original."
-QUIET_COPY = (
-    "These copies are not getting push. Try a new original "
-    "— this may be the video, not the variant."
+WEAK_HOLD_COPY = (
+    "Viewers bounce early on these copies (skip or short watch). "
+    "Try a new original — this looks like the video, not the variant."
 )
+HELD_NO_PUSH_COPY = (
+    "Hold looks fine, but these copies are not getting push versus the rest of this account. "
+    "Insights cannot see policy."
+)
+QUIET_COPY = HELD_NO_PUSH_COPY
 
 
 def pack_suggestions(
@@ -379,7 +608,7 @@ def pack_suggestions(
     *,
     now: datetime | None = None,
 ) -> list[dict[str, Any]]:
-    """Winner / quiet copy. Never writes flagged. Fresh posts are not quiet."""
+    """Winner / weak-hold / held-no-push. Never writes flagged. Fresh posts wait."""
     moment = now or datetime.now(UTC)
     linked = [p for p in packs if int(p.get("insights_linked") or 0) > 0]
     scored = [p for p in linked if isinstance(p.get("insights_views"), int)]
@@ -406,13 +635,17 @@ def pack_suggestions(
         linked_n = int(pack.get("insights_linked") or 0)
         created = _parse_utc(pack.get("created_utc") if isinstance(pack.get("created_utc"), str) else None)
         age_ok = created is not None and (moment - created).total_seconds() >= QUIET_MIN_AGE_HOURS * 3600
-        if (
+        quiet_floor = (
             account_has_push
             and linked_n >= QUIET_MIN_LINKED
             and age_ok
             and views <= QUIET_MAX_VIEWS
-        ):
-            out.append(row("quiet", pack, QUIET_COPY))
+        )
+        hold = pack.get("hold_kind") if isinstance(pack.get("hold_kind"), str) else None
+        if quiet_floor and hold == "weak_hold":
+            out.append(row("weak_hold", pack, WEAK_HOLD_COPY))
+        elif quiet_floor:
+            out.append(row("held_no_push", pack, HELD_NO_PUSH_COPY))
 
     return out
 
@@ -465,7 +698,7 @@ def list_media(
     """
     fetch = get_json or _get_json
     qs = urlencode({
-        "fields": "id,caption,permalink,timestamp,media_type,media_product_type",
+        "fields": "id,caption,permalink,timestamp,media_type,media_product_type,video_duration",
         "limit": "50",
         "access_token": access_token,
     })
@@ -494,21 +727,31 @@ def fetch_media_insights(
     access_token: str,
     *,
     get_json: Callable[[str], dict[str, Any]] | None = None,
-) -> dict[str, int]:
+) -> dict[str, int | float]:
     fetch = get_json or _get_json
-    qs = urlencode({
-        "metric": ",".join(INSIGHT_METRICS),
-        "access_token": access_token,
-    })
-    url = f"{GRAPH_HOST}/{media_id}/insights?{qs}"
-    try:
-        return parse_insights_payload(fetch(url))
-    except ValueError:
-        qs2 = urlencode({
-            "metric": "views,likes,comments,saved,shares",
+    out: dict[str, int | float] = {}
+    batches = (
+        INSIGHT_METRICS,
+        INSIGHT_HOLD_METRICS,
+        INSIGHT_CONV_METRICS,
+    )
+    for metrics in batches:
+        qs = urlencode({
+            "metric": ",".join(metrics),
             "access_token": access_token,
         })
+        url = f"{GRAPH_HOST}/{media_id}/insights?{qs}"
         try:
-            return parse_insights_payload(fetch(f"{GRAPH_HOST}/{media_id}/insights?{qs2}"))
+            out.update(parse_insights_payload(fetch(url)))
         except ValueError:
-            return {}
+            if metrics == INSIGHT_METRICS:
+                qs2 = urlencode({
+                    "metric": "views,likes,comments,saved,shares",
+                    "access_token": access_token,
+                })
+                try:
+                    out.update(parse_insights_payload(fetch(f"{GRAPH_HOST}/{media_id}/insights?{qs2}")))
+                except ValueError:
+                    pass
+            continue
+    return out

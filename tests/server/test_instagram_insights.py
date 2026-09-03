@@ -8,8 +8,11 @@ from variant_maker.server.instagram_insights import (
     IgMedia,
     VariantLink,
     caption_from_drive_filename,
+    copy_hold_kind,
     export_caption_hints,
+    fetch_media_insights,
     gallery_analytics,
+    lanes_from_sources,
     list_media,
     match_media,
     normalize_caption,
@@ -17,7 +20,10 @@ from variant_maker.server.instagram_insights import (
     pack_suggestions,
     parse_insights_payload,
     permalink_key,
+    stamp_tracked_accounts,
+    tracked_copies,
     unmatched_media,
+    video_duration_s,
 )
 from variant_maker.server.jobs import JobStore
 from variant_maker.server.workspace import Workspace
@@ -162,6 +168,70 @@ def test_gallery_analytics_ranks_the_winning_source():
     assert body["ranked"][0]["insights_views"] == 1000
 
 
+def test_tracked_copies_list_linked_variants_highest_views_first():
+    class V:
+        def __init__(self, index, media, views, user=None, username=None, post_url=None):
+            self.index = index
+            self.ig_media_id = media
+            self.ig_user_id = user
+            self.post_url = post_url
+            self.ig_insights = {"views": views, "shares": 1, "follows": 2}
+            if username:
+                self.ig_insights["username"] = username
+
+    copies = tracked_copies([
+        V(1, "m-low", 40, user="jeff", username="jeff.main"),
+        V(3, None, 0),
+        V(2, "m-high", 900, user="mckenzie", username="mckenzie.trial",
+          post_url="https://instagram.com/reel/Aaa/"),
+    ])
+    assert [row["index"] for row in copies] == [2, 1]
+    assert copies[0]["insights_views"] == 900
+    assert copies[0]["username"] == "mckenzie.trial"
+    assert copies[0]["post_url"].endswith("/Aaa/")
+    assert copies[1]["ig_user_id"] == "jeff"
+
+
+def test_stamp_tracked_marks_disconnected_handles():
+    rows = [{
+        "tracked": [
+            {"index": 2, "ig_user_id": "mckenzie", "username": "mckenzie.trial"},
+            {"index": 1, "ig_user_id": "jeff", "username": None},
+        ],
+    }]
+    stamp_tracked_accounts(
+        rows,
+        usernames={"jeff": "jeff.main"},
+        connected_ids=["jeff"],
+    )
+    by_idx = {row["index"]: row for row in rows[0]["tracked"]}
+    assert by_idx[2]["account_connected"] is False
+    assert by_idx[2]["username"] == "mckenzie.trial"
+    assert by_idx[1]["account_connected"] is True
+    assert by_idx[1]["username"] == "jeff.main"
+
+
+def test_gallery_analytics_attaches_tracked_copies():
+    class V:
+        def __init__(self, index, media, views):
+            self.index = index
+            self.ig_media_id = media
+            self.ig_user_id = "178"
+            self.post_url = None
+            self.ig_insights = {"views": views}
+
+    class S:
+        def __init__(self, source_id, filename, variants):
+            self.source_id = source_id
+            self.filename = filename
+            self.variants = variants
+
+    body = gallery_analytics([
+        S("winner", "winner.mp4", [V(1, "b", 900), V(2, "c", 100)]),
+    ])
+    assert [row["index"] for row in body["ranked"][0]["tracked"]] == [1, 2]
+
+
 def test_parse_insights_reads_total_value_and_values():
     body = {
         "data": [
@@ -170,6 +240,18 @@ def test_parse_insights_reads_total_value_and_values():
         ]
     }
     assert parse_insights_payload(body) == {"views": 312400, "likes": 12}
+
+
+def test_parse_insights_keeps_skip_rate_as_a_fraction():
+    body = {
+        "data": [
+            {"name": "reels_skip_rate", "total_value": {"value": 0.62}},
+            {"name": "ig_reels_avg_watch_time", "values": [{"value": 2100}]},
+        ]
+    }
+    out = parse_insights_payload(body)
+    assert out["reels_skip_rate"] == 0.62
+    assert out["ig_reels_avg_watch_time"] == 2100
 
 
 def test_set_ig_insights_survives_hydrate(tmp_path):
@@ -240,9 +322,9 @@ def test_pack_suggestions_winner_needs_floor_and_gap():
     kinds = {row["kind"]: row for row in out}
     assert kinds["winner"]["source_id"] == "winner"
     assert "Generate 20 more" in kinds["winner"]["copy"]
-    assert kinds["quiet"]["source_id"] == "quiet"
-    assert "flagged" not in kinds["quiet"]["copy"].lower()
-    assert "not getting push" in kinds["quiet"]["copy"]
+    assert kinds["held_no_push"]["source_id"] == "quiet"
+    assert "flagged" not in kinds["held_no_push"]["copy"].lower()
+    assert "not getting push" in kinds["held_no_push"]["copy"]
 
 
 def test_pack_suggestions_skips_fresh_quiet_and_weak_leaders():
@@ -264,3 +346,127 @@ def test_pack_suggestions_skips_fresh_quiet_and_weak_leaders():
         },
     ]
     assert pack_suggestions(packs, now=now) == []
+
+
+def test_video_duration_s_skips_junk():
+    assert video_duration_s({"video_duration": 12.4}) == 12.4
+    assert video_duration_s({"video_duration": "9"}) == 9.0
+    assert video_duration_s({"video_duration": 0}) is None
+    assert video_duration_s({"video_duration": -1}) is None
+    assert video_duration_s({"video_duration": 9000}) is None
+    assert video_duration_s({}) is None
+
+
+def test_copy_hold_kind_splits_bounce_from_held_without_calling_flagged():
+    assert copy_hold_kind({"reels_skip_rate": 0.62}) == "weak_hold"
+    assert copy_hold_kind({
+        "ig_reels_avg_watch_time": 2000,
+        "video_duration": 10,
+    }) == "weak_hold"
+    assert copy_hold_kind({
+        "reels_skip_rate": 0.12,
+        "ig_reels_avg_watch_time": 8000,
+        "video_duration": 10,
+        "views": 40,
+    }) == "held"
+    assert copy_hold_kind({"views": 40}) is None
+    for snapshot in (
+        {"reels_skip_rate": 0.62},
+        {"reels_skip_rate": 0.12, "ig_reels_avg_watch_time": 8000, "video_duration": 10},
+    ):
+        assert "flagged" not in (copy_hold_kind(snapshot) or "")
+
+
+def test_pack_suggestions_weak_hold_is_not_flagged():
+    now = datetime(2026, 9, 2, tzinfo=UTC)
+    packs = [
+        {
+            "source_id": "bounce",
+            "filename": "bounce.mp4",
+            "insights_views": 40,
+            "insights_linked": 5,
+            "hold_kind": "weak_hold",
+            "created_utc": "2026-08-30T00:00:00Z",
+        },
+        {
+            "source_id": "ok",
+            "filename": "ok.mp4",
+            "insights_views": 12_000,
+            "insights_linked": 6,
+            "created_utc": "2026-08-30T00:00:00Z",
+        },
+    ]
+    out = pack_suggestions(packs, now=now)
+    kinds = {row["kind"]: row for row in out}
+    assert kinds["weak_hold"]["source_id"] == "bounce"
+    assert "bounce" in kinds["weak_hold"]["copy"].lower()
+    assert "flagged" not in kinds["weak_hold"]["copy"].lower()
+    assert "quiet" not in kinds
+
+
+def test_pack_analytics_sums_shares_and_follows():
+    class V:
+        def __init__(self, media, **insights):
+            self.ig_media_id = media
+            self.ig_user_id = "178"
+            self.ig_insights = insights
+
+    pack = pack_analytics([
+        V("a", views=100, shares=4, follows=2),
+        V("b", views=50, shares=1, follows=1),
+        V(None),
+    ])
+    assert pack["insights_views"] == 150
+    assert pack["insights_shares"] == 5
+    assert pack["insights_follows"] == 3
+    assert pack["insights_linked"] == 2
+
+
+def test_lanes_group_linked_copies_by_instagram_account():
+    class V:
+        def __init__(self, media, user, views, follows=0, username=None):
+            self.ig_media_id = media
+            self.ig_user_id = user
+            insights = {"views": views, "follows": follows}
+            if username:
+                insights["username"] = username
+            self.ig_insights = insights
+
+    class S:
+        def __init__(self, source_id, variants):
+            self.source_id = source_id
+            self.filename = f"{source_id}.mp4"
+            self.variants = variants
+
+    lanes = lanes_from_sources([
+        S("one", [
+            V("a", "trial", 200, 4, username="mckenzie.trial"),
+            V("b", "main", 50, 1, username="jeff.main"),
+        ]),
+        S("two", [V("c", "trial", 10, 0, username="mckenzie.trial")]),
+    ])
+    by_id = {row["ig_user_id"]: row for row in lanes}
+    assert by_id["trial"]["insights_views"] == 210
+    assert by_id["trial"]["insights_follows"] == 4
+    assert by_id["trial"]["username"] == "mckenzie.trial"
+    assert by_id["main"]["insights_views"] == 50
+
+
+def test_fetch_media_insights_asks_hold_and_conversion_batches():
+    urls: list[str] = []
+
+    def get_json(url: str):
+        urls.append(url)
+        if "reels_skip_rate" in url:
+            return {"data": [{"name": "reels_skip_rate", "total_value": {"value": 0.4}}]}
+        if "follows" in url:
+            raise ValueError("Instagram HTTP 400: metric follows is not available")
+        return {"data": [{"name": "views", "total_value": {"value": 99}}]}
+
+    out = fetch_media_insights("m1", "tok", get_json=get_json)
+    assert out["views"] == 99
+    assert out["reels_skip_rate"] == 0.4
+    assert "follows" not in out
+    joined = " ".join(urls)
+    assert "ig_reels_avg_watch_time" in joined
+    assert "follows" in joined

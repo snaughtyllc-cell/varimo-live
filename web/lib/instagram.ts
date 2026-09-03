@@ -26,9 +26,27 @@ export function packViewsCopy(
   linked: number,
   copies: number,
 ): string | null {
+  return packConversionCopy(views, null, null, linked, copies);
+}
+
+export function packConversionCopy(
+  views: number | null | undefined,
+  shares: number | null | undefined,
+  follows: number | null | undefined,
+  linked: number,
+  copies?: number,
+): string | null {
   if (linked <= 0) return null;
-  const label = views == null ? "views unknown" : `${formatViews(views)} views`;
-  return `${label} · ${linked} of ${copies} linked`;
+  const parts: string[] = [];
+  parts.push(views == null ? "views unknown" : `${formatViews(views)} views`);
+  if (typeof shares === "number") parts.push(`${formatViews(shares)} shares`);
+  if (typeof follows === "number") parts.push(`${formatViews(follows)} follows`);
+  if (typeof copies === "number" && copies > 0) {
+    parts.push(`${linked} of ${copies} linked`);
+  } else {
+    parts.push(`${linked} linked`);
+  }
+  return parts.join(" · ");
 }
 
 export function galleryViewsCopy(
@@ -52,6 +70,26 @@ export function variantViewsCopy(views: number | null | undefined, linked: boole
   return formatViews(views);
 }
 
+function formatSkipRate(raw: number): string {
+  let value = raw;
+  if (value > 1.5) value = value / 100;
+  value = Math.min(1, Math.max(0, value));
+  return `${Math.round(value * 100)}% skip`;
+}
+
+function formatWatchTime(raw: number, duration?: number): string {
+  let seconds = raw;
+  if (typeof duration === "number" && duration > 0 && raw > duration * 8) {
+    seconds = raw / 1000;
+  } else if (raw > 600) {
+    seconds = raw / 1000;
+  }
+  if (seconds < 10) {
+    return `${seconds.toFixed(1).replace(/\.0$/, "")}s watch`;
+  }
+  return `${Math.round(seconds)}s watch`;
+}
+
 export function insightSnapshotCopy(snapshot: {
   views?: number;
   reach?: number;
@@ -59,6 +97,12 @@ export function insightSnapshotCopy(snapshot: {
   comments?: number;
   shares?: number;
   saved?: number;
+  follows?: number;
+  profile_visits?: number;
+  reposts?: number;
+  reels_skip_rate?: number;
+  ig_reels_avg_watch_time?: number;
+  video_duration?: number;
   fetched_at?: string;
 } | null | undefined): string | null {
   if (!snapshot) return null;
@@ -69,8 +113,20 @@ export function insightSnapshotCopy(snapshot: {
   if (typeof snapshot.comments === "number") parts.push(`${formatViews(snapshot.comments)} comments`);
   if (typeof snapshot.shares === "number") parts.push(`${formatViews(snapshot.shares)} shares`);
   if (typeof snapshot.saved === "number") parts.push(`${formatViews(snapshot.saved)} saved`);
+  if (typeof snapshot.follows === "number") parts.push(`${formatViews(snapshot.follows)} follows`);
+  if (typeof snapshot.profile_visits === "number") {
+    parts.push(`${formatViews(snapshot.profile_visits)} profile visits`);
+  }
+  if (typeof snapshot.reposts === "number") parts.push(`${formatViews(snapshot.reposts)} reposts`);
+  if (typeof snapshot.reels_skip_rate === "number") {
+    parts.push(formatSkipRate(snapshot.reels_skip_rate));
+  }
+  if (typeof snapshot.ig_reels_avg_watch_time === "number") {
+    parts.push(formatWatchTime(snapshot.ig_reels_avg_watch_time, snapshot.video_duration));
+  }
+  const joined = parts.join(" · ");
   if (parts.length === 0) return snapshot.fetched_at ? "Linked — Insights not in yet" : null;
-  return parts.join(" · ");
+  return joined;
 }
 
 export function igOauthErrorMessage(reason: string | null): string {
@@ -151,8 +207,42 @@ export function suggestionButtonLabel(kind: string): string | null {
 
 export function packSuggestionHint(kind: string | null | undefined): string | null {
   if (kind === "winner") return "Winner";
+  if (kind === "weak_hold") return "Weak hold";
+  if (kind === "held_no_push") return "Held, little push";
   if (kind === "quiet") return "Quiet — try a new original";
   return null;
+}
+
+export function rankedOriginalPrefix(kind: string | null | undefined): string {
+  if (kind === "winner") return "Winner · ";
+  if (kind === "weak_hold") return "Weak hold · ";
+  if (kind === "held_no_push") return "Held, little push · ";
+  return "";
+}
+
+export function trackedCopyLabel(index: number): string {
+  return copyOnlyLabel(index, false);
+}
+
+export function unlinkCopyLabel(index: number): string {
+  return `Remove ${trackedCopyLabel(index)} from tracking`;
+}
+
+export function trackedCopyMeta(copy: {
+  username?: string | null;
+  account_connected?: boolean;
+  insights_views?: number | null;
+  insights_shares?: number | null;
+  insights_follows?: number | null;
+}): string {
+  const parts: string[] = [];
+  const handle = handleLabel(copy.username || "");
+  if (handle) parts.push(handle);
+  if (copy.account_connected === false) parts.push("account not connected");
+  if (typeof copy.insights_views === "number") parts.push(`${formatViews(copy.insights_views)} views`);
+  if (typeof copy.insights_shares === "number") parts.push(`${formatViews(copy.insights_shares)} shares`);
+  if (typeof copy.insights_follows === "number") parts.push(`${formatViews(copy.insights_follows)} follows`);
+  return parts.join(" · ");
 }
 
 export function copyPickerLabel(filename: string, index: number, linked = false): string {

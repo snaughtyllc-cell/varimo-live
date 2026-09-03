@@ -21,7 +21,7 @@ import {
 } from "@/lib/shareVideos";
 import { postedCountCopy } from "@/lib/postUrl";
 import { uniquenessCustomerLabel } from "@/lib/prepareCopy";
-import { packSuggestionHint, packViewsCopy } from "@/lib/instagram";
+import { packSuggestionHint, packConversionCopy } from "@/lib/instagram";
 import { VariantCard } from "./VariantCard";
 import { PackOptions } from "./PackOptions";
 
@@ -94,8 +94,10 @@ export function SourceGroup({
       : source.variants.length === 0
         ? "no variants yet"
         : "";
-  const viewsCopy = packViewsCopy(
+  const viewsCopy = packConversionCopy(
     source.insights_views,
+    source.insights_shares,
+    source.insights_follows,
     source.insights_linked ?? 0,
     source.variants.length,
   );

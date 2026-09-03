@@ -403,12 +403,88 @@ def test_analytics_and_gallery_stamp_winner_and_quiet(tmp_path):
     body = client.get("/api/instagram/analytics").json()
     kinds = {row["kind"]: row["source_id"] for row in body["suggestions"]}
     assert kinds["winner"] == winner.source_id
-    assert kinds["quiet"] == quiet.source_id
+    assert kinds["held_no_push"] == quiet.source_id
     gallery = {row["filename"]: row for row in client.get("/api/gallery").json()}
     assert gallery["winner.mp4"]["suggestion_kind"] == "winner"
     assert "Generate 20 more" in gallery["winner.mp4"]["suggestion_copy"]
-    assert gallery["quiet.mp4"]["suggestion_kind"] == "quiet"
+    assert gallery["quiet.mp4"]["suggestion_kind"] == "held_no_push"
     assert "flagged" not in gallery["quiet.mp4"]["suggestion_copy"].lower()
+
+
+def test_analytics_lanes_label_connected_handles(tmp_path):
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    job = store.create_job([("a.mp4", b"x")], count=2)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    store.set_ig_insights(
+        src.source_id, src.variants[0].index,
+        ig_media_id="m1",
+        ig_user_id="trial",
+        insights={"views": 200, "follows": 4, "shares": 3, "fetched_at": "2026-08-30T00:00:00Z"},
+    )
+    store.set_ig_insights(
+        src.source_id, src.variants[1].index,
+        ig_media_id="m2",
+        ig_user_id="main",
+        insights={"views": 50, "follows": 1, "shares": 1, "fetched_at": "2026-08-30T00:00:00Z"},
+    )
+    accounts = InstagramAccountStore(ws.instagram_dir())
+    accounts.save({"user_id": "trial", "username": "lab.trial", "access_token": "secret-tok"})
+    accounts.save({"user_id": "main", "username": "lab.main", "access_token": "secret-tok-2"})
+    client = TestClient(create_app(store, sa_json_path=""))
+    body = client.get("/api/instagram/analytics").json()
+    dumped = json.dumps(body)
+    assert "secret-tok" not in dumped
+    by_user = {row["username"]: row for row in body["lanes"]}
+    assert by_user["lab.trial"]["insights_views"] == 200
+    assert by_user["lab.trial"]["insights_follows"] == 4
+    assert by_user["lab.main"]["insights_views"] == 50
+    assert "flagged" not in dumped.lower()
+
+
+def test_unlink_drops_a_tracked_copy_from_a_disconnected_account(tmp_path):
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    job = store.create_job([("pack.mp4", b"x")], count=2)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    leftover, kept = src.variants
+    store.set_ig_insights(
+        src.source_id, leftover.index,
+        ig_media_id="mckenzie-reel",
+        ig_user_id="mckenzie",
+        insights={"views": 80, "username": "mckenzie.trial", "fetched_at": "2026-08-30T00:00:00Z"},
+        post_url="https://www.instagram.com/reel/MckTrial/",
+    )
+    store.set_ig_insights(
+        src.source_id, kept.index,
+        ig_media_id="jeff-reel",
+        ig_user_id="jeff",
+        insights={"views": 20, "username": "jeff.main", "fetched_at": "2026-08-30T00:00:00Z"},
+    )
+    accounts = InstagramAccountStore(ws.instagram_dir())
+    accounts.save({"user_id": "jeff", "username": "jeff.main", "access_token": "secret-tok"})
+    client = TestClient(create_app(store, sa_json_path=""))
+    body = client.get("/api/instagram/analytics").json()
+    tracked = {row["ig_media_id"]: row for row in body["ranked"][0]["tracked"]}
+    assert tracked["mckenzie-reel"]["account_connected"] is False
+    assert tracked["mckenzie-reel"]["username"] == "mckenzie.trial"
+    assert tracked["jeff-reel"]["account_connected"] is True
+
+    resp = client.post("/api/instagram/unlink", json={
+        "source_id": src.source_id,
+        "index": leftover.index,
+    })
+    assert resp.status_code == 200
+    dumped = json.dumps(resp.json())
+    assert "secret-tok" not in dumped
+    left = [row["ig_media_id"] for row in resp.json()["ranked"][0]["tracked"]]
+    assert left == ["jeff-reel"]
+    gallery = {v["index"]: v for v in client.get("/api/gallery").json()[0]["variants"]}
+    assert gallery[leftover.index]["ig_media_id"] is None
+    assert gallery[leftover.index]["ig_insights"] is None
+    assert gallery[kept.index]["ig_media_id"] == "jeff-reel"
 
 
 def test_analytics_get_returns_insights_without_leaking_token(tmp_path):

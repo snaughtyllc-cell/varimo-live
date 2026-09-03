@@ -427,6 +427,15 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .analytics-ranked__hint { font-size: 12.5px; line-height: 1.45; margin-top: 6px; max-width: 46em; }
 .analytics-ranked__hint[data-kind="winner"] { color: #0e5f66; }
 .analytics-ranked__hint[data-kind="quiet"] { color: #a9741b; }
+.analytics-ranked__hint[data-kind="held_no_push"] { color: #a9741b; }
+.analytics-ranked__hint[data-kind="weak_hold"] { color: #b42318; }
+.analytics-ranked__tracked { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 10px 0 0; padding: 0; }
+.analytics-ranked__copy { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.analytics-ranked__copy-main { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.analytics-ranked__copy-name { color: var(--ink); font-size: 12.5px; font-weight: 650; }
+.analytics-ranked__copy-meta { color: var(--color-muted); font-size: 12px; }
+.analytics-ranked__copy[data-connected="false"] .analytics-ranked__copy-meta { color: #a9741b; }
+.analytics-ranked__copy a { color: var(--color-violet); font-size: 12px; }
 .analytics-tabs { width: fit-content; }
 .analytics-match { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
 .analytics-match__field { display: flex; flex: 1; flex-direction: column; gap: 6px; min-width: 180px; }

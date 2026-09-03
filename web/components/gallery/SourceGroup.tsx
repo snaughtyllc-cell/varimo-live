@@ -100,6 +100,12 @@ export function SourceGroup({
     source.insights_follows,
     source.insights_linked ?? 0,
     source.variants.length,
+    {
+      likes: source.insights_likes,
+      comments: source.insights_comments,
+      saved: source.insights_saved,
+      reach: source.insights_reach,
+    },
   );
   const suggestionHint = packSuggestionHint(source.suggestion_kind);
   const summaryLine = [originalitySummary, postedCopy, suggestionHint]

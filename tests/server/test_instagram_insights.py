@@ -178,7 +178,9 @@ def test_tracked_copies_list_linked_variants_highest_views_first():
             self.ig_media_id = media
             self.ig_user_id = user
             self.post_url = post_url
-            self.ig_insights = {"views": views, "shares": 1, "follows": 2}
+            self.ig_insights = {"views": views, "shares": 1, "follows": 2, "likes": 8,
+                                "reels_skip_rate": 0.2, "ig_reels_avg_watch_time": 4.1,
+                                "video_duration": 10}
             if username:
                 self.ig_insights["username"] = username
 
@@ -190,6 +192,9 @@ def test_tracked_copies_list_linked_variants_highest_views_first():
     ])
     assert [row["index"] for row in copies] == [2, 1]
     assert copies[0]["insights_views"] == 900
+    assert copies[0]["insights_likes"] == 8
+    assert copies[0]["insights_skip_rate"] == 0.2
+    assert copies[0]["insights_watch_time"] == 4.1
     assert copies[0]["username"] == "mckenzie.trial"
     assert copies[0]["post_url"].endswith("/Aaa/")
     assert copies[1]["ig_user_id"] == "jeff"
@@ -445,6 +450,21 @@ def test_pack_analytics_sums_shares_and_follows():
     assert pack["insights_shares"] == 5
     assert pack["insights_follows"] == 3
     assert pack["insights_linked"] == 2
+
+
+def test_pack_analytics_sums_likes_comments_and_saved():
+    class V:
+        def __init__(self, media, **insights):
+            self.ig_media_id = media
+            self.ig_insights = insights
+
+    pack = pack_analytics([
+        V("a", views=100, likes=10, comments=2, saved=4),
+        V("b", views=50, likes=5, comments=1, saved=1),
+    ])
+    assert pack["insights_likes"] == 15
+    assert pack["insights_comments"] == 3
+    assert pack["insights_saved"] == 5
 
 
 def test_lanes_group_linked_copies_by_instagram_account():

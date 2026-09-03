@@ -77,6 +77,15 @@ describe("packConversionCopy", () => {
     );
   });
 
+  it("adds likes, comments, saved, and reach when Graph sent them", () => {
+    expect(packConversionCopy(1500, 9, null, 2, 4, {
+      likes: 40,
+      comments: 3,
+      saved: 5,
+      reach: 900,
+    })).toBe("1.5k views · 900 reach · 40 likes · 3 comments · 9 shares · 5 saved · 2 of 4 linked");
+  });
+
   it("omits missing conversion metrics instead of writing zero", () => {
     expect(packConversionCopy(1500, null, undefined, 4, 8)).toBe("1.5k views · 4 of 8 linked");
   });
@@ -211,6 +220,15 @@ describe("trackedCopyMeta", () => {
       account_connected: false,
       insights_views: 800,
     })).not.toMatch(/flagged/i);
+    expect(trackedCopyMeta({
+      username: "jeff",
+      insights_views: 15000,
+      insights_likes: 40,
+      insights_shares: 13,
+      insights_skip_rate: 0.2,
+      insights_watch_time: 4.1,
+      video_duration: 10,
+    })).toBe("@jeff · 15k views · 40 likes · 13 shares · 20% skip · 4.1s watch");
     expect(trackedCopyMeta({
       username: "jeff",
       insights_views: null,

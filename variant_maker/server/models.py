@@ -123,7 +123,11 @@ class SourceOut(BaseModel):
     job_id: str | None = None
     caption_prompt: str | None = None
     insights_views: int | None = None
+    insights_likes: int | None = None
+    insights_comments: int | None = None
     insights_shares: int | None = None
+    insights_saved: int | None = None
+    insights_reach: int | None = None
     insights_follows: int | None = None
     insights_linked: int = 0
     insights_unknown: int = 0

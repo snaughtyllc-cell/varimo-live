@@ -36,7 +36,10 @@ const analytics = {
       source_id: "winner",
       filename: "winner.mp4",
       insights_views: 300000,
+      insights_likes: 400,
+      insights_comments: 20,
       insights_shares: 80,
+      insights_saved: 15,
       insights_follows: 12,
       insights_linked: 12,
       insights_unknown: 8,
@@ -48,8 +51,11 @@ const analytics = {
           username: "jeff",
           post_url: "https://www.instagram.com/reel/WinnerCopy/",
           insights_views: 200000,
+          insights_likes: 300,
           insights_shares: 60,
           insights_follows: 10,
+          insights_skip_rate: 0.2,
+          insights_watch_time: 4.1,
           account_connected: true,
         },
         {
@@ -108,7 +114,11 @@ describe("AnalyticsBoard", () => {
     expect(screen.getByText(/not getting push/i)).toBeTruthy();
     expect(screen.getByText(/not getting push/i).textContent).not.toMatch(/flagged/i);
     expect(screen.getByText(/80 shares/i)).toBeTruthy();
+    expect(screen.getByText(/400 likes/i)).toBeTruthy();
+    expect(screen.getByText(/20 comments/i)).toBeTruthy();
+    expect(screen.getByText(/15 saved/i)).toBeTruthy();
     expect(screen.getByText(/12 follows/i)).toBeTruthy();
+    expect(screen.getByText(/20% skip/i)).toBeTruthy();
     expect(screen.getByText("copy 03")).toBeTruthy();
     expect(screen.getByText("copy 07")).toBeTruthy();
     expect(screen.getByText(/@mckenzie.trial · account not connected · 800 views/i)).toBeTruthy();

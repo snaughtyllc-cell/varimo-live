@@ -432,6 +432,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .analytics-ranked__tracked { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 10px 0 0; padding: 0; }
 .analytics-ranked__copy { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
 .analytics-ranked__copy-main { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.analytics-ranked__copy-actions { align-items: center; display: flex; gap: 10px; }
+.analytics-ranked__move { flex-basis: 100%; margin-top: 4px; }
+.analytics-ranked__move-submit { align-items: center; display: flex; gap: 10px; margin-top: 8px; }
+.analytics-ranked__copy-main { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
 .analytics-ranked__copy-name { color: var(--ink); font-size: 12.5px; font-weight: 650; }
 .analytics-ranked__copy-meta { color: var(--color-muted); font-size: 12px; }
 .analytics-ranked__copy[data-connected="false"] .analytics-ranked__copy-meta { color: #a9741b; }

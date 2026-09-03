@@ -82,6 +82,7 @@ from .instagram_insights import (
     lanes_from_sources,
     list_media as list_ig_media,
     match_media,
+    merge_insight_snapshots,
     now_utc,
     pack_analytics,
     pack_suggestions,
@@ -656,6 +657,40 @@ def create_app(
                         ids.add(mid)
         return ids
 
+    def _ig_snapshot_if_same_reel(source_id: str, index: int, media_id: str) -> dict[str, Any] | None:
+        loc = store._locate(source_id)
+        if loc is None:
+            return None
+        _job_id, source = loc
+        variant = next((v for v in source.variants if v.index == index), None)
+        if variant is None:
+            return None
+        if variant.ig_media_id and variant.ig_media_id != media_id:
+            return None
+        snapshot = variant.ig_insights
+        return dict(snapshot) if isinstance(snapshot, dict) else None
+
+    def _steal_ig_media(
+        media_id: str, *, keep_source_id: str, keep_index: int,
+    ) -> dict[str, Any]:
+        stolen: dict[str, Any] = {}
+        for job in store.list():
+            for source in job.sources:
+                for variant in source.variants:
+                    if variant.ig_media_id != media_id:
+                        continue
+                    same = source.source_id == keep_source_id and variant.index == keep_index
+                    if isinstance(variant.ig_insights, dict) and variant.ig_insights:
+                        stolen = dict(variant.ig_insights)
+                    if not same:
+                        store.set_ig_insights(
+                            source.source_id, variant.index,
+                            ig_media_id=None,
+                            ig_user_id=None,
+                            insights=None,
+                        )
+        return stolen
+
     def _token_path() -> str:
         return _oauth_tokens().path
 
@@ -1029,7 +1064,7 @@ def create_app(
         matched = 0
         fetched_at = now_utc()
         for hit in hits:
-            snapshot: dict[str, Any] = {"fetched_at": fetched_at}
+            incoming: dict[str, Any] = {"fetched_at": fetched_at}
             owner = media_owner.get(hit.media_id)
             token = token_by_user.get(owner or "")
             if isinstance(token, str):
@@ -1038,20 +1073,21 @@ def create_app(
                 except Exception:
                     counts = {}
                 if counts:
-                    snapshot.update(counts)
+                    incoming.update(counts)
             media = media_by_id.get(hit.media_id)
             if media is not None and media.video_duration:
-                snapshot["video_duration"] = media.video_duration
+                incoming["video_duration"] = media.video_duration
             if media is not None and media.username:
-                snapshot["username"] = media.username
+                incoming["username"] = media.username
             permalink = hit.permalink or (
                 media_by_id[hit.media_id].permalink if hit.media_id in media_by_id else None
             )
+            existing = _ig_snapshot_if_same_reel(hit.source_id, hit.index, hit.media_id)
             store.set_ig_insights(
                 hit.source_id, hit.index,
                 ig_media_id=hit.media_id,
                 ig_user_id=owner,
-                insights=snapshot,
+                insights=merge_insight_snapshots(existing, incoming),
                 post_url=permalink,
             )
             matched += 1
@@ -2014,27 +2050,28 @@ def create_app(
         if not media_id:
             raise HTTPException(status_code=400, detail="media_id required")
         owner = (body.ig_user_id or "").strip() or None
+        stolen = _steal_ig_media(media_id, keep_source_id=body.source_id, keep_index=body.index)
+        incoming: dict[str, Any] = {"fetched_at": now_utc()}
+        handle = (body.username or "").strip().lstrip("@")
+        if handle:
+            incoming["username"] = handle
         token = None
         if owner:
             data = _ig_accounts().load(owner)
             if data and isinstance(data.get("access_token"), str):
                 token = data["access_token"]
-        snapshot: dict[str, Any] = {"fetched_at": now_utc()}
-        handle = (body.username or "").strip().lstrip("@")
-        if handle:
-            snapshot["username"] = handle
         if isinstance(token, str):
             try:
                 counts = app.state.instagram_fetch_insights(media_id, token)
             except Exception:
                 counts = {}
             if counts:
-                snapshot.update(counts)
+                incoming.update(counts)
         updated = store.set_ig_insights(
             body.source_id, body.index,
             ig_media_id=media_id,
             ig_user_id=owner,
-            insights=snapshot,
+            insights=merge_insight_snapshots(stolen, incoming),
             post_url=(body.permalink or "").strip() or None,
         )
         if updated is None:

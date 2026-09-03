@@ -248,6 +248,20 @@ def _insight_number(raw: object) -> int | float | None:
     return None
 
 
+def merge_insight_snapshots(
+    existing: Mapping[str, Any] | None,
+    incoming: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Keep last-known counts when Graph omits a metric on refresh."""
+    out: dict[str, Any] = dict(existing) if isinstance(existing, dict) else {}
+    if not isinstance(incoming, dict):
+        return out
+    for key, value in incoming.items():
+        if value is not None:
+            out[key] = value
+    return out
+
+
 def skip_ratio(snapshot: Mapping[str, Any] | None) -> float | None:
     if not isinstance(snapshot, dict):
         return None

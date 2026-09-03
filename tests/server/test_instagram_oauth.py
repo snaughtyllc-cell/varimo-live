@@ -487,6 +487,93 @@ def test_unlink_drops_a_tracked_copy_from_a_disconnected_account(tmp_path):
     assert gallery[kept.index]["ig_media_id"] == "jeff-reel"
 
 
+def test_sync_keeps_views_when_graph_returns_no_counts(tmp_path):
+    def fake_media(user_id, token):
+        return [{
+            "id": "reel-jeff",
+            "permalink": "https://www.instagram.com/reel/JeffReel/",
+            "caption": "jeff hook",
+        }]
+
+    def fake_insights(media_id, token):
+        return {}
+
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    job = store.create_job([("jeff tingz.mp4", b"x")], count=1)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    idx = src.variants[0].index
+    store.set_ig_insights(
+        src.source_id, idx,
+        ig_media_id="reel-jeff",
+        ig_user_id="178",
+        insights={"views": 5000, "shares": 9, "username": "jeff.tingz", "fetched_at": "2026-08-01T00:00:00Z"},
+        post_url="https://www.instagram.com/reel/JeffReel/",
+    )
+    InstagramAccountStore(ws.instagram_dir()).save({
+        "user_id": "178", "username": "jeff.tingz", "access_token": "tok",
+    })
+    client = TestClient(create_app(
+        store,
+        sa_json_path="",
+        instagram_environ={
+            ENV_APP_ID: "ig-app-id",
+            ENV_APP_SECRET: "ig-app-secret",
+            ENV_REDIRECT_URI: "https://ui.example/api/instagram/oauth/callback",
+        },
+        instagram_list_media=fake_media,
+        instagram_fetch_insights=fake_insights,
+    ))
+    resp = client.post("/api/instagram/sync")
+    assert resp.status_code == 200
+    variant = client.get("/api/gallery").json()[0]["variants"][0]
+    assert variant["ig_media_id"] == "reel-jeff"
+    assert variant["ig_insights"]["views"] == 5000
+    assert variant["ig_insights"]["shares"] == 9
+
+
+def test_link_moves_reel_off_the_wrong_gallery_pack(tmp_path):
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    job = store.create_job(
+        [("mckenzie trial reels.mp4", b"x"), ("jeff tingz.mp4", b"y")],
+        count=1,
+    )
+    store.wait(job.job_id, timeout=5)
+    job = store.get(job.job_id)
+    wrong, right = job.sources
+    store.set_ig_insights(
+        wrong.source_id, wrong.variants[0].index,
+        ig_media_id="reel-jeff",
+        ig_user_id="178",
+        insights={"views": 900, "shares": 12, "username": "jeff.tingz", "fetched_at": "2026-08-30T00:00:00Z"},
+        post_url="https://www.instagram.com/reel/JeffReel/",
+    )
+    client = TestClient(create_app(store, sa_json_path=""))
+    resp = client.post("/api/instagram/link", json={
+        "source_id": right.source_id,
+        "index": right.variants[0].index,
+        "media_id": "reel-jeff",
+        "ig_user_id": "178",
+        "username": "jeff.tingz",
+        "permalink": "https://www.instagram.com/reel/JeffReel/",
+    })
+    assert resp.status_code == 200
+    gallery = {row["filename"]: row for row in client.get("/api/gallery").json()}
+    assert gallery["mckenzie trial reels.mp4"]["variants"][0]["ig_media_id"] is None
+    moved = gallery["jeff tingz.mp4"]["variants"][0]
+    assert moved["ig_media_id"] == "reel-jeff"
+    assert moved["ig_insights"]["views"] == 900
+    assert moved["ig_insights"]["shares"] == 12
+    tracked = {
+        row["filename"]: [c["ig_media_id"] for c in row.get("tracked") or []]
+        for row in resp.json()["ranked"]
+    }
+    assert tracked.get("jeff tingz.mp4") == ["reel-jeff"]
+    assert "mckenzie trial reels.mp4" not in tracked
+
+
 def test_analytics_get_returns_insights_without_leaking_token(tmp_path):
     client, ws = _ig_app(tmp_path)
     accounts = InstagramAccountStore(ws.instagram_dir())

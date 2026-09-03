@@ -24,6 +24,7 @@ _CAPTION_SPACE = re.compile(r"\s+")
 _SHORTCODE = re.compile(r"/(?:reel|p|tv)/([A-Za-z0-9_-]+)", re.IGNORECASE)
 _VARIANT_FILE = re.compile(r"^v\d+$", re.IGNORECASE)
 INSIGHT_METRICS = ("views", "reach", "likes", "comments", "shares", "saved")
+INSIGHT_CORE_METRICS = ("views", "likes", "comments", "saved", "shares")
 INSIGHT_HOLD_METRICS = ("ig_reels_avg_watch_time", "reels_skip_rate")
 INSIGHT_CONV_METRICS = ("follows", "profile_visits", "reposts")
 WEAK_SKIP = 0.45
@@ -779,28 +780,44 @@ def fetch_media_insights(
             return ask(metrics, extra)
         except (ValueError, OSError):
             # Graph 400s mixed Reel batches (HTTPError) instead of returning
-            # empty data. Keep going so views-only still has a chance.
+            # empty data. Keep going so the rest of the Insights set still has a chance.
             return {}
 
-    core_attempts: tuple[tuple[Sequence[str], dict[str, str] | None], ...] = (
-        (INSIGHT_METRICS, {"metric_type": "total_value"}),
-        (INSIGHT_METRICS, None),
-        (("views", "likes", "comments", "saved", "shares"), {"metric_type": "total_value"}),
-        (("views", "likes", "comments", "saved", "shares"), None),
-        (("views",), {"metric_type": "total_value"}),
-        (("views",), None),
-        (("views",), {"metric_type": "total_value", "period": "lifetime"}),
-        (("views",), {"period": "lifetime"}),
-        (("plays",), {"metric_type": "total_value"}),
-        (("plays",), None),
+    extras_total: tuple[dict[str, str] | None, ...] = ({"metric_type": "total_value"}, None)
+    view_extras: tuple[dict[str, str] | None, ...] = (
+        {"metric_type": "total_value"},
+        None,
+        {"metric_type": "total_value", "period": "lifetime"},
+        {"period": "lifetime"},
     )
-    for metrics, extra in core_attempts:
-        got = try_ask(metrics, extra)
-        out.update(got)
-        if "views" in out or "plays" in out:
-            break
+
+    def missing(names: Sequence[str]) -> list[str]:
+        return [name for name in names if name not in out]
+
+    def fill(metrics: Sequence[str], extras: Sequence[dict[str, str] | None]) -> None:
+        for extra in extras:
+            if metrics and not missing(metrics):
+                return
+            out.update(try_ask(metrics, extra))
+
+    # Widest batch first (includes reach). Views-only is a fallback, not the product.
+    fill(INSIGHT_METRICS, extras_total)
+    fill(INSIGHT_CORE_METRICS, extras_total)
+    if "views" not in out and "plays" not in out:
+        fill(("views",), view_extras)
+    if "views" not in out and "plays" not in out:
+        fill(("plays",), extras_total)
     if "views" not in out and "plays" in out:
         out["views"] = out["plays"]
+
+    leftover = missing([name for name in INSIGHT_CORE_METRICS if name != "views"])
+    if leftover:
+        fill(tuple(leftover), extras_total)
+    for name in leftover:
+        if name not in out:
+            fill((name,), extras_total)
+    if "reach" not in out:
+        fill(("reach",), extras_total)
 
     for metrics in (INSIGHT_HOLD_METRICS, INSIGHT_CONV_METRICS):
         got = try_ask(metrics, {"metric_type": "total_value"})

@@ -497,6 +497,37 @@ def test_fetch_media_insights_asks_hold_and_conversion_batches():
     assert "follows" in joined
 
 
+def test_fetch_media_insights_keeps_shares_skip_and_follows_with_views():
+    def get_json(url: str):
+        if "reels_skip_rate" in url:
+            return {
+                "data": [
+                    {"name": "reels_skip_rate", "total_value": {"value": 0.2}},
+                    {"name": "ig_reels_avg_watch_time", "total_value": {"value": 4.1}},
+                ]
+            }
+        if "follows" in url:
+            return {"data": [{"name": "follows", "total_value": {"value": 4}}]}
+        if "reach" in url or "shares" in url:
+            return {
+                "data": [
+                    {"name": "views", "total_value": {"value": 100}},
+                    {"name": "shares", "total_value": {"value": 9}},
+                    {"name": "likes", "total_value": {"value": 3}},
+                    {"name": "saved", "total_value": {"value": 2}},
+                ]
+            }
+        return {"data": []}
+
+    out = fetch_media_insights("m1", "tok", get_json=get_json)
+    assert out["views"] == 100
+    assert out["shares"] == 9
+    assert out["likes"] == 3
+    assert out["follows"] == 4
+    assert out["reels_skip_rate"] == 0.2
+    assert out["ig_reels_avg_watch_time"] == 4.1
+
+
 def test_fetch_media_insights_retries_views_when_core_batch_is_empty():
     urls: list[str] = []
 
@@ -516,6 +547,30 @@ def test_fetch_media_insights_retries_views_when_core_batch_is_empty():
     assert out["views"] == 312400
     joined = " ".join(urls)
     assert "metric_type=total_value" in joined
+    assert "shares" in joined
+    assert "reels_skip_rate" in joined
+    assert "follows" in joined
+
+
+def test_fetch_media_insights_still_asks_shares_after_views_fallback():
+    urls: list[str] = []
+
+    def get_json(url: str):
+        urls.append(url)
+        if "reels_skip_rate" in url or "follows" in url or "reach" in url:
+            return {"data": []}
+        if "metric=views&" in url or url.endswith("metric=views") or "metric=views%" in url:
+            return {"data": [{"name": "views", "total_value": {"value": 312400}}]}
+        if "metric=views," in url:
+            return {"data": []}
+        if "shares" in url:
+            return {"data": [{"name": "shares", "total_value": {"value": 80}}]}
+        return {"data": []}
+
+    out = fetch_media_insights("m1", "tok", get_json=get_json)
+    assert out["views"] == 312400
+    assert out["shares"] == 80
+    assert any("shares" in url for url in urls)
 
 
 def test_fetch_media_insights_maps_plays_when_views_missing():

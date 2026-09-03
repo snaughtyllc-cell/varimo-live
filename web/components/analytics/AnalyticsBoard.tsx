@@ -12,14 +12,16 @@ import {
 import { InstagramPanel } from "@/components/InstagramPanel";
 import {
   AMPLIFY_MORE_N,
-  copyPickerOptions,
+  copiesForPack,
   galleryViewsCopy,
   handleLabel,
+  packPickerOptions,
   packViewsCopy,
   parseCopyPick,
   suggestionButtonLabel,
   syncInsightsCopy,
   unmatchedCaptionPreview,
+  unmatchedTabCopy,
 } from "@/lib/instagram";
 import type {
   InstagramAnalytics,
@@ -36,17 +38,38 @@ function suggestionFor(
   return suggestions.find((row) => row.source_id === sourceId);
 }
 
+function firstUnlinkedCopy(
+  sources: SourceOut[],
+  sourceId: string,
+): string {
+  const copies = copiesForPack(sources, sourceId);
+  const open = copies.find((row) => !row.label.includes("(linked)"));
+  return (open ?? copies[0])?.value ?? "";
+}
+
 export function AnalyticsBoard() {
   const [status, setStatus] = useState<InstagramStatus | null>(null);
   const [analytics, setAnalytics] = useState<InstagramAnalytics | null>(null);
   const [unmatched, setUnmatched] = useState<InstagramUnmatched[]>([]);
   const [gallery, setGallery] = useState<SourceOut[]>([]);
-  const [picks, setPicks] = useState<Record<string, string>>({});
-  const [linking, setLinking] = useState<string | null>(null);
+  const [tab, setTab] = useState<"ranked" | "unmatched">("ranked");
+  const [packId, setPackId] = useState("");
+  const [copyPick, setCopyPick] = useState("");
+  const [reelId, setReelId] = useState("");
+  const [linking, setLinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [amplifying, setAmplifying] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+
+  async function applyAnalytics(next: InstagramAnalytics, leftover?: InstagramUnmatched[]) {
+    setAnalytics(next);
+    const rows = leftover ?? next.unmatched ?? [];
+    setUnmatched(rows);
+    if (rows.length > 0 && gallery.length === 0) {
+      setGallery(await getGallery());
+    }
+  }
 
   async function load() {
     try {
@@ -55,7 +78,7 @@ export function AnalyticsBoard() {
         getInstagramAnalytics(),
       ]);
       setStatus(nextStatus);
-      setAnalytics(nextAnalytics);
+      await applyAnalytics(nextAnalytics);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load Analytics");
     }
@@ -63,6 +86,8 @@ export function AnalyticsBoard() {
 
   useEffect(() => {
     void load();
+    // First paint only — later Sync / Link refresh through those handlers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSync() {
@@ -71,13 +96,15 @@ export function AnalyticsBoard() {
     setNote(null);
     try {
       const out = await syncInstagram();
-      const leftover = out.unmatched ?? [];
-      setAnalytics(out.analytics);
-      setUnmatched(leftover);
-      setPicks({});
+      const leftover = out.unmatched ?? out.analytics.unmatched ?? [];
       if (leftover.length > 0) {
         setGallery(await getGallery());
       }
+      await applyAnalytics(out.analytics, leftover);
+      setPackId("");
+      setCopyPick("");
+      setReelId("");
+      setTab("ranked");
       setNote(syncInsightsCopy(out));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");
@@ -99,10 +126,17 @@ export function AnalyticsBoard() {
     }
   }
 
-  async function handleLink(item: InstagramUnmatched) {
-    const pick = parseCopyPick(picks[item.media_id] || "");
-    if (!pick) return;
-    setLinking(item.media_id);
+  function handlePickPack(sourceId: string) {
+    setPackId(sourceId);
+    setCopyPick(sourceId ? firstUnlinkedCopy(gallery, sourceId) : "");
+    setReelId("");
+  }
+
+  async function handleLink() {
+    const item = unmatched.find((row) => row.media_id === reelId);
+    const pick = parseCopyPick(copyPick);
+    if (!item || !pick) return;
+    setLinking(true);
     setError(null);
     try {
       const next = await linkInstagramMedia({
@@ -112,18 +146,15 @@ export function AnalyticsBoard() {
         ig_user_id: item.ig_user_id,
         permalink: item.permalink,
       });
-      setAnalytics(next);
-      setUnmatched((rows) => rows.filter((row) => row.media_id !== item.media_id));
-      setPicks((current) => {
-        const next = { ...current };
-        delete next[item.media_id];
-        return next;
-      });
+      await applyAnalytics(next, next.unmatched ?? unmatched.filter((row) => row.media_id !== item.media_id));
+      setGallery(await getGallery());
+      setReelId("");
+      setCopyPick(firstUnlinkedCopy(gallery, packId));
       setNote("Linked. Captions can change; tracking holds on this Reel id.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Link failed");
     } finally {
-      setLinking(null);
+      setLinking(false);
     }
   }
 
@@ -135,7 +166,10 @@ export function AnalyticsBoard() {
     analytics?.insights_linked ?? 0,
     accounts.length,
   );
-  const pickerOptions = useMemo(() => copyPickerOptions(gallery), [gallery]);
+  const packOptions = useMemo(() => packPickerOptions(gallery), [gallery]);
+  const copyOptions = useMemo(() => copiesForPack(gallery, packId), [gallery, packId]);
+  const selectedReel = unmatched.find((row) => row.media_id === reelId);
+  const canLink = Boolean(packId && copyPick && selectedReel) && !linking;
 
   return (
     <div className="analytics-board">
@@ -169,111 +203,166 @@ export function AnalyticsBoard() {
         </div>
       )}
 
-      <InstagramPanel />
+      <div className="gallery-segments analytics-tabs" role="tablist" aria-label="Analytics views">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "ranked"}
+          data-active={tab === "ranked"}
+          onClick={() => setTab("ranked")}
+        >
+          Ranked originals
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "unmatched"}
+          data-active={tab === "unmatched"}
+          onClick={() => setTab("unmatched")}
+        >
+          Unmatched Reels ({unmatched.length})
+        </button>
+      </div>
 
-      {unmatched.length > 0 && (
-        <section className="drive-card" aria-label="Unmatched Reels">
-          <div className="drive-card__title">Unmatched Reels</div>
+      {tab === "ranked" && (
+        <section className="drive-card" aria-label="Ranked originals">
+          <div className="drive-card__title">Ranked originals</div>
           <p className="drive-card__copy">
-            Caption matching is a hint. Banks reuse lines, so these did not auto-link.
-            Pick the Gallery copy — identity is the Reel id after that.
+            Unit of winning is the source — mint more unique files of the original that is working.
+            Unlinked copies are unknown, not zero views.
           </p>
-          <div className="analytics-picker">
-            {unmatched.map((item) => (
-              <div key={item.media_id} className="analytics-picker__row">
-                <div className="analytics-picker__main">
-                  <div className="analytics-picker__caption">
-                    {unmatchedCaptionPreview(item.caption || "")}
-                  </div>
-                  <div className="analytics-picker__meta">
-                    {item.username ? `${handleLabel(item.username)} · ` : ""}
-                    {item.permalink ? (
-                      <a href={item.permalink} target="_blank" rel="noreferrer">
-                        Open Reel
-                      </a>
-                    ) : (
-                      "No permalink"
+          {ranked.length === 0 ? (
+            <div className="drive-table__empty">No linked Reels yet. Connect testers, then Sync insights.</div>
+          ) : (
+            <div className="analytics-ranked">
+              {ranked.map((row) => {
+                const copies = (row.insights_linked || 0) + (row.insights_unknown || 0);
+                const copy = packViewsCopy(row.insights_views, row.insights_linked, copies || row.insights_linked);
+                const suggestion = suggestionFor(row.source_id, suggestions);
+                const amplify = suggestion ? suggestionButtonLabel(suggestion.kind) : null;
+                return (
+                  <div key={row.source_id} className="analytics-ranked__row">
+                    <div className="analytics-ranked__main">
+                      <div className="analytics-ranked__name" title={row.filename}>
+                        {suggestion?.kind === "winner" ? "Winner · " : ""}
+                        {row.filename}
+                      </div>
+                      <div className="analytics-ranked__meta">{copy}</div>
+                      {suggestion && (
+                        <div
+                          className="analytics-ranked__hint"
+                          data-kind={suggestion.kind}
+                        >
+                          {suggestion.copy}
+                        </div>
+                      )}
+                    </div>
+                    {amplify && (
+                      <button
+                        type="button"
+                        className="drive-btn drive-btn--aqua drive-btn--sm"
+                        onClick={() => handleAmplify(row.source_id)}
+                        disabled={amplifying === row.source_id}
+                      >
+                        {amplifying === row.source_id ? "Starting…" : amplify}
+                      </button>
                     )}
                   </div>
-                </div>
-                <div className="analytics-picker__actions">
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === "unmatched" && (
+        <section className="drive-card" aria-label="Unmatched Reels">
+          <div className="drive-card__title">Unmatched Reels</div>
+          <p className="drive-card__copy">{unmatchedTabCopy(unmatched.length)}</p>
+          {unmatched.length > 0 && (
+            <div className="analytics-match">
+              <label className="analytics-match__field">
+                <span>Gallery pack</span>
+                <select
+                  aria-label="Pick a Gallery pack"
+                  value={packId}
+                  onChange={(e) => handlePickPack(e.target.value)}
+                >
+                  <option value="">Pick a Gallery pack…</option>
+                  {packOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {packId ? (
+                <label className="analytics-match__field">
+                  <span>Copy you posted</span>
                   <select
-                    aria-label={`Match ${unmatchedCaptionPreview(item.caption || "", 40)} to a Gallery copy`}
-                    value={picks[item.media_id] || ""}
-                    onChange={(e) =>
-                      setPicks((current) => ({ ...current, [item.media_id]: e.target.value }))
-                    }
+                    aria-label="Pick the copy you posted"
+                    value={copyPick}
+                    onChange={(e) => setCopyPick(e.target.value)}
                   >
                     <option value="">Pick a copy…</option>
-                    {pickerOptions.map((opt) => (
+                    {copyOptions.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
                     ))}
                   </select>
-                  <button
-                    type="button"
-                    className="drive-btn drive-btn--aqua drive-btn--sm"
-                    onClick={() => handleLink(item)}
-                    disabled={!picks[item.media_id] || linking === item.media_id}
-                  >
-                    {linking === item.media_id ? "Linking…" : "Link"}
-                  </button>
-                </div>
+                </label>
+              ) : null}
+            </div>
+          )}
+          {packId && unmatched.length > 0 ? (
+            <>
+              <div className="analytics-picker">
+                {unmatched.map((item) => {
+                  const preview = unmatchedCaptionPreview(item.caption || "");
+                  return (
+                    <label key={item.media_id} className="analytics-picker__row analytics-picker__row--choice">
+                      <input
+                        type="radio"
+                        name="unmatched-reel"
+                        value={item.media_id}
+                        checked={reelId === item.media_id}
+                        onChange={() => setReelId(item.media_id)}
+                        aria-label={preview}
+                      />
+                      <div className="analytics-picker__main">
+                        <div className="analytics-picker__caption">{preview}</div>
+                        <div className="analytics-picker__meta">
+                          {item.username ? `${handleLabel(item.username)} · ` : ""}
+                          {item.permalink ? (
+                            <a href={item.permalink} target="_blank" rel="noreferrer">
+                              Open Reel
+                            </a>
+                          ) : (
+                            "No permalink"
+                          )}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
-            ))}
-          </div>
+              <div className="analytics-match__submit">
+                <button
+                  type="button"
+                  className="drive-btn drive-btn--aqua drive-btn--sm"
+                  onClick={() => void handleLink()}
+                  disabled={!canLink}
+                >
+                  {linking ? "Linking…" : "Link Reel"}
+                </button>
+              </div>
+            </>
+          ) : null}
         </section>
       )}
 
-      <section className="drive-card" aria-label="Ranked originals">
-        <div className="drive-card__title">Ranked originals</div>
-        <p className="drive-card__copy">
-          Unit of winning is the source — mint more unique files of the original that is working.
-          Unlinked copies are unknown, not zero views.
-        </p>
-        {ranked.length === 0 ? (
-          <div className="drive-table__empty">No linked Reels yet. Connect testers, then Sync insights.</div>
-        ) : (
-          <div className="analytics-ranked">
-            {ranked.map((row) => {
-              const copies = (row.insights_linked || 0) + (row.insights_unknown || 0);
-              const copy = packViewsCopy(row.insights_views, row.insights_linked, copies || row.insights_linked);
-              const suggestion = suggestionFor(row.source_id, suggestions);
-              const amplify = suggestion ? suggestionButtonLabel(suggestion.kind) : null;
-              return (
-                <div key={row.source_id} className="analytics-ranked__row">
-                  <div className="analytics-ranked__main">
-                    <div className="analytics-ranked__name" title={row.filename}>
-                      {suggestion?.kind === "winner" ? "Winner · " : ""}
-                      {row.filename}
-                    </div>
-                    <div className="analytics-ranked__meta">{copy}</div>
-                    {suggestion && (
-                      <div
-                        className="analytics-ranked__hint"
-                        data-kind={suggestion.kind}
-                      >
-                        {suggestion.copy}
-                      </div>
-                    )}
-                  </div>
-                  {amplify && (
-                    <button
-                      type="button"
-                      className="drive-btn drive-btn--aqua drive-btn--sm"
-                      onClick={() => handleAmplify(row.source_id)}
-                      disabled={amplifying === row.source_id}
-                    >
-                      {amplifying === row.source_id ? "Starting…" : amplify}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      <InstagramPanel />
     </div>
   );
 }

@@ -74,6 +74,7 @@ from .events import VariantEvent, event_to_dict
 from .experience import resolve_experience
 from .instagram_insights import (
     IgMedia,
+    InstagramUnmatchedStore,
     VariantLink,
     export_caption_hints,
     fetch_media_insights,
@@ -631,6 +632,22 @@ def create_app(
             return hub.bundle(workspace_id).instagram_accounts
         return _ig_accounts()
 
+    def _ig_unmatched() -> InstagramUnmatchedStore:
+        bundle = current_bundle()
+        if bundle is not None:
+            return InstagramUnmatchedStore(bundle.ws.instagram_unmatched_path())
+        return InstagramUnmatchedStore(fallback_store._ws.instagram_unmatched_path())
+
+    def _linked_ig_media_ids() -> set[str]:
+        ids: set[str] = set()
+        for job in store.list():
+            for source in job.sources:
+                for variant in source.variants:
+                    mid = getattr(variant, "ig_media_id", None)
+                    if isinstance(mid, str) and mid:
+                        ids.add(mid)
+        return ids
+
     def _token_path() -> str:
         return _oauth_tokens().path
 
@@ -1025,6 +1042,7 @@ def create_app(
             )
             matched += 1
         leftover = unmatched_payload(media_rows, hits)
+        _ig_unmatched().save(leftover)
         analytics = _ig_analytics_body()
         print(
             "instagram sync "
@@ -1054,6 +1072,7 @@ def create_app(
                 row["created_utc"] = created.get(row.get("source_id"))
         body["suggestions"] = pack_suggestions(body.get("packs") or [])
         body["accounts"] = ig_status_payload(_ig_accounts(), ig_env)["accounts"]
+        body["unmatched"] = _ig_unmatched().drop_linked(_linked_ig_media_ids())
         return body
 
     def _run_workflow_tick(wf: Workflow) -> Workflow:
@@ -1982,6 +2001,7 @@ def create_app(
         )
         if updated is None:
             raise HTTPException(status_code=404, detail="Variant not found")
+        _ig_unmatched().remove(media_id)
         return _ig_analytics_body()
 
     @app.get("/api/drive/destinations", response_model=list[DestinationOut])

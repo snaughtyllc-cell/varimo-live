@@ -100,7 +100,7 @@ export function SourceGroup({
     source.variants.length,
   );
   const suggestionHint = packSuggestionHint(source.suggestion_kind);
-  const summaryLine = [originalitySummary, postedCopy, viewsCopy, suggestionHint]
+  const summaryLine = [originalitySummary, postedCopy, suggestionHint]
     .filter(Boolean)
     .join(" · ");
 
@@ -289,6 +289,24 @@ export function SourceGroup({
 
         {/* Right side: delivery pill + folder link */}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {viewsCopy ? (
+            <span
+              aria-label="Pack insights"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                fontSize: 12,
+                fontWeight: 700,
+                padding: "4px 10px",
+                borderRadius: 999,
+                color: "#0e5f66",
+                background: "#e7f6f7",
+                border: "1px solid #bfe3e6",
+              }}
+            >
+              {viewsCopy}
+            </span>
+          ) : null}
           <span
             style={{
               display: "inline-flex",

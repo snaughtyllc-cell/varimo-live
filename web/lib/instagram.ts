@@ -117,7 +117,7 @@ export function syncInsightsCopy(out: {
   }
   let note = `Saw ${media} Reel${media === 1 ? "" : "s"}, matched ${out.matched} across ${accountBit}.`;
   if (leftover > 0) {
-    note += ` ${leftover} unmatched Reel${leftover === 1 ? "" : "s"} need a picker — caption banks reuse lines, so we do not guess.`;
+    note += ` ${leftover} unmatched Reel${leftover === 1 ? "" : "s"} live on the Unmatched tab (older posts stay there).`;
   }
   return note;
 }
@@ -132,6 +132,17 @@ export function unmatchedCaptionPreview(caption: string, max = 80): string {
   if (!t) return "No caption";
   if (t.length <= max) return t;
   return `${t.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
+
+export function unmatchedTabCopy(count: number): string {
+  if (count <= 0) {
+    return "No leftover Reels. Sync insights after you post a Gallery pack.";
+  }
+  return (
+    `${count} unmatched Reel${count === 1 ? "" : "s"}. ` +
+    "Most of these are Instagram posts from before Varimo — they will not match a Gallery copy. " +
+    "Pick the pack you posted, then link the Reel that belongs to it."
+  );
 }
 
 export function suggestionButtonLabel(kind: string): string | null {
@@ -150,6 +161,11 @@ export function copyPickerLabel(filename: string, index: number, linked = false)
   return linked ? `${base} (linked)` : base;
 }
 
+export function copyOnlyLabel(index: number, linked = false): string {
+  const n = String(index).padStart(2, "0");
+  return linked ? `copy ${n} (linked)` : `copy ${n}`;
+}
+
 export function formatCopyPick(sourceId: string, index: number): string {
   return `${sourceId}:${index}`;
 }
@@ -161,6 +177,30 @@ export function parseCopyPick(value: string): { source_id: string; index: number
   const index = Number(value.slice(i + 1));
   if (!source_id || !Number.isInteger(index)) return null;
   return { source_id, index };
+}
+
+export function packPickerOptions(
+  sources: { source_id: string; filename: string }[],
+): { value: string; label: string }[] {
+  return sources.map((source) => ({ value: source.source_id, label: source.filename }));
+}
+
+export function copiesForPack(
+  sources: {
+    source_id: string;
+    filename: string;
+    variants: { index: number; ig_media_id?: string | null }[];
+  }[],
+  sourceId: string,
+): { source_id: string; index: number; value: string; label: string }[] {
+  const source = sources.find((row) => row.source_id === sourceId);
+  if (!source) return [];
+  return source.variants.map((variant) => ({
+    source_id: source.source_id,
+    index: variant.index,
+    value: formatCopyPick(source.source_id, variant.index),
+    label: copyOnlyLabel(variant.index, Boolean(variant.ig_media_id)),
+  }));
 }
 
 export function copyPickerOptions(

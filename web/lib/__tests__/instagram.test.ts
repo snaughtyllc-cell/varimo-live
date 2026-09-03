@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AMPLIFY_MORE_N,
+  copiesForPack,
   copyPickerLabel,
   copyPickerOptions,
   formatCopyPick,
@@ -9,12 +10,14 @@ import {
   handleLabel,
   igOauthErrorMessage,
   insightSnapshotCopy,
+  packPickerOptions,
   packSuggestionHint,
   packViewsCopy,
   parseCopyPick,
   suggestionButtonLabel,
   syncInsightsCopy,
   unmatchedCaptionPreview,
+  unmatchedTabCopy,
   variantViewsCopy,
 } from "@/lib/instagram";
 
@@ -93,6 +96,14 @@ describe("syncInsightsCopy", () => {
         unmatched: [{ media_id: "orphan" }],
       }),
     ).toMatch(/Saw 12 Reels, matched 0/i);
+    expect(
+      syncInsightsCopy({
+        matched: 0,
+        accounts: 1,
+        media: 12,
+        unmatched: [{ media_id: "orphan" }],
+      }),
+    ).toMatch(/Unmatched tab/i);
   });
 });
 
@@ -141,5 +152,37 @@ describe("unmatched picker helpers", () => {
       "a.mp4 · copy 01",
       "a.mp4 · copy 02 (linked)",
     ]);
+  });
+
+  it("lists Gallery packs first, then copies inside the chosen pack", () => {
+    const sources = [
+      {
+        source_id: "s1",
+        filename: "winner.mp4",
+        variants: [{ index: 1, ig_media_id: null }, { index: 2, ig_media_id: "m" }],
+      },
+      {
+        source_id: "s2",
+        filename: "quiet.mp4",
+        variants: [{ index: 1, ig_media_id: null }],
+      },
+    ];
+    expect(packPickerOptions(sources).map((row) => row.label)).toEqual([
+      "winner.mp4",
+      "quiet.mp4",
+    ]);
+    expect(copiesForPack(sources, "s1").map((row) => row.label)).toEqual([
+      "copy 01",
+      "copy 02 (linked)",
+    ]);
+    expect(copiesForPack(sources, "missing")).toEqual([]);
+  });
+});
+
+describe("unmatchedTabCopy", () => {
+  it("says leftover Reels are older posts, not missing Gallery files", () => {
+    expect(unmatchedTabCopy(12)).toMatch(/before Varimo/i);
+    expect(unmatchedTabCopy(12)).toMatch(/12 unmatched/i);
+    expect(unmatchedTabCopy(0)).toMatch(/No leftover Reels/i);
   });
 });

@@ -427,6 +427,66 @@ def test_analytics_get_returns_insights_without_leaking_token(tmp_path):
     dumped = json.dumps(body)
     assert "secret-tok" not in dumped
     assert "access_token" not in dumped
+    assert body.get("unmatched") == []
+
+
+def test_analytics_get_keeps_unmatched_reels_after_sync(tmp_path):
+    def fake_media(user_id, token):
+        return [
+            {
+                "id": "linked",
+                "permalink": "https://www.instagram.com/reel/SyncCap/",
+                "caption": "unique lab hook",
+            },
+            {
+                "id": "orphan",
+                "permalink": "https://www.instagram.com/reel/OrphanReel/",
+                "caption": "old post from before varimo",
+            },
+        ]
+
+    def fake_insights(media_id, token):
+        return {"views": 50}
+
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    job = store.create_job([("a.mp4", b"x")], count=1)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    src.variants[0].caption = "Unique Lab Hook"
+    store._persist(job)
+    InstagramAccountStore(ws.instagram_dir()).save({
+        "user_id": "178", "username": "lab.ig", "access_token": "tok",
+    })
+    client = TestClient(create_app(
+        store,
+        sa_json_path="",
+        instagram_environ={
+            ENV_APP_ID: "ig-app-id",
+            ENV_APP_SECRET: "ig-app-secret",
+            ENV_REDIRECT_URI: "https://ui.example/api/instagram/oauth/callback",
+        },
+        instagram_list_media=fake_media,
+        instagram_fetch_insights=fake_insights,
+    ))
+    synced = client.post("/api/instagram/sync")
+    assert synced.status_code == 200
+    assert [u["media_id"] for u in synced.json()["unmatched"]] == ["orphan"]
+
+    again = client.get("/api/instagram/analytics").json()
+    assert [u["media_id"] for u in again["unmatched"]] == ["orphan"]
+    assert "tok" not in json.dumps(again)
+
+    linked = client.post("/api/instagram/link", json={
+        "source_id": src.source_id,
+        "index": src.variants[0].index,
+        "media_id": "orphan",
+        "ig_user_id": "178",
+        "permalink": "https://www.instagram.com/reel/OrphanReel/",
+    })
+    assert linked.status_code == 200
+    leftover = client.get("/api/instagram/analytics").json()["unmatched"]
+    assert leftover == []
 
 
 def test_instagram_oauth_pending_store_round_trips_workspace_id(tmp_path):

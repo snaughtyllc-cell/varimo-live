@@ -29,18 +29,48 @@ export function packViewsCopy(
   return packConversionCopy(views, null, null, linked, copies);
 }
 
+export type PackInsightExtras = {
+  likes?: number | null;
+  comments?: number | null;
+  saved?: number | null;
+  reach?: number | null;
+  skip_rate?: number | null;
+  watch_time?: number | null;
+  video_duration?: number | null;
+};
+
+function insightMetricParts(
+  views: number | null | undefined,
+  shares: number | null | undefined,
+  follows: number | null | undefined,
+  extras?: PackInsightExtras | null,
+): string[] {
+  const more = extras ?? {};
+  const parts: string[] = [];
+  parts.push(views == null ? "views unknown" : `${formatViews(views)} views`);
+  if (typeof more.reach === "number") parts.push(`${formatViews(more.reach)} reach`);
+  if (typeof more.likes === "number") parts.push(`${formatViews(more.likes)} likes`);
+  if (typeof more.comments === "number") parts.push(`${formatViews(more.comments)} comments`);
+  if (typeof shares === "number") parts.push(`${formatViews(shares)} shares`);
+  if (typeof more.saved === "number") parts.push(`${formatViews(more.saved)} saved`);
+  if (typeof follows === "number") parts.push(`${formatViews(follows)} follows`);
+  if (typeof more.skip_rate === "number") parts.push(formatSkipRate(more.skip_rate));
+  if (typeof more.watch_time === "number") {
+    parts.push(formatWatchTime(more.watch_time, more.video_duration ?? undefined));
+  }
+  return parts;
+}
+
 export function packConversionCopy(
   views: number | null | undefined,
   shares: number | null | undefined,
   follows: number | null | undefined,
   linked: number,
   copies?: number,
+  extras?: PackInsightExtras | null,
 ): string | null {
   if (linked <= 0) return null;
-  const parts: string[] = [];
-  parts.push(views == null ? "views unknown" : `${formatViews(views)} views`);
-  if (typeof shares === "number") parts.push(`${formatViews(shares)} shares`);
-  if (typeof follows === "number") parts.push(`${formatViews(follows)} follows`);
+  const parts = insightMetricParts(views, shares, follows, extras);
   if (typeof copies === "number" && copies > 0) {
     parts.push(`${linked} of ${copies} linked`);
   } else {
@@ -247,20 +277,35 @@ export function trackedCopyMeta(copy: {
   username?: string | null;
   account_connected?: boolean;
   insights_views?: number | null;
+  insights_likes?: number | null;
+  insights_comments?: number | null;
   insights_shares?: number | null;
+  insights_saved?: number | null;
+  insights_reach?: number | null;
   insights_follows?: number | null;
+  insights_skip_rate?: number | null;
+  insights_watch_time?: number | null;
+  video_duration?: number | null;
 }): string {
+  const metricBits = insightMetricParts(
+    copy.insights_views,
+    copy.insights_shares,
+    copy.insights_follows,
+    {
+      likes: copy.insights_likes,
+      comments: copy.insights_comments,
+      saved: copy.insights_saved,
+      reach: copy.insights_reach,
+      skip_rate: copy.insights_skip_rate,
+      watch_time: copy.insights_watch_time,
+      video_duration: copy.video_duration,
+    },
+  );
   const parts: string[] = [];
   const handle = handleLabel(copy.username || "");
   if (handle) parts.push(handle);
   if (copy.account_connected === false) parts.push("account not connected");
-  if (typeof copy.insights_views === "number") {
-    parts.push(`${formatViews(copy.insights_views)} views`);
-  } else {
-    parts.push("views unknown");
-  }
-  if (typeof copy.insights_shares === "number") parts.push(`${formatViews(copy.insights_shares)} shares`);
-  if (typeof copy.insights_follows === "number") parts.push(`${formatViews(copy.insights_follows)} follows`);
+  parts.push(...metricBits);
   return parts.join(" · ");
 }
 

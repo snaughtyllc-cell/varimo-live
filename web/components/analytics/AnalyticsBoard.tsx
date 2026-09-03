@@ -318,7 +318,9 @@ export function AnalyticsBoard() {
             Unit of winning is the source — mint more unique files of the original that is working.
             Tracked copies are the Reels actually linked. Move a Reel if it landed on the wrong
             original. Remove it if the match is wrong, including posts from an account that is
-            no longer connected. Unlinked copies are unknown, not zero views.
+            no longer connected. Graph Reels Insights are views, reach, likes, comments, shares,
+            saved, skip, and watch when Instagram sends them — some lag up to 48 hours. Follows
+            are not a Reel metric. Unlinked copies are unknown, not zero views.
           </p>
           {ranked.length === 0 ? (
             <div className="drive-table__empty">No linked Reels yet. Connect testers, then Sync insights.</div>
@@ -332,6 +334,12 @@ export function AnalyticsBoard() {
                   row.insights_follows,
                   row.insights_linked,
                   copies || row.insights_linked,
+                  {
+                    likes: row.insights_likes,
+                    comments: row.insights_comments,
+                    saved: row.insights_saved,
+                    reach: row.insights_reach,
+                  },
                 );
                 const suggestion = suggestionFor(row.source_id, suggestions);
                 const amplify = suggestion ? suggestionButtonLabel(suggestion.kind) : null;
@@ -492,6 +500,13 @@ export function AnalyticsBoard() {
                 lane.insights_shares,
                 lane.insights_follows,
                 lane.insights_linked,
+                undefined,
+                {
+                  likes: lane.insights_likes,
+                  comments: lane.insights_comments,
+                  saved: lane.insights_saved,
+                  reach: lane.insights_reach,
+                },
               );
               const label = handleLabel(lane.username || "") || lane.ig_user_id;
               const disconnected = lane.account_connected === false;

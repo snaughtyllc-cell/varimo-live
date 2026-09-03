@@ -74,7 +74,11 @@ export interface SourceOut {
   job_id?: string | null;
   caption_prompt?: string | null;
   insights_views?: number | null;
+  insights_likes?: number | null;
+  insights_comments?: number | null;
   insights_shares?: number | null;
+  insights_saved?: number | null;
+  insights_reach?: number | null;
   insights_follows?: number | null;
   insights_linked?: number;
   insights_unknown?: number;
@@ -361,8 +365,15 @@ export interface InstagramTrackedCopy {
   username?: string | null;
   post_url?: string | null;
   insights_views?: number | null;
+  insights_likes?: number | null;
+  insights_comments?: number | null;
   insights_shares?: number | null;
+  insights_saved?: number | null;
+  insights_reach?: number | null;
   insights_follows?: number | null;
+  insights_skip_rate?: number | null;
+  insights_watch_time?: number | null;
+  video_duration?: number | null;
   hold_kind?: string | null;
   account_connected?: boolean;
 }
@@ -371,7 +382,11 @@ export interface InstagramPackRow {
   source_id: string;
   filename: string;
   insights_views: number | null;
+  insights_likes?: number | null;
+  insights_comments?: number | null;
   insights_shares?: number | null;
+  insights_saved?: number | null;
+  insights_reach?: number | null;
   insights_follows?: number | null;
   insights_linked: number;
   insights_unknown?: number;
@@ -383,7 +398,11 @@ export interface InstagramLane {
   ig_user_id: string;
   username?: string;
   insights_views: number | null;
+  insights_likes?: number | null;
+  insights_comments?: number | null;
   insights_shares?: number | null;
+  insights_saved?: number | null;
+  insights_reach?: number | null;
   insights_follows?: number | null;
   insights_linked: number;
   hold_kind?: string | null;

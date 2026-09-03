@@ -332,7 +332,7 @@ def pack_analytics(variants: Iterable[Any]) -> dict[str, Any]:
     """views is None when nothing is linked — never treat unknown as 0."""
     copies = 0
     linked = 0
-    totals = {"views": 0, "shares": 0, "saved": 0, "follows": 0, "reach": 0}
+    totals = {"views": 0, "shares": 0, "saved": 0, "follows": 0, "reach": 0, "likes": 0, "comments": 0}
     has = {key: False for key in totals}
     hold_votes: list[str] = []
     for variant in variants:
@@ -366,6 +366,8 @@ def pack_analytics(variants: Iterable[Any]) -> dict[str, Any]:
         "insights_views": totals["views"] if has["views"] else None,
         "insights_shares": totals["shares"] if has["shares"] else None,
         "insights_saved": totals["saved"] if has["saved"] else None,
+        "insights_likes": totals["likes"] if has["likes"] else None,
+        "insights_comments": totals["comments"] if has["comments"] else None,
         "insights_follows": totals["follows"] if has["follows"] else None,
         "insights_reach": totals["reach"] if has["reach"] else None,
         "insights_linked": linked,
@@ -408,8 +410,15 @@ def tracked_copies(variants: Iterable[Any]) -> list[dict[str, Any]]:
             "username": username or None,
             "post_url": post_url if isinstance(post_url, str) and post_url else None,
             "insights_views": _insight_int(insights, "views"),
+            "insights_likes": _insight_int(insights, "likes"),
+            "insights_comments": _insight_int(insights, "comments"),
             "insights_shares": _insight_int(insights, "shares"),
+            "insights_saved": _insight_int(insights, "saved"),
+            "insights_reach": _insight_int(insights, "reach"),
             "insights_follows": _insight_int(insights, "follows"),
+            "insights_skip_rate": skip_ratio(insights),
+            "insights_watch_time": watch_seconds(insights),
+            "video_duration": video_duration_s(insights),
             "hold_kind": copy_hold_kind(insights) if insights else None,
         })
     return sorted(
@@ -467,7 +476,11 @@ def gallery_analytics(sources: Sequence[Any]) -> dict[str, Any]:
             "source_id": source_id,
             "filename": filename,
             "insights_views": pack["insights_views"],
+            "insights_likes": pack["insights_likes"],
+            "insights_comments": pack["insights_comments"],
             "insights_shares": pack["insights_shares"],
+            "insights_saved": pack["insights_saved"],
+            "insights_reach": pack["insights_reach"],
             "insights_follows": pack["insights_follows"],
             "insights_linked": pack["insights_linked"],
             "insights_unknown": pack["insights_unknown"],
@@ -514,7 +527,11 @@ def lanes_from_sources(sources: Sequence[Any]) -> list[dict[str, Any]]:
             "ig_user_id": user_id,
             "username": username,
             "insights_views": pack["insights_views"],
+            "insights_likes": pack["insights_likes"],
+            "insights_comments": pack["insights_comments"],
             "insights_shares": pack["insights_shares"],
+            "insights_saved": pack["insights_saved"],
+            "insights_reach": pack["insights_reach"],
             "insights_follows": pack["insights_follows"],
             "insights_linked": pack["insights_linked"],
             "hold_kind": pack["hold_kind"],

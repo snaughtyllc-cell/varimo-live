@@ -8,6 +8,7 @@ import {
   linkInstagramMedia,
   regenerate,
   syncInstagram,
+  unlinkInstagramMedia,
 } from "@/lib/api";
 import { InstagramPanel } from "@/components/InstagramPanel";
 import {
@@ -15,13 +16,17 @@ import {
   copiesForPack,
   galleryViewsCopy,
   handleLabel,
+  packConversionCopy,
   packPickerOptions,
-  packViewsCopy,
   parseCopyPick,
+  rankedOriginalPrefix,
   suggestionButtonLabel,
   syncInsightsCopy,
+  trackedCopyLabel,
+  trackedCopyMeta,
   unmatchedCaptionPreview,
   unmatchedTabCopy,
+  unlinkCopyLabel,
 } from "@/lib/instagram";
 import type {
   InstagramAnalytics,
@@ -60,6 +65,7 @@ export function AnalyticsBoard() {
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [amplifying, setAmplifying] = useState<string | null>(null);
+  const [unlinking, setUnlinking] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
   async function applyAnalytics(next: InstagramAnalytics, leftover?: InstagramUnmatched[]) {
@@ -126,6 +132,21 @@ export function AnalyticsBoard() {
     }
   }
 
+  async function handleUnlink(sourceId: string, index: number) {
+    const key = `${sourceId}:${index}`;
+    setUnlinking(key);
+    setError(null);
+    try {
+      const next = await unlinkInstagramMedia({ source_id: sourceId, index });
+      await applyAnalytics(next, next.unmatched ?? unmatched);
+      setNote("Removed from tracking. Ranked totals no longer include that Reel.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Remove failed");
+    } finally {
+      setUnlinking(null);
+    }
+  }
+
   function handlePickPack(sourceId: string) {
     setPackId(sourceId);
     setCopyPick(sourceId ? firstUnlinkedCopy(gallery, sourceId) : "");
@@ -145,6 +166,7 @@ export function AnalyticsBoard() {
         media_id: item.media_id,
         ig_user_id: item.ig_user_id,
         permalink: item.permalink,
+        username: item.username,
       });
       await applyAnalytics(next, next.unmatched ?? unmatched.filter((row) => row.media_id !== item.media_id));
       setGallery(await getGallery());
@@ -161,6 +183,7 @@ export function AnalyticsBoard() {
   const accounts = analytics?.accounts ?? status?.accounts ?? [];
   const ranked = analytics?.ranked ?? [];
   const suggestions = analytics?.suggestions ?? [];
+  const lanes = analytics?.lanes ?? [];
   const headline = galleryViewsCopy(
     analytics?.insights_views,
     analytics?.insights_linked ?? 0,
@@ -229,7 +252,8 @@ export function AnalyticsBoard() {
           <div className="drive-card__title">Ranked originals</div>
           <p className="drive-card__copy">
             Unit of winning is the source — mint more unique files of the original that is working.
-            Unlinked copies are unknown, not zero views.
+            Tracked copies are the Reels actually linked. Remove a copy if the match is wrong,
+            including posts from an account that is no longer connected. Unlinked copies are unknown, not zero views.
           </p>
           {ranked.length === 0 ? (
             <div className="drive-table__empty">No linked Reels yet. Connect testers, then Sync insights.</div>
@@ -237,14 +261,21 @@ export function AnalyticsBoard() {
             <div className="analytics-ranked">
               {ranked.map((row) => {
                 const copies = (row.insights_linked || 0) + (row.insights_unknown || 0);
-                const copy = packViewsCopy(row.insights_views, row.insights_linked, copies || row.insights_linked);
+                const copy = packConversionCopy(
+                  row.insights_views,
+                  row.insights_shares,
+                  row.insights_follows,
+                  row.insights_linked,
+                  copies || row.insights_linked,
+                );
                 const suggestion = suggestionFor(row.source_id, suggestions);
                 const amplify = suggestion ? suggestionButtonLabel(suggestion.kind) : null;
+                const tracked = row.tracked ?? [];
                 return (
                   <div key={row.source_id} className="analytics-ranked__row">
                     <div className="analytics-ranked__main">
                       <div className="analytics-ranked__name" title={row.filename}>
-                        {suggestion?.kind === "winner" ? "Winner · " : ""}
+                        {rankedOriginalPrefix(suggestion?.kind)}
                         {row.filename}
                       </div>
                       <div className="analytics-ranked__meta">{copy}</div>
@@ -255,6 +286,44 @@ export function AnalyticsBoard() {
                         >
                           {suggestion.copy}
                         </div>
+                      )}
+                      {tracked.length > 0 && (
+                        <ul className="analytics-ranked__tracked">
+                          {tracked.map((item) => {
+                            const unlinkKey = `${row.source_id}:${item.index}`;
+                            const meta = trackedCopyMeta(item);
+                            return (
+                              <li
+                                key={item.ig_media_id || unlinkKey}
+                                className="analytics-ranked__copy"
+                                data-connected={item.account_connected === false ? "false" : "true"}
+                              >
+                                <div className="analytics-ranked__copy-main">
+                                  <span className="analytics-ranked__copy-name">
+                                    {trackedCopyLabel(item.index)}
+                                  </span>
+                                  {meta ? (
+                                    <span className="analytics-ranked__copy-meta">{meta}</span>
+                                  ) : null}
+                                  {item.post_url ? (
+                                    <a href={item.post_url} target="_blank" rel="noreferrer">
+                                      Open Reel
+                                    </a>
+                                  ) : null}
+                                </div>
+                                <button
+                                  type="button"
+                                  className="gallery-quiet-link"
+                                  aria-label={unlinkCopyLabel(item.index)}
+                                  onClick={() => void handleUnlink(row.source_id, item.index)}
+                                  disabled={unlinking === unlinkKey}
+                                >
+                                  {unlinking === unlinkKey ? "Removing…" : "Remove"}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
                       )}
                     </div>
                     {amplify && (
@@ -272,6 +341,38 @@ export function AnalyticsBoard() {
               })}
             </div>
           )}
+        </section>
+      )}
+
+      {tab === "ranked" && lanes.length > 0 && (
+        <section className="drive-card" aria-label="Accounts">
+          <div className="drive-card__title">Accounts</div>
+          <p className="drive-card__copy">
+            Main, trial, and growth stay separate. Each connected @handle is its own lane.
+          </p>
+          <div className="analytics-ranked">
+            {lanes.map((lane) => {
+              const copy = packConversionCopy(
+                lane.insights_views,
+                lane.insights_shares,
+                lane.insights_follows,
+                lane.insights_linked,
+              );
+              const label = handleLabel(lane.username || "") || lane.ig_user_id;
+              const disconnected = lane.account_connected === false;
+              return (
+                <div key={lane.ig_user_id} className="analytics-ranked__row">
+                  <div className="analytics-ranked__main">
+                    <div className="analytics-ranked__name">{label}</div>
+                    <div className="analytics-ranked__meta">
+                      {disconnected ? "Account not connected · " : ""}
+                      {copy}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </section>
       )}
 

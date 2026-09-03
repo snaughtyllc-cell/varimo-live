@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AnalyticsBoard } from "../analytics/AnalyticsBoard";
 
 const mockGetInstagramStatus = vi.fn();
@@ -8,6 +8,7 @@ const mockSyncInstagram = vi.fn();
 const mockRegenerate = vi.fn();
 const mockGetGallery = vi.fn();
 const mockLinkInstagramMedia = vi.fn();
+const mockUnlinkInstagramMedia = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getInstagramStatus: () => mockGetInstagramStatus(),
@@ -16,6 +17,7 @@ vi.mock("@/lib/api", () => ({
   regenerate: (id: string, n: number) => mockRegenerate(id, n),
   getGallery: () => mockGetGallery(),
   linkInstagramMedia: (body: unknown) => mockLinkInstagramMedia(body),
+  unlinkInstagramMedia: (body: unknown) => mockUnlinkInstagramMedia(body),
   disconnectInstagram: vi.fn(),
   pasteInstagramToken: vi.fn(),
 }));
@@ -34,8 +36,31 @@ const analytics = {
       source_id: "winner",
       filename: "winner.mp4",
       insights_views: 300000,
+      insights_shares: 80,
+      insights_follows: 12,
       insights_linked: 12,
       insights_unknown: 8,
+      tracked: [
+        {
+          index: 3,
+          ig_media_id: "w3",
+          ig_user_id: "1",
+          username: "jeff",
+          post_url: "https://www.instagram.com/reel/WinnerCopy/",
+          insights_views: 200000,
+          insights_shares: 60,
+          insights_follows: 10,
+          account_connected: true,
+        },
+        {
+          index: 7,
+          ig_media_id: "mck",
+          ig_user_id: "mckenzie",
+          username: "mckenzie.trial",
+          insights_views: 800,
+          account_connected: false,
+        },
+      ],
     },
     {
       source_id: "quiet",
@@ -53,10 +78,10 @@ const analytics = {
       copy: "This original is carrying the week. Generate 20 more of this original.",
     },
     {
-      kind: "quiet",
+      kind: "held_no_push",
       source_id: "quiet",
       filename: "quiet.mp4",
-      copy: "These copies are not getting push. Try a new original — this may be the video, not the variant.",
+      copy: "Hold looks fine, but these copies are not getting push versus the rest of this account. Insights cannot see policy.",
     },
   ],
   accounts,
@@ -79,9 +104,15 @@ describe("AnalyticsBoard", () => {
     render(<AnalyticsBoard />);
     expect(await screen.findByText(/312k views across 14 linked posts/i)).toBeTruthy();
     expect(screen.getByText(/Winner · winner.mp4/)).toBeTruthy();
-    expect(screen.getByText("quiet.mp4")).toBeTruthy();
+    expect(screen.getByText(/Held, little push · quiet.mp4/)).toBeTruthy();
     expect(screen.getByText(/not getting push/i)).toBeTruthy();
     expect(screen.getByText(/not getting push/i).textContent).not.toMatch(/flagged/i);
+    expect(screen.getByText(/80 shares/i)).toBeTruthy();
+    expect(screen.getByText(/12 follows/i)).toBeTruthy();
+    expect(screen.getByText("copy 03")).toBeTruthy();
+    expect(screen.getByText("copy 07")).toBeTruthy();
+    expect(screen.getByText(/@mckenzie.trial · account not connected · 800 views/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /remove copy 07 from tracking/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /generate 20 more of this original/i })).toBeTruthy();
   });
 
@@ -205,10 +236,67 @@ describe("AnalyticsBoard", () => {
         media_id: "orphan",
         ig_user_id: "178",
         permalink: "https://www.instagram.com/reel/OrphanReel/",
+        username: "lab.ig",
       });
     });
     await waitFor(() => {
       expect(screen.queryByText(/reused bank line/i)).toBeNull();
     });
+  });
+
+  it("splits connected handles into account lanes", async () => {
+    mockGetInstagramAnalytics.mockResolvedValue({
+      ...analytics,
+      lanes: [
+        {
+          ig_user_id: "1",
+          username: "jeff",
+          insights_views: 300000,
+          insights_shares: 80,
+          insights_follows: 12,
+          insights_linked: 10,
+          account_connected: true,
+        },
+        {
+          ig_user_id: "mckenzie",
+          username: "mckenzie.trial",
+          insights_views: 800,
+          insights_linked: 1,
+          account_connected: false,
+        },
+      ],
+    });
+    render(<AnalyticsBoard />);
+    const lanes = await screen.findByRole("region", { name: /accounts/i });
+    expect(within(lanes).getByText("@jeff")).toBeTruthy();
+    expect(within(lanes).getByText("@mckenzie.trial")).toBeTruthy();
+    expect(within(lanes).getByText(/account not connected/i)).toBeTruthy();
+    expect(within(lanes).getByText(/12 follows/i)).toBeTruthy();
+  });
+
+  it("unlinks a tracked copy from a disconnected account", async () => {
+    mockUnlinkInstagramMedia.mockResolvedValue({
+      ...analytics,
+      ranked: [
+        {
+          ...analytics.ranked[0],
+          insights_linked: 11,
+          tracked: [analytics.ranked[0].tracked[0]],
+        },
+        analytics.ranked[1],
+      ],
+    });
+    render(<AnalyticsBoard />);
+    fireEvent.click(await screen.findByRole("button", { name: /remove copy 07 from tracking/i }));
+    await waitFor(() => {
+      expect(mockUnlinkInstagramMedia).toHaveBeenCalledWith({
+        source_id: "winner",
+        index: 7,
+      });
+    });
+    await waitFor(() => {
+      expect(screen.queryByText(/mckenzie.trial/i)).toBeNull();
+    });
+    expect(screen.getByText("copy 03")).toBeTruthy();
   });
 });

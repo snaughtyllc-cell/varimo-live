@@ -253,4 +253,34 @@ describe("SourceGroup insights line", () => {
     expect(screen.getByText(/1\.2k views/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/pack insights/i).textContent).toMatch(/1\.2k views/i);
   });
+
+  it("adds shares and follows on the pack chip", () => {
+    render(
+      <SourceGroup
+        source={source({
+          insights_views: 1234,
+          insights_shares: 9,
+          insights_follows: 2,
+          insights_linked: 2,
+          suggestion_kind: "held_no_push",
+          suggestion_copy: "Hold looks fine, but these copies are not getting push versus the rest of this account.",
+          variants: [
+            variant({ ig_media_id: "1", ig_insights: { views: 1000 } }),
+            variant({
+              index: 2,
+              filename: "v02.mp4",
+              file_url: "/api/variants/s1/v02.mp4",
+              ig_media_id: "2",
+              ig_insights: { views: 234 },
+            }),
+          ],
+        })}
+        {...props}
+      />,
+    );
+    expect(screen.getByLabelText(/pack insights/i).textContent).toMatch(/9 shares/i);
+    expect(screen.getByLabelText(/pack insights/i).textContent).toMatch(/2 follows/i);
+    expect(screen.getByText(/Held, little push/i)).toBeInTheDocument();
+    expect(screen.getByText(/Held, little push/i).textContent).not.toMatch(/flagged/i);
+  });
 });

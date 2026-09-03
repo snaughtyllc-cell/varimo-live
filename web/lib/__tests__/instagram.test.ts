@@ -10,12 +10,17 @@ import {
   handleLabel,
   igOauthErrorMessage,
   insightSnapshotCopy,
+  packConversionCopy,
   packPickerOptions,
   packSuggestionHint,
   packViewsCopy,
+  rankedOriginalPrefix,
   parseCopyPick,
   suggestionButtonLabel,
   syncInsightsCopy,
+  trackedCopyLabel,
+  trackedCopyMeta,
+  unlinkCopyLabel,
   unmatchedCaptionPreview,
   unmatchedTabCopy,
   variantViewsCopy,
@@ -58,10 +63,37 @@ describe("variantViewsCopy", () => {
   });
 });
 
+describe("packConversionCopy", () => {
+  it("adds shares and follows when Graph sent them", () => {
+    expect(packConversionCopy(312400, 80, 12, 14, 20)).toBe(
+      "312k views · 80 shares · 12 follows · 14 of 20 linked",
+    );
+  });
+
+  it("omits missing conversion metrics instead of writing zero", () => {
+    expect(packConversionCopy(1500, null, undefined, 4, 8)).toBe("1.5k views · 4 of 8 linked");
+  });
+});
+
 describe("insightSnapshotCopy", () => {
   it("joins the Insights snapshot without inventing flagged", () => {
     expect(insightSnapshotCopy({ views: 1500, likes: 12 })).toBe("1.5k views · 12 likes");
     expect(insightSnapshotCopy({ views: 1500, likes: 12 })).not.toMatch(/flagged/i);
+  });
+
+  it("lists follows, skip, and watch when present", () => {
+    const copy = insightSnapshotCopy({
+      views: 1500,
+      follows: 3,
+      reels_skip_rate: 0.62,
+      ig_reels_avg_watch_time: 2100,
+      video_duration: 10,
+    });
+    expect(copy).toMatch(/1\.5k views/);
+    expect(copy).toMatch(/3 follows/);
+    expect(copy).toMatch(/62% skip/);
+    expect(copy).toMatch(/2\.1s watch/);
+    expect(copy).not.toMatch(/flagged/i);
   });
 });
 
@@ -117,15 +149,48 @@ describe("suggestionButtonLabel", () => {
   it("only puts Generate more on a winner", () => {
     expect(suggestionButtonLabel("winner")).toMatch(/Generate 20 more/i);
     expect(suggestionButtonLabel("quiet")).toBeNull();
+    expect(suggestionButtonLabel("weak_hold")).toBeNull();
+    expect(suggestionButtonLabel("held_no_push")).toBeNull();
   });
 });
 
 describe("packSuggestionHint", () => {
   it("is a compact Gallery chip, never flagged", () => {
     expect(packSuggestionHint("winner")).toBe("Winner");
+    expect(packSuggestionHint("weak_hold")).toBe("Weak hold");
+    expect(packSuggestionHint("held_no_push")).toBe("Held, little push");
     expect(packSuggestionHint("quiet")).toBe("Quiet — try a new original");
+    expect(packSuggestionHint("weak_hold")).not.toMatch(/flagged/i);
+    expect(packSuggestionHint("held_no_push")).not.toMatch(/flagged/i);
     expect(packSuggestionHint("quiet")).not.toMatch(/flagged/i);
     expect(packSuggestionHint(null)).toBeNull();
+  });
+});
+
+describe("rankedOriginalPrefix", () => {
+  it("labels hold vs push without calling flagged", () => {
+    expect(rankedOriginalPrefix("winner")).toBe("Winner · ");
+    expect(rankedOriginalPrefix("weak_hold")).toBe("Weak hold · ");
+    expect(rankedOriginalPrefix("held_no_push")).toBe("Held, little push · ");
+    expect(rankedOriginalPrefix("held_no_push")).not.toMatch(/flagged/i);
+    expect(rankedOriginalPrefix(null)).toBe("");
+  });
+});
+
+describe("trackedCopyMeta", () => {
+  it("names the handle and flags a disconnected account", () => {
+    expect(trackedCopyLabel(7)).toBe("copy 07");
+    expect(unlinkCopyLabel(7)).toBe("Remove copy 07 from tracking");
+    expect(trackedCopyMeta({
+      username: "mckenzie.trial",
+      account_connected: false,
+      insights_views: 800,
+    })).toBe("@mckenzie.trial · account not connected · 800 views");
+    expect(trackedCopyMeta({
+      username: "mckenzie.trial",
+      account_connected: false,
+      insights_views: 800,
+    })).not.toMatch(/flagged/i);
   });
 });
 

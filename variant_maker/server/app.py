@@ -79,12 +79,15 @@ from .instagram_insights import (
     export_caption_hints,
     fetch_media_insights,
     gallery_analytics,
+    lanes_from_sources,
     list_media as list_ig_media,
     match_media,
     now_utc,
     pack_analytics,
     pack_suggestions,
+    stamp_tracked_accounts,
     unmatched_payload,
+    video_duration_s,
 )
 from .instagram_oauth import (
     ENV_APP_ID,
@@ -144,6 +147,7 @@ from .models import (
     InstagramStatusOut,
     InstagramSyncOut,
     InstagramTokenIn,
+    InstagramUnlinkIn,
     InviteCreateIn,
     InviteOut,
     JobDetail,
@@ -321,8 +325,11 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
         job_id=job_id,
         caption_prompt=(s.caption_prompt or None),
         insights_views=pack["insights_views"],
+        insights_shares=pack.get("insights_shares") if isinstance(pack.get("insights_shares"), int) else None,
+        insights_follows=pack.get("insights_follows") if isinstance(pack.get("insights_follows"), int) else None,
         insights_linked=int(pack["insights_linked"] or 0),
         insights_unknown=int(pack["insights_unknown"] or 0),
+        hold_kind=pack.get("hold_kind") if isinstance(pack.get("hold_kind"), str) else None,
     )
 
 
@@ -333,6 +340,7 @@ def _stamp_source_suggestions(sources: list[SourceOut]) -> list[SourceOut]:
             "filename": s.filename,
             "insights_views": s.insights_views,
             "insights_linked": s.insights_linked,
+            "hold_kind": s.hold_kind,
             "created_utc": s.created_utc,
         }
         for s in sources
@@ -997,6 +1005,7 @@ def create_app(
                     caption=row.get("caption") if isinstance(row.get("caption"), str) else None,
                     username=str(acc.get("username") or "") or None,
                     user_id=user_id,
+                    video_duration=video_duration_s(row),
                 ))
         hints = export_caption_hints(app.state.exports.list())
         links: list[VariantLink] = []
@@ -1030,6 +1039,11 @@ def create_app(
                     counts = {}
                 if counts:
                     snapshot.update(counts)
+            media = media_by_id.get(hit.media_id)
+            if media is not None and media.video_duration:
+                snapshot["video_duration"] = media.video_duration
+            if media is not None and media.username:
+                snapshot["username"] = media.username
             permalink = hit.permalink or (
                 media_by_id[hit.media_id].permalink if hit.media_id in media_by_id else None
             )
@@ -1071,7 +1085,28 @@ def create_app(
             if isinstance(row, dict):
                 row["created_utc"] = created.get(row.get("source_id"))
         body["suggestions"] = pack_suggestions(body.get("packs") or [])
-        body["accounts"] = ig_status_payload(_ig_accounts(), ig_env)["accounts"]
+        accounts = ig_status_payload(_ig_accounts(), ig_env)["accounts"]
+        body["accounts"] = accounts
+        names = {
+            str(acc.get("user_id") or ""): str(acc.get("username") or "")
+            for acc in accounts
+            if isinstance(acc, dict)
+        }
+        connected_ids = [uid for uid in names if uid]
+        stamp_tracked_accounts(
+            list(body.get("packs") or []) + list(body.get("ranked") or []),
+            usernames=names,
+            connected_ids=connected_ids,
+        )
+        lanes: list[dict[str, Any]] = []
+        for lane in lanes_from_sources(sources):
+            uid = str(lane.get("ig_user_id") or "")
+            lanes.append({
+                **lane,
+                "username": names.get(uid) or lane.get("username") or "",
+                "account_connected": bool(uid and uid in names),
+            })
+        body["lanes"] = lanes
         body["unmatched"] = _ig_unmatched().drop_linked(_linked_ig_media_ids())
         return body
 
@@ -1985,6 +2020,9 @@ def create_app(
             if data and isinstance(data.get("access_token"), str):
                 token = data["access_token"]
         snapshot: dict[str, Any] = {"fetched_at": now_utc()}
+        handle = (body.username or "").strip().lstrip("@")
+        if handle:
+            snapshot["username"] = handle
         if isinstance(token, str):
             try:
                 counts = app.state.instagram_fetch_insights(media_id, token)
@@ -2002,6 +2040,19 @@ def create_app(
         if updated is None:
             raise HTTPException(status_code=404, detail="Variant not found")
         _ig_unmatched().remove(media_id)
+        return _ig_analytics_body()
+
+    @app.post("/api/instagram/unlink")
+    def instagram_unlink(request: Request, body: InstagramUnlinkIn) -> dict:
+        _require_instagram_manager(request)
+        updated = store.set_ig_insights(
+            body.source_id, body.index,
+            ig_media_id=None,
+            ig_user_id=None,
+            insights=None,
+        )
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Variant not found")
         return _ig_analytics_body()
 
     @app.get("/api/drive/destinations", response_model=list[DestinationOut])

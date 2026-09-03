@@ -25,7 +25,33 @@ import {
   unmatchedCaptionPreview,
   unmatchedTabCopy,
   variantViewsCopy,
+  analyticsPackThumb,
 } from "@/lib/instagram";
+
+describe("analyticsPackThumb", () => {
+  it("prefers a look still so ranked rows can paint on phones", () => {
+    expect(analyticsPackThumb({
+      variants: [{
+        file_url: "/api/variants/s1/v01.mp4",
+        look_var_url: "/api/look/s1/look_v01.jpg",
+        file_ready: true,
+      }],
+    })).toEqual({ kind: "image", src: "/api/look/s1/look_v01.jpg" });
+  });
+
+  it("falls back to the mp4 when no look still exists", () => {
+    expect(analyticsPackThumb({
+      variants: [{ file_url: "/api/variants/s1/v01.mp4", file_ready: true }],
+    })).toEqual({ kind: "video", src: "/api/variants/s1/v01.mp4" });
+  });
+
+  it("uses the source look still when variants only have the mp4", () => {
+    expect(analyticsPackThumb({
+      look_preview: { look_src_url: "/api/look/s1/look_v01_src.jpg" },
+      variants: [{ file_url: "/api/variants/s1/v01.mp4", file_ready: true }],
+    })).toEqual({ kind: "image", src: "/api/look/s1/look_v01_src.jpg" });
+  });
+});
 
 describe("formatViews", () => {
   it("keeps unknown as an em dash", () => {

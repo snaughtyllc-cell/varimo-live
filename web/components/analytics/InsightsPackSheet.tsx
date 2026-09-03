@@ -12,6 +12,7 @@ import {
   trackedCopyMeta,
   unlinkCopyLabel,
 } from "@/lib/instagram";
+import { PackThumb } from "@/components/analytics/PackThumb";
 import type {
   InstagramPackRow,
   InstagramSuggestion,
@@ -175,7 +176,6 @@ export function InsightsPackSheet({
   const hasHoldMetrics = tracked.some(
     (copy) => isMetric(copy.insights_skip_rate) || isMetric(copy.insights_watch_time),
   );
-  const thumb = source?.variants.find((variant) => Boolean(variant.file_url))?.file_url;
   const packMetrics = summaryMetrics(pack);
   const unknown = pack.insights_unknown ?? 0;
 
@@ -201,9 +201,7 @@ export function InsightsPackSheet({
 
           <div className="analytics-sheet__body">
             <section className="analytics-pack-hero" aria-label="Pack totals">
-              {thumb ? (
-                <video className="analytics-pack-hero__thumb" src={thumb} muted playsInline preload="metadata" />
-              ) : null}
+              <PackThumb source={source} className="analytics-pack-hero__thumb" />
               <div className="analytics-pack-hero__content">
                 <h3>{rankedOriginalPrefix(suggestion?.kind)}{pack.filename}</h3>
                 <MetricRail metrics={packMetrics} />

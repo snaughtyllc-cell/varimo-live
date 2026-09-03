@@ -357,6 +357,34 @@ export function copiesForPack(
   }));
 }
 
+export function analyticsPackThumb(source?: {
+  look_preview?: {
+    look_var_url?: string | null;
+    look_src_url?: string | null;
+  } | null;
+  variants?: Array<{
+    file_url?: string | null;
+    file_ready?: boolean;
+    look_var_url?: string | null;
+    look_src_url?: string | null;
+  }>;
+} | null): { kind: "image" | "video"; src: string } | null {
+  const variants = source?.variants ?? [];
+  const stills = [
+    ...variants,
+    source?.look_preview,
+  ];
+  for (const row of stills) {
+    const still = (row?.look_var_url || row?.look_src_url || "").trim();
+    if (still) return { kind: "image", src: still };
+  }
+  for (const variant of variants) {
+    const url = (variant.file_url || "").trim();
+    if (url && variant.file_ready !== false) return { kind: "video", src: url };
+  }
+  return null;
+}
+
 export function copyPickerOptions(
   sources: {
     source_id: string;

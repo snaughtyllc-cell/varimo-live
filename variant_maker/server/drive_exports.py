@@ -71,6 +71,8 @@ def build_export_files(job_store: JobStore, refs: list[VariantRef]) -> list[Expo
         local_path = job_store.find_variant(ref.source_id, variant.filename)
         if local_path is None:
             continue
+        if (ref.caption or "").strip():
+            job_store.set_caption(ref.source_id, ref.index, ref.caption or "")
         files.append(ExportFile(
             source_id=ref.source_id, index=ref.index,
             filename=caption_filename(ref.caption, variant.filename),

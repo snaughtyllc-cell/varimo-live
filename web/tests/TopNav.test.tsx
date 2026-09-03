@@ -46,13 +46,18 @@ describe("TopNav", () => {
   it("shows Team for workspace owners", () => {
     render(<TopNav />);
     expect(screen.getAllByRole("link", { name: "Team" })[0]).toHaveAttribute("href", "/team");
+    expect(screen.getAllByRole("link", { name: "Analytics" })[0]).toHaveAttribute(
+      "href",
+      "/analytics",
+    );
     expect(screen.queryByRole("link", { name: "Admin" })).not.toBeInTheDocument();
   });
 
-  it("hides Team for members", () => {
+  it("hides Team and Analytics for members", () => {
     me.data = { ...BASE, role: "member" };
     render(<TopNav />);
     expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Analytics" })).not.toBeInTheDocument();
   });
 
   it("shows Team and Admin for the site admin", () => {
@@ -103,6 +108,10 @@ describe("TopNav", () => {
     render(<TopNav />);
     expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Drops" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Analytics" })[0]).toHaveAttribute(
+      "href",
+      "/analytics",
+    );
   });
 
   it("hides Drops and Workflows for solo members", () => {

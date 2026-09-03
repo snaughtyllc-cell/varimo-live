@@ -8,6 +8,7 @@ import { ScrubBar } from "./ScrubBar";
 import { CaptionBlock } from "./CaptionBlock";
 import { QualityPanel } from "./QualityPanel";
 import { VariantActions } from "./VariantActions";
+import { insightSnapshotCopy } from "@/lib/instagram";
 
 interface VariantSheetProps {
   sourceId: string;
@@ -38,6 +39,7 @@ export function VariantSheet({
 
   // Pad variant.index for display (v01, v02 …) — use the real 1-based variant.index
   const padded = String(variant.index).padStart(2, "0");
+  const insightsCopy = insightSnapshotCopy(variant.ig_insights);
 
   // Keyboard: ← → for nav, Esc is handled by Radix Dialog
   useEffect(() => {
@@ -245,6 +247,26 @@ export function VariantSheet({
             </div>
 
             <CaptionBlock sourceId={sourceId} variant={variant} onSaved={onRegenerate} />
+
+            {insightsCopy && (
+              <div style={{ marginTop: 14 }}>
+                <div
+                  style={{
+                    color: "var(--color-violet)",
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    marginBottom: 6,
+                  }}
+                >
+                  Insights
+                </div>
+                <div style={{ fontSize: 13.5, lineHeight: 1.5, color: "var(--color-text)" }}>
+                  {insightsCopy}
+                </div>
+              </div>
+            )}
 
             <QualityPanel
               uniqueness={variant.uniqueness}

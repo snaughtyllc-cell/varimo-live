@@ -17,6 +17,9 @@ import {
   ExportVariantRef,
   Invite,
   InviteKind,
+  InstagramAnalytics,
+  InstagramStatus,
+  InstagramSync,
   SplitExportDest,
   SplitExportResult,
   JobDetail,
@@ -226,6 +229,44 @@ export const getDriveStatus = () => fetch("/api/drive/status").then(json<DriveSt
 export async function disconnectDriveOAuth(): Promise<void> {
   const res = await fetch("/api/drive/oauth/disconnect", { method: "POST" });
   if (!res.ok) throw new Error(await errorMessage(res));
+}
+
+export const getInstagramStatus = () =>
+  fetch("/api/instagram/status").then(json<InstagramStatus>);
+
+export const getInstagramAnalytics = () =>
+  fetch("/api/instagram/analytics").then(json<InstagramAnalytics>);
+
+export function syncInstagram(): Promise<InstagramSync> {
+  return fetch("/api/instagram/sync", { method: "POST" }).then(json<InstagramSync>);
+}
+
+export function linkInstagramMedia(body: {
+  source_id: string;
+  index: number;
+  media_id: string;
+  ig_user_id?: string | null;
+  permalink?: string | null;
+}): Promise<InstagramAnalytics> {
+  return fetch("/api/instagram/link", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then(json<InstagramAnalytics>);
+}
+
+export function disconnectInstagram(userId: string): Promise<InstagramStatus> {
+  return fetch(`/api/instagram/accounts/${encodeURIComponent(userId)}/disconnect`, {
+    method: "POST",
+  }).then(json<InstagramStatus>);
+}
+
+export function pasteInstagramToken(accessToken: string): Promise<InstagramStatus> {
+  return fetch("/api/instagram/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ access_token: accessToken }),
+  }).then(json<InstagramStatus>);
 }
 
 export const listDestinations = () => fetch("/api/drive/destinations").then(json<Destination[]>);

@@ -2,6 +2,7 @@ import { DestinationsPanel } from "@/components/drive/DestinationsPanel";
 import { DropLedgerPanel } from "@/components/drive/DropLedgerPanel";
 import { DriveLoginNote } from "@/components/auth/DriveLoginNote";
 import { PasswordPanel } from "@/components/auth/PasswordPanel";
+import { InstagramPanel } from "@/components/InstagramPanel";
 import { Cloud } from "lucide-react";
 
 export default function DriveSettingsPage() {
@@ -24,6 +25,8 @@ export default function DriveSettingsPage() {
         <DestinationsPanel />
         <div style={{ height: 28 }} />
         <DropLedgerPanel />
+        <div style={{ height: 28 }} />
+        <InstagramPanel />
       </div>
     </main>
   );

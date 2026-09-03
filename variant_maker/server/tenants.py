@@ -57,6 +57,23 @@ def is_admin_email(email: str, admin_email: str | None) -> bool:
     return addr in parse_admin_emails(admin_email)
 
 
+def can_manage_instagram(
+    *,
+    email: str | None,
+    role: MemberRole | str | None,
+    admin_email: str | None,
+    auth_on: bool,
+) -> bool:
+    """Workspace owners and site admins. VAs cannot Connect, Sync, or open Analytics."""
+    if not auth_on:
+        return True
+    if not email:
+        return False
+    if is_admin_email(email, admin_email):
+        return True
+    return role == "owner"
+
+
 def auth_required(environ: dict | None = None) -> bool:
     env = environ if environ is not None else os.environ
     return bool(parse_admin_emails(env.get(ADMIN_EMAIL_ENV), env.get(SITE_ADMIN_EMAILS_ENV)))

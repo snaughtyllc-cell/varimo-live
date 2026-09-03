@@ -72,6 +72,30 @@ from .drop_ledger import (
 from .drops import DropPack, build_drop_packs
 from .events import VariantEvent, event_to_dict
 from .experience import resolve_experience
+from .instagram_insights import (
+    IgMedia,
+    VariantLink,
+    export_caption_hints,
+    fetch_media_insights,
+    gallery_analytics,
+    list_media as list_ig_media,
+    match_media,
+    now_utc,
+    pack_analytics,
+    pack_suggestions,
+    unmatched_payload,
+)
+from .instagram_oauth import (
+    ENV_APP_ID,
+    ENV_APP_SECRET,
+    InstagramAccountStore,
+    build_authorization_url as build_ig_authorization_url,
+    exchange_code_for_token as exchange_ig_code_for_token,
+    fetch_profile as fetch_ig_profile,
+    oauth_client_configured as ig_oauth_configured,
+    resolve_redirect_uri as resolve_ig_redirect_uri,
+    status_payload as ig_status_payload,
+)
 from .jobs import (
     Job,
     JobSource,
@@ -114,6 +138,10 @@ from .models import (
     ExportJobOut,
     ExportSplitIn,
     InFlightOut,
+    InstagramLinkIn,
+    InstagramStatusOut,
+    InstagramSyncOut,
+    InstagramTokenIn,
     InviteCreateIn,
     InviteOut,
     JobDetail,
@@ -154,6 +182,7 @@ from .sheets import GoogleSheets, SheetsClient
 from .tenant_runtime import TenantHub
 from .tenants import (
     TenantStore,
+    can_manage_instagram,
     combined_admin_emails,
     is_admin_email,
     normalize_email,
@@ -194,6 +223,9 @@ def _variant_out(source_id: str, v, *, file_ready: bool = True) -> VariantOut:
         look_src_url=_look_file_url(source_id, v.look_src),
         look_var_url=_look_file_url(source_id, v.look_var),
         caption=strip_internal_index_lines(getattr(v, "caption", None) or "") or None,
+        ig_media_id=getattr(v, "ig_media_id", None),
+        ig_user_id=getattr(v, "ig_user_id", None),
+        ig_insights=getattr(v, "ig_insights", None),
     )
 
 
@@ -262,6 +294,7 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
         source_copy_status(s, ws, job_id, job.state if job is not None else None)
         if ws is not None and job_id else "ok"
     )
+    pack = pack_analytics(variants)
     return SourceOut(
         source_id=s.source_id, filename=s.filename, requested=s.requested,
         delivered=s.delivered, shortfall=s.shortfall,
@@ -285,7 +318,31 @@ def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
         copy_status=copy_status,
         job_id=job_id,
         caption_prompt=(s.caption_prompt or None),
+        insights_views=pack["insights_views"],
+        insights_linked=int(pack["insights_linked"] or 0),
+        insights_unknown=int(pack["insights_unknown"] or 0),
     )
+
+
+def _stamp_source_suggestions(sources: list[SourceOut]) -> list[SourceOut]:
+    packs = [
+        {
+            "source_id": s.source_id,
+            "filename": s.filename,
+            "insights_views": s.insights_views,
+            "insights_linked": s.insights_linked,
+            "created_utc": s.created_utc,
+        }
+        for s in sources
+    ]
+    by_id = {row["source_id"]: row for row in pack_suggestions(packs)}
+    for source in sources:
+        hit = by_id.get(source.source_id)
+        if not hit:
+            continue
+        source.suggestion_kind = str(hit.get("kind") or "") or None
+        source.suggestion_copy = str(hit.get("copy") or "") or None
+    return sources
 
 
 def _destination_out(d: Destination) -> DestinationOut:
@@ -432,6 +489,11 @@ def create_app(
     enable_workflow_poller: bool = False,
     auth_environ: Mapping[str, str] | None = None,
     login_exchange: ExchangeFn | None = None,
+    instagram_environ: Mapping[str, str] | None = None,
+    instagram_exchange: ExchangeFn | None = None,
+    instagram_fetch_profile: Callable[[str], dict[str, Any]] | None = None,
+    instagram_list_media: Callable[..., list] | None = None,
+    instagram_fetch_insights: Callable[..., dict] | None = None,
 ) -> FastAPI:
     if store is None:
         store = JobStore(Workspace("./.vmdata"), LocalRunner())
@@ -483,6 +545,15 @@ def create_app(
     app.state.oauth_exchange = oauth_exchange or exchange_code_for_token
     app.state.oauth_fetch_email = oauth_fetch_email or fetch_connected_email
     app.state.login_exchange = login_exchange
+
+    ig_env: Mapping[str, str] = instagram_environ if instagram_environ is not None else os.environ
+    fallback_ig_accounts = InstagramAccountStore(fallback_store._ws.instagram_dir())
+    fallback_ig_pending = OAuthPendingStore(fallback_store._ws.instagram_pending_path())
+    app.state.instagram_environ = ig_env
+    app.state.instagram_exchange = instagram_exchange or exchange_ig_code_for_token
+    app.state.instagram_fetch_profile = instagram_fetch_profile or fetch_ig_profile
+    app.state.instagram_list_media = instagram_list_media or list_ig_media
+    app.state.instagram_fetch_insights = instagram_fetch_insights or fetch_media_insights
 
     # Explicit "" means "no SA" (tests); None means fall through to env.
     sa_arg = None if sa_json_path in (None, "") else sa_json_path
@@ -537,6 +608,18 @@ def create_app(
         if bundle is not None:
             return bundle.oauth_pending
         return pending_store
+
+    def _ig_accounts() -> InstagramAccountStore:
+        bundle = current_bundle()
+        if bundle is not None:
+            return bundle.instagram_accounts
+        return fallback_ig_accounts
+
+    def _ig_pending() -> OAuthPendingStore:
+        bundle = current_bundle()
+        if bundle is not None:
+            return bundle.instagram_pending
+        return fallback_ig_pending
 
     def _token_path() -> str:
         return _oauth_tokens().path
@@ -813,6 +896,151 @@ def create_app(
             public_request_base(request.headers, fallback),
         )
         return f"{origin}/settings/drive?{query}"
+
+    def _ig_done_url(request: Request, query: str) -> str:
+        fallback = str(request.base_url).rstrip("/")
+        origin = studio_origin_from_redirect_uri(
+            _ig_redirect_uri_for(request),
+            public_request_base(request.headers, fallback),
+        )
+        return f"{origin}/analytics?{query}"
+
+    def _ig_redirect_uri_for(request: Request) -> str:
+        fallback = str(request.base_url).rstrip("/")
+        return resolve_ig_redirect_uri(
+            ig_env,
+            request_base=public_request_base(request.headers, fallback),
+        )
+
+    def _require_instagram_manager(request: Request):
+        if not auth_on:
+            return
+        user = _require_user(request)
+        if not can_manage_instagram(
+            email=user.email, role=user.role, admin_email=admin_email, auth_on=True,
+        ):
+            raise HTTPException(status_code=403, detail="owner only")
+
+    def _ig_finish_account(token_data: dict[str, Any]) -> None:
+        access = token_data.get("access_token")
+        if not isinstance(access, str) or not access:
+            raise ValueError("Instagram did not return an access token")
+        profile = app.state.instagram_fetch_profile(access)
+        user_id = str(profile.get("user_id") or token_data.get("user_id") or "")
+        if not user_id:
+            raise ValueError("Instagram profile is missing user_id")
+        payload = {
+            **token_data,
+            "access_token": access,
+            "user_id": user_id,
+            "username": profile.get("username") or "",
+            "name": profile.get("name") or "",
+        }
+        _ig_accounts().save(payload)
+
+    def _run_instagram_sync() -> dict[str, Any]:
+        accounts = _ig_accounts().tokens()
+        media_rows: list[IgMedia] = []
+        media_owner: dict[str, str] = {}
+        list_errors: list[str] = []
+        for acc in accounts:
+            token = acc.get("access_token")
+            user_id = str(acc.get("user_id") or "")
+            if not isinstance(token, str) or not token or not user_id:
+                continue
+            try:
+                listed = app.state.instagram_list_media(user_id, token)
+            except Exception as exc:
+                handle = str(acc.get("username") or user_id)
+                list_errors.append(f"@{handle}: {exc}")
+                print(f"instagram list_media failed for @{handle}: {exc}", flush=True)
+                continue
+            for row in listed:
+                mid = str(row.get("id") or "")
+                if not mid:
+                    continue
+                media_owner[mid] = user_id
+                media_rows.append(IgMedia(
+                    id=mid,
+                    permalink=row.get("permalink") if isinstance(row.get("permalink"), str) else None,
+                    caption=row.get("caption") if isinstance(row.get("caption"), str) else None,
+                    username=str(acc.get("username") or "") or None,
+                    user_id=user_id,
+                ))
+        hints = export_caption_hints(app.state.exports.list())
+        links: list[VariantLink] = []
+        for job in store.list():
+            for source in job.sources:
+                for variant in source.variants:
+                    links.append(VariantLink(
+                        source_id=source.source_id,
+                        index=variant.index,
+                        post_url=variant.post_url,
+                        caption=variant.caption or hints.get((source.source_id, variant.index)),
+                        ig_media_id=variant.ig_media_id,
+                    ))
+        hits = match_media(links, media_rows)
+        media_by_id = {m.id: m for m in media_rows}
+        token_by_user = {
+            str(acc.get("user_id")): acc.get("access_token")
+            for acc in accounts
+            if acc.get("user_id") and isinstance(acc.get("access_token"), str)
+        }
+        matched = 0
+        fetched_at = now_utc()
+        for hit in hits:
+            snapshot: dict[str, Any] = {"fetched_at": fetched_at}
+            owner = media_owner.get(hit.media_id)
+            token = token_by_user.get(owner or "")
+            if isinstance(token, str):
+                try:
+                    counts = app.state.instagram_fetch_insights(hit.media_id, token)
+                except Exception:
+                    counts = {}
+                if counts:
+                    snapshot.update(counts)
+            permalink = hit.permalink or (
+                media_by_id[hit.media_id].permalink if hit.media_id in media_by_id else None
+            )
+            store.set_ig_insights(
+                hit.source_id, hit.index,
+                ig_media_id=hit.media_id,
+                ig_user_id=owner,
+                insights=snapshot,
+                post_url=permalink,
+            )
+            matched += 1
+        leftover = unmatched_payload(media_rows, hits)
+        analytics = _ig_analytics_body()
+        print(
+            "instagram sync "
+            f"accounts={len(accounts)} media={len(media_rows)} "
+            f"matched={matched} unmatched={len(leftover)} errors={len(list_errors)}",
+            flush=True,
+        )
+        return {
+            "matched": matched,
+            "accounts": len(accounts),
+            "media": len(media_rows),
+            "unmatched": leftover,
+            "errors": list_errors,
+            "analytics": analytics,
+        }
+
+    def _ig_analytics_body() -> dict[str, Any]:
+        sources = [s for job in store.list() for s in job.sources]
+        body = gallery_analytics(sources)
+        created = {
+            s.source_id: job.created_utc
+            for job in store.list()
+            for s in job.sources
+        }
+        for row in list(body.get("packs") or []) + list(body.get("ranked") or []):
+            if isinstance(row, dict):
+                row["created_utc"] = created.get(row.get("source_id"))
+        body["suggestions"] = pack_suggestions(body.get("packs") or [])
+        body["accounts"] = ig_status_payload(_ig_accounts(), ig_env)["accounts"]
+        return body
 
     def _run_workflow_tick(wf: Workflow) -> Workflow:
         from datetime import datetime
@@ -1365,7 +1593,7 @@ def create_app(
             for s in job.sources:
                 out.append(_source_out(s, ok_only=True, job=job, ws=store._ws))
         out.sort(key=lambda s: s.created_utc or "", reverse=True)
-        return out
+        return _stamp_source_suggestions(out)
 
     @app.get("/api/diagnostics", response_model=list[DiagnosticsItem])
     def diagnostics() -> list[DiagnosticsItem]:
@@ -1613,6 +1841,129 @@ def create_app(
         ):
             _set_drive(_build_drive_client(sa_json_path=sa_arg))
         return {"ok": True}
+
+    @app.get("/api/instagram/status", response_model=InstagramStatusOut)
+    def instagram_status(request: Request) -> InstagramStatusOut:
+        _require_instagram_manager(request)
+        return InstagramStatusOut(**ig_status_payload(_ig_accounts(), ig_env))
+
+    @app.get("/api/instagram/analytics")
+    def instagram_analytics(request: Request) -> dict:
+        _require_instagram_manager(request)
+        return _ig_analytics_body()
+
+    @app.get("/api/instagram/oauth/start")
+    def instagram_oauth_start(request: Request):
+        _require_instagram_manager(request)
+        if not ig_oauth_configured(ig_env):
+            raise HTTPException(
+                status_code=503,
+                detail="Instagram app not configured — set VARIANT_IG_APP_ID and VARIANT_IG_APP_SECRET",
+            )
+        state = new_oauth_state()
+        _ig_pending().add(state)
+        redirect_uri = _ig_redirect_uri_for(request)
+        url = build_ig_authorization_url(
+            client_id=ig_env[ENV_APP_ID],
+            redirect_uri=redirect_uri,
+            state=state,
+        )
+        return RedirectResponse(url=url, status_code=302)
+
+    @app.get("/api/instagram/oauth/callback")
+    def instagram_oauth_callback(
+        request: Request,
+        code: str | None = None,
+        state: str | None = None,
+        error: str | None = None,
+    ):
+        if error:
+            return RedirectResponse(
+                url=_ig_done_url(request, f"ig=error&reason={error}"),
+                status_code=302,
+            )
+        if not code or not state:
+            return RedirectResponse(
+                url=_ig_done_url(request, "ig=error&reason=missing_code"),
+                status_code=302,
+            )
+        if not _ig_pending().consume(state):
+            return RedirectResponse(
+                url=_ig_done_url(request, "ig=error&reason=bad_state"),
+                status_code=302,
+            )
+        try:
+            token_data = app.state.instagram_exchange(
+                code=code,
+                client_id=ig_env.get(ENV_APP_ID, ""),
+                client_secret=ig_env.get(ENV_APP_SECRET, ""),
+                redirect_uri=_ig_redirect_uri_for(request),
+            )
+            _ig_finish_account(token_data)
+        except Exception as exc:
+            print(f"instagram oauth exchange failed: {exc}", flush=True)
+            traceback.print_exc()
+            return RedirectResponse(
+                url=_ig_done_url(request, "ig=error&reason=exchange_failed"),
+                status_code=302,
+            )
+        return RedirectResponse(url=_ig_done_url(request, "ig=connected"), status_code=302)
+
+    @app.post("/api/instagram/token", response_model=InstagramStatusOut)
+    def instagram_paste_token(request: Request, body: InstagramTokenIn) -> InstagramStatusOut:
+        _require_instagram_manager(request)
+        token = (body.access_token or "").strip()
+        if not token:
+            raise HTTPException(status_code=400, detail="Paste the Instagram access token")
+        try:
+            _ig_finish_account({"access_token": token})
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return InstagramStatusOut(**ig_status_payload(_ig_accounts(), ig_env))
+
+    @app.post("/api/instagram/accounts/{user_id}/disconnect", response_model=InstagramStatusOut)
+    def instagram_disconnect(request: Request, user_id: str) -> InstagramStatusOut:
+        _require_instagram_manager(request)
+        _ig_accounts().remove(user_id)
+        return InstagramStatusOut(**ig_status_payload(_ig_accounts(), ig_env))
+
+    @app.post("/api/instagram/sync", response_model=InstagramSyncOut)
+    def instagram_sync(request: Request) -> InstagramSyncOut:
+        _require_instagram_manager(request)
+        if not _ig_accounts().list_accounts():
+            raise HTTPException(status_code=400, detail="Connect an Instagram tester account first")
+        return InstagramSyncOut(**_run_instagram_sync())
+
+    @app.post("/api/instagram/link")
+    def instagram_link(request: Request, body: InstagramLinkIn) -> dict:
+        _require_instagram_manager(request)
+        media_id = (body.media_id or "").strip()
+        if not media_id:
+            raise HTTPException(status_code=400, detail="media_id required")
+        owner = (body.ig_user_id or "").strip() or None
+        token = None
+        if owner:
+            data = _ig_accounts().load(owner)
+            if data and isinstance(data.get("access_token"), str):
+                token = data["access_token"]
+        snapshot: dict[str, Any] = {"fetched_at": now_utc()}
+        if isinstance(token, str):
+            try:
+                counts = app.state.instagram_fetch_insights(media_id, token)
+            except Exception:
+                counts = {}
+            if counts:
+                snapshot.update(counts)
+        updated = store.set_ig_insights(
+            body.source_id, body.index,
+            ig_media_id=media_id,
+            ig_user_id=owner,
+            insights=snapshot,
+            post_url=(body.permalink or "").strip() or None,
+        )
+        if updated is None:
+            raise HTTPException(status_code=404, detail="Variant not found")
+        return _ig_analytics_body()
 
     @app.get("/api/drive/destinations", response_model=list[DestinationOut])
     def list_destinations() -> list[DestinationOut]:

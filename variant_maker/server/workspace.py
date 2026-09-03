@@ -79,6 +79,14 @@ class Workspace:
     def captions_path(self) -> str:
         return os.path.join(self.drive_dir(), "captions.json")
 
+    def instagram_dir(self) -> str:
+        d = os.path.join(self.root, "instagram")
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def instagram_pending_path(self) -> str:
+        return os.path.join(self.instagram_dir(), "oauth_pending.json")
+
     def workflow_ledger_path(self, workflow_id: str) -> str:
         d = os.path.join(self.drive_dir(), "workflow-ledgers")
         os.makedirs(d, exist_ok=True)

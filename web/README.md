@@ -137,6 +137,7 @@ route is missing from that catalog.
 | **Workflows** | `/workflows` | everyone | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | **Drive** | `/settings/drive` | everyone | yes | Connect Google, destinations, caption bank, Drop Ledger, password. |
 | **Team** | `/team` | owner / site admin | More | Workspace owner invites VAs into this studio. |
+| **Analytics** | `/analytics` | owner / site admin | More (label **Stats**) | Instagram Insights: ranked originals, tester Connect/Sync, and Unmatched Reels. VAs cannot open it. |
 | **Admin** | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | **Diagnostics** | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
 | **Login** | `/login` | unauthenticated | — | Invite-only email + password or Google. No app tabs. |
@@ -149,8 +150,9 @@ Nested (not tabs — a redesign must still include them):
 | **Send to Drive** | Gallery / variant sheet | Pick destination + caption folder; split a pack across folders. |
 | **Drive picker** | Studio | Import source files from a saved Drive destination. |
 | **Watch / queue / cancel** | Studio + Workflows | Live job tiles, cancel, re-attach after reload. |
+| **Analytics pack sheet** | Analytics | Tap a ranked original for pack totals, per-account main / trial / growth Insights, and tracked Reels. |
 
-Phone (`< 640px`) shows the five everyone-tabs. Team / Admin /
+Phone (`< 640px`) shows the five everyone-tabs. Team / Analytics / Admin /
 Diagnostics sit under **More**. Desktop shows extras in the top row
 when the session is allowed. Auth gating: `web/lib/navAccess.ts`.
 

@@ -129,6 +129,11 @@ export const STUDIO_NESTED_SURFACES = [
     summary: "Live job tiles, cancel, re-attach after reload.",
   },
   {
+    name: "Analytics pack sheet",
+    opens_from: "/analytics",
+    summary: "Tap a ranked original for pack totals, per-account main / trial / growth Insights, and tracked Reels.",
+  },
+  {
     name: "Analytics unmatched picker",
     opens_from: "/analytics",
     summary: "Unmatched Reels tab. Pick a Gallery pack, then link the Reel you posted. Older pre-Varimo posts stay here.",

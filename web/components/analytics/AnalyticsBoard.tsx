@@ -11,23 +11,19 @@ import {
   unlinkInstagramMedia,
 } from "@/lib/api";
 import { InstagramPanel } from "@/components/InstagramPanel";
+import { InsightsPackSheet } from "@/components/analytics/InsightsPackSheet";
 import {
   AMPLIFY_MORE_N,
   copiesForPack,
+  formatViews,
   galleryViewsCopy,
   handleLabel,
-  packConversionCopy,
   packPickerOptions,
   parseCopyPick,
   rankedOriginalPrefix,
-  suggestionButtonLabel,
   syncInsightsCopy,
-  trackedCopyLabel,
-  trackedCopyMeta,
   unmatchedCaptionPreview,
   unmatchedTabCopy,
-  unlinkCopyLabel,
-  moveCopyLabel,
 } from "@/lib/instagram";
 import type {
   InstagramAnalytics,
@@ -54,12 +50,27 @@ function firstUnlinkedCopy(
   return (open ?? copies[0])?.value ?? "";
 }
 
+function packIndexMetrics(row: {
+  insights_views: number | null;
+  insights_shares?: number | null;
+  insights_likes?: number | null;
+  insights_reach?: number | null;
+}) {
+  const metrics: { label: string; value: string }[] = [];
+  if (typeof row.insights_views === "number") metrics.push({ label: "views", value: formatViews(row.insights_views) });
+  if (typeof row.insights_shares === "number") metrics.push({ label: "shares", value: formatViews(row.insights_shares) });
+  if (typeof row.insights_likes === "number") metrics.push({ label: "likes", value: formatViews(row.insights_likes) });
+  if (typeof row.insights_reach === "number") metrics.push({ label: "reach", value: formatViews(row.insights_reach) });
+  return metrics;
+}
+
 export function AnalyticsBoard() {
   const [status, setStatus] = useState<InstagramStatus | null>(null);
   const [analytics, setAnalytics] = useState<InstagramAnalytics | null>(null);
   const [unmatched, setUnmatched] = useState<InstagramUnmatched[]>([]);
   const [gallery, setGallery] = useState<SourceOut[]>([]);
   const [tab, setTab] = useState<"ranked" | "unmatched">("ranked");
+  const [selectedSourceId, setSelectedSourceId] = useState("");
   const [packId, setPackId] = useState("");
   const [copyPick, setCopyPick] = useState("");
   const [reelId, setReelId] = useState("");
@@ -122,6 +133,7 @@ export function AnalyticsBoard() {
       setCopyPick("");
       setReelId("");
       setMoveFrom(null);
+      setSelectedSourceId("");
       setTab("ranked");
       setNote(syncInsightsCopy(out));
     } catch (err) {
@@ -236,7 +248,6 @@ export function AnalyticsBoard() {
   const accounts = analytics?.accounts ?? status?.accounts ?? [];
   const ranked = analytics?.ranked ?? [];
   const suggestions = analytics?.suggestions ?? [];
-  const lanes = analytics?.lanes ?? [];
   const headline = galleryViewsCopy(
     analytics?.insights_views,
     analytics?.insights_linked ?? 0,
@@ -251,12 +262,28 @@ export function AnalyticsBoard() {
   const selectedReel = unmatched.find((row) => row.media_id === reelId);
   const canLink = Boolean(packId && copyPick && selectedReel) && !linking;
   const moveDest = parseCopyPick(moveCopyPick);
+  const sourceById = useMemo(
+    () => new Map(gallery.map((source) => [source.source_id, source])),
+    [gallery],
+  );
+  const accountNames = useMemo(() => {
+    const names = Object.fromEntries(accounts.map((account) => [account.user_id, account.username]));
+    for (const lane of analytics?.lanes ?? []) {
+      if (lane.username) names[lane.ig_user_id] = lane.username;
+    }
+    return names;
+  }, [accounts, analytics?.lanes]);
+  const selectedPack = ranked.find((row) => row.source_id === selectedSourceId);
   const canMove = Boolean(
     moveFrom
     && moveDest
     && !moving
     && (moveDest.source_id !== moveFrom.source_id || moveDest.index !== moveFrom.item.index),
   );
+
+  useEffect(() => {
+    if (selectedSourceId && !selectedPack) setSelectedSourceId("");
+  }, [selectedPack, selectedSourceId]);
 
   return (
     <div className="analytics-board">
@@ -312,217 +339,50 @@ export function AnalyticsBoard() {
       </div>
 
       {tab === "ranked" && (
-        <section className="drive-card" aria-label="Ranked originals">
-          <div className="drive-card__title">Ranked originals</div>
+        <section className="analytics-pack-list" aria-label="Ranked originals">
+          <h2>Ranked originals</h2>
           <p className="drive-card__copy">
-            Unit of winning is the source — mint more unique files of the original that is working.
-            Tracked copies are the Reels actually linked. Move a Reel if it landed on the wrong
-            original. Remove it if the match is wrong, including posts from an account that is
-            no longer connected. Graph Reels Insights are views, reach, likes, comments, shares,
-            saved, skip, and watch when Instagram sends them — some lag up to 48 hours. Follows
-            are not a Reel metric. Unlinked copies are unknown, not zero views.
+            One row is one original. Open a pack to compare its accounts and tracked Reels.
           </p>
           {ranked.length === 0 ? (
             <div className="drive-table__empty">No linked Reels yet. Connect testers, then Sync insights.</div>
           ) : (
-            <div className="analytics-ranked">
+            <div className="analytics-pack-list__rows">
               {ranked.map((row) => {
-                const copies = (row.insights_linked || 0) + (row.insights_unknown || 0);
-                const copy = packConversionCopy(
-                  row.insights_views,
-                  row.insights_shares,
-                  row.insights_follows,
-                  row.insights_linked,
-                  copies || row.insights_linked,
-                  {
-                    likes: row.insights_likes,
-                    comments: row.insights_comments,
-                    saved: row.insights_saved,
-                    reach: row.insights_reach,
-                  },
-                );
                 const suggestion = suggestionFor(row.source_id, suggestions);
-                const amplify = suggestion ? suggestionButtonLabel(suggestion.kind) : null;
-                const tracked = row.tracked ?? [];
+                const source = sourceById.get(row.source_id);
+                const thumb = source?.variants.find((variant) => Boolean(variant.file_url))?.file_url;
+                const metrics = packIndexMetrics(row);
+                const unknown = row.insights_unknown ?? 0;
                 return (
-                  <div key={row.source_id} className="analytics-ranked__row">
-                    <div className="analytics-ranked__main">
-                      <div className="analytics-ranked__name" title={row.filename}>
-                        {rankedOriginalPrefix(suggestion?.kind)}
-                        {row.filename}
-                      </div>
-                      <div className="analytics-ranked__meta">{copy}</div>
-                      {suggestion && (
-                        <div
-                          className="analytics-ranked__hint"
-                          data-kind={suggestion.kind}
-                        >
-                          {suggestion.copy}
-                        </div>
-                      )}
-                      {tracked.length > 0 && (
-                        <ul className="analytics-ranked__tracked">
-                          {tracked.map((item) => {
-                            const unlinkKey = `${row.source_id}:${item.index}`;
-                            const movingThis = Boolean(
-                              moveFrom
-                              && moveFrom.source_id === row.source_id
-                              && moveFrom.item.index === item.index,
-                            );
-                            const meta = trackedCopyMeta(item);
-                            return (
-                              <li
-                                key={item.ig_media_id || unlinkKey}
-                                className="analytics-ranked__copy"
-                                data-connected={item.account_connected === false ? "false" : "true"}
-                              >
-                                <div className="analytics-ranked__copy-main">
-                                  <span className="analytics-ranked__copy-name">
-                                    {trackedCopyLabel(item.index)}
-                                  </span>
-                                  {meta ? (
-                                    <span className="analytics-ranked__copy-meta">{meta}</span>
-                                  ) : null}
-                                  {item.post_url ? (
-                                    <a href={item.post_url} target="_blank" rel="noreferrer">
-                                      Open Reel
-                                    </a>
-                                  ) : null}
-                                </div>
-                                <div className="analytics-ranked__copy-actions">
-                                  <button
-                                    type="button"
-                                    className="gallery-quiet-link"
-                                    aria-label={moveCopyLabel(item.index)}
-                                    onClick={() => void handleStartMove(row.source_id, item)}
-                                    disabled={moving}
-                                  >
-                                    Move
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="gallery-quiet-link"
-                                    aria-label={unlinkCopyLabel(item.index)}
-                                    onClick={() => void handleUnlink(row.source_id, item.index)}
-                                    disabled={unlinking === unlinkKey}
-                                  >
-                                    {unlinking === unlinkKey ? "Removing…" : "Remove"}
-                                  </button>
-                                </div>
-                                {movingThis && (
-                                  <div className="analytics-match analytics-ranked__move">
-                                    <label className="analytics-match__field">
-                                      <span>Move to Gallery pack</span>
-                                      <select
-                                        aria-label="Move to Gallery pack"
-                                        value={movePackId}
-                                        onChange={(e) => handleMovePickPack(e.target.value)}
-                                      >
-                                        <option value="">Pick a Gallery pack…</option>
-                                        {packOptions.map((opt) => (
-                                          <option key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </label>
-                                    {movePackId ? (
-                                      <label className="analytics-match__field">
-                                        <span>Copy it belongs on</span>
-                                        <select
-                                          aria-label="Move to copy"
-                                          value={moveCopyPick}
-                                          onChange={(e) => setMoveCopyPick(e.target.value)}
-                                        >
-                                          <option value="">Pick a copy…</option>
-                                          {moveCopyOptions.map((opt) => (
-                                            <option key={opt.value} value={opt.value}>
-                                              {opt.label}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </label>
-                                    ) : null}
-                                    <div className="analytics-ranked__move-submit">
-                                      <button
-                                        type="button"
-                                        className="drive-btn drive-btn--aqua drive-btn--sm"
-                                        onClick={() => void handleMoveReel()}
-                                        disabled={!canMove}
-                                      >
-                                        {moving ? "Moving…" : "Move Reel"}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="gallery-quiet-link"
-                                        onClick={() => setMoveFrom(null)}
-                                        disabled={moving}
-                                      >
-                                        Cancel
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </div>
-                    {amplify && (
-                      <button
-                        type="button"
-                        className="drive-btn drive-btn--aqua drive-btn--sm"
-                        onClick={() => handleAmplify(row.source_id)}
-                        disabled={amplifying === row.source_id}
-                      >
-                        {amplifying === row.source_id ? "Starting…" : amplify}
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    key={row.source_id}
+                    type="button"
+                    className="analytics-pack-row"
+                    data-kind={suggestion?.kind}
+                    onClick={() => setSelectedSourceId(row.source_id)}
+                  >
+                    <span className="analytics-pack-row__thumb" aria-hidden="true">
+                      {thumb ? <video src={thumb} muted playsInline preload="metadata" /> : null}
+                    </span>
+                    <span className="analytics-pack-row__body">
+                      <span className="analytics-pack-row__name" title={row.filename}>
+                        {rankedOriginalPrefix(suggestion?.kind)}{row.filename}
+                      </span>
+                      <span className="analytics-pack-row__metrics">
+                        {metrics.map((metric) => (
+                          <span key={metric.label}><b>{metric.value}</b> {metric.label}</span>
+                        ))}
+                        {metrics.length === 0 ? <span>views unknown</span> : null}
+                        <span>{row.insights_linked} linked</span>
+                        {unknown > 0 ? <span>{unknown} unknown</span> : null}
+                      </span>
+                    </span>
+                  </button>
                 );
               })}
             </div>
           )}
-        </section>
-      )}
-
-      {tab === "ranked" && lanes.length > 0 && (
-        <section className="drive-card" aria-label="Accounts">
-          <div className="drive-card__title">Accounts</div>
-          <p className="drive-card__copy">
-            Main, trial, and growth stay separate. Each connected @handle is its own lane.
-          </p>
-          <div className="analytics-ranked">
-            {lanes.map((lane) => {
-              const copy = packConversionCopy(
-                lane.insights_views,
-                lane.insights_shares,
-                lane.insights_follows,
-                lane.insights_linked,
-                undefined,
-                {
-                  likes: lane.insights_likes,
-                  comments: lane.insights_comments,
-                  saved: lane.insights_saved,
-                  reach: lane.insights_reach,
-                },
-              );
-              const label = handleLabel(lane.username || "") || lane.ig_user_id;
-              const disconnected = lane.account_connected === false;
-              return (
-                <div key={lane.ig_user_id} className="analytics-ranked__row">
-                  <div className="analytics-ranked__main">
-                    <div className="analytics-ranked__name">{label}</div>
-                    <div className="analytics-ranked__meta">
-                      {disconnected ? "Account not connected · " : ""}
-                      {copy}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
         </section>
       )}
 
@@ -612,6 +472,35 @@ export function AnalyticsBoard() {
           ) : null}
         </section>
       )}
+
+      {selectedPack ? (
+        <InsightsPackSheet
+          pack={selectedPack}
+          source={sourceById.get(selectedPack.source_id)}
+          suggestion={suggestionFor(selectedPack.source_id, suggestions)}
+          accountNames={accountNames}
+          onClose={() => {
+            setSelectedSourceId("");
+            setMoveFrom(null);
+          }}
+          onAmplify={handleAmplify}
+          amplifying={amplifying === selectedPack.source_id}
+          onStartMove={(sourceId, item) => void handleStartMove(sourceId, item)}
+          onUnlink={(sourceId, index) => void handleUnlink(sourceId, index)}
+          unlinking={unlinking}
+          moveFrom={moveFrom}
+          movePackId={movePackId}
+          moveCopyPick={moveCopyPick}
+          packOptions={packOptions}
+          moveCopyOptions={moveCopyOptions}
+          moving={moving}
+          canMove={canMove}
+          onMovePack={handleMovePickPack}
+          onMoveCopy={setMoveCopyPick}
+          onMoveReel={() => void handleMoveReel()}
+          onCancelMove={() => setMoveFrom(null)}
+        />
+      ) : null}
 
       <InstagramPanel />
     </div>

@@ -48,7 +48,7 @@ const analytics = {
           index: 3,
           ig_media_id: "w3",
           ig_user_id: "1",
-          username: "jeff",
+          username: "jeff.main",
           post_url: "https://www.instagram.com/reel/WinnerCopy/",
           insights_views: 200000,
           insights_likes: 300,
@@ -65,6 +65,17 @@ const analytics = {
           username: "mckenzie.trial",
           insights_views: 800,
           account_connected: false,
+        },
+        {
+          index: 19,
+          ig_media_id: "growth-19",
+          ig_user_id: "growth",
+          username: "mckenzie.growth",
+          post_url: "https://www.instagram.com/reel/GrowthCopy/",
+          insights_views: 1200,
+          insights_shares: 4,
+          insights_reach: 900,
+          account_connected: true,
         },
       ],
     },
@@ -91,6 +102,29 @@ const analytics = {
     },
   ],
   accounts,
+  lanes: [
+    {
+      ig_user_id: "1",
+      username: "jeff.main",
+      insights_views: 300000,
+      insights_linked: 12,
+      account_connected: true,
+    },
+    {
+      ig_user_id: "mckenzie",
+      username: "mckenzie.trial",
+      insights_views: 800,
+      insights_linked: 1,
+      account_connected: false,
+    },
+    {
+      ig_user_id: "growth",
+      username: "mckenzie.growth",
+      insights_views: 1200,
+      insights_linked: 1,
+      account_connected: true,
+    },
+  ],
 };
 
 describe("AnalyticsBoard", () => {
@@ -111,19 +145,73 @@ describe("AnalyticsBoard", () => {
     expect(await screen.findByText(/312k views across 14 linked posts/i)).toBeTruthy();
     expect(screen.getByText(/Winner · winner.mp4/)).toBeTruthy();
     expect(screen.getByText(/Held, little push · quiet.mp4/)).toBeTruthy();
-    expect(screen.getByText(/not getting push/i)).toBeTruthy();
-    expect(screen.getByText(/not getting push/i).textContent).not.toMatch(/flagged/i);
-    expect(screen.getByText(/80 shares/i)).toBeTruthy();
-    expect(screen.getByText(/400 likes/i)).toBeTruthy();
-    expect(screen.getByText(/20 comments/i)).toBeTruthy();
-    expect(screen.getByText(/15 saved/i)).toBeTruthy();
-    expect(screen.getByText(/12 follows/i)).toBeTruthy();
-    expect(screen.getByText(/20% skip/i)).toBeTruthy();
-    expect(screen.getByText("copy 03")).toBeTruthy();
-    expect(screen.getByText("copy 07")).toBeTruthy();
-    expect(screen.getByText(/@mckenzie.trial · account not connected · 800 views/i)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /remove copy 07 from tracking/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /generate 20 more of this original/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /winner.*winner\.mp4.*300k views.*80 shares/i })).toBeTruthy();
+    expect(screen.queryByText(/^copy 03$/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /generate 20 more of this original/i })).toBeNull();
+  });
+
+  it("keeps the ranked index to packs and opens an Insights sheet for the original", async () => {
+    render(<AnalyticsBoard />);
+    const pack = await screen.findByRole("button", { name: /winner.*winner\.mp4/i });
+    expect(screen.queryByText(/^copy 19$/i)).toBeNull();
+
+    fireEvent.click(pack);
+
+    const sheet = await screen.findByRole("dialog", { name: /winner\.mp4 insights/i });
+    expect(within(sheet).getByText(/^copy 19$/i)).toBeTruthy();
+    expect(within(sheet).getAllByRole("link", { name: /open reel/i })
+      .some((link) => link.getAttribute("href") === "https://www.instagram.com/reel/GrowthCopy/"))
+      .toBe(true);
+  });
+
+  it("shows a selected pack by main, trial, and growth lane without hiding a disconnected account", async () => {
+    render(<AnalyticsBoard />);
+    fireEvent.click(await screen.findByRole("button", { name: /winner.*winner\.mp4/i }));
+
+    const sheet = await screen.findByRole("dialog", { name: /winner\.mp4 insights/i });
+    expect(within(sheet).getByText("Main lane")).toBeTruthy();
+    expect(within(sheet).getByText("Trial lane")).toBeTruthy();
+    expect(within(sheet).getByText("Growth lane")).toBeTruthy();
+    expect(within(sheet).getAllByText(/@mckenzie\.trial · account not connected/i).length).toBeGreaterThan(0);
+  });
+
+  it("omits Graph-unknown metrics in the sheet instead of writing them as zero", async () => {
+    mockGetInstagramAnalytics.mockResolvedValue({
+      ...analytics,
+      ranked: [{
+        ...analytics.ranked[0],
+        insights_likes: null,
+        insights_comments: undefined,
+        insights_saved: null,
+        insights_reach: undefined,
+        tracked: [{
+          ...analytics.ranked[0]!.tracked![0]!,
+          insights_likes: null,
+          insights_comments: undefined,
+          insights_saved: null,
+          insights_reach: undefined,
+          insights_skip_rate: null,
+          insights_watch_time: undefined,
+        }],
+      }],
+    });
+    render(<AnalyticsBoard />);
+    fireEvent.click(await screen.findByRole("button", { name: /winner.*winner\.mp4/i }));
+
+    const sheet = await screen.findByRole("dialog", { name: /winner\.mp4 insights/i });
+    expect(within(sheet).getByText(/200k views/i)).toBeTruthy();
+    expect(within(sheet).queryByText(/0 (reach|likes|comments|saved)/i)).toBeNull();
+    expect(within(sheet).queryByText(/% skip|s watch/i)).toBeNull();
+  });
+
+  it("keeps Insights suggestions out of policy language inside the sheet", async () => {
+    render(<AnalyticsBoard />);
+    fireEvent.click(await screen.findByRole("button", { name: /quiet\.mp4/i }));
+
+    const sheet = await screen.findByRole("dialog", { name: /quiet\.mp4 insights/i });
+    expect(within(sheet).getByText(/held, little push/i)).toBeTruthy();
+    expect(within(sheet).queryByText(/flagged/i)).toBeNull();
+    expect(within(sheet).queryByRole("button", { name: /generate 20 more/i })).toBeNull();
   });
 
   it("does not mint more from first-ranked unless G4 calls it a winner", async () => {
@@ -140,7 +228,9 @@ describe("AnalyticsBoard", () => {
   it("mints more of the winning original", async () => {
     mockRegenerate.mockResolvedValue({});
     render(<AnalyticsBoard />);
-    fireEvent.click(await screen.findByRole("button", { name: /generate 20 more of this original/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /winner.*winner\.mp4/i }));
+    const sheet = await screen.findByRole("dialog", { name: /winner\.mp4 insights/i });
+    fireEvent.click(within(sheet).getByRole("button", { name: /generate 20 more of this original/i }));
     expect(mockRegenerate).toHaveBeenCalledWith("winner", 20);
   });
 
@@ -280,9 +370,11 @@ describe("AnalyticsBoard", () => {
     });
     render(<AnalyticsBoard />);
     expect(await screen.findByText(/linked posts, but Instagram sent no view counts/i)).toBeTruthy();
-    expect(screen.getByText(/@jeff · views unknown/i)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /move copy 01 to another original/i })).toBeTruthy();
-    expect(screen.queryByText(/^— views/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /winner\.mp4/i }));
+    const sheet = await screen.findByRole("dialog", { name: /winner\.mp4 insights/i });
+    expect(within(sheet).getByText(/@jeff · views unknown/i)).toBeTruthy();
+    expect(within(sheet).getByRole("button", { name: /move copy 01 to another original/i })).toBeTruthy();
+    expect(within(sheet).queryByText(/^— views/i)).toBeNull();
   });
 
   it("splits connected handles into account lanes", async () => {
@@ -308,11 +400,12 @@ describe("AnalyticsBoard", () => {
       ],
     });
     render(<AnalyticsBoard />);
-    const lanes = await screen.findByRole("region", { name: /accounts/i });
-    expect(within(lanes).getByText("@jeff")).toBeTruthy();
-    expect(within(lanes).getByText("@mckenzie.trial")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: /winner.*winner\.mp4/i }));
+    const lanes = await screen.findByRole("region", { name: /by account/i });
+    expect(within(lanes).getByText("@jeff.main")).toBeTruthy();
+    expect(within(lanes).getByText(/@mckenzie\.trial · account not connected/i)).toBeTruthy();
     expect(within(lanes).getByText(/account not connected/i)).toBeTruthy();
-    expect(within(lanes).getByText(/12 follows/i)).toBeTruthy();
+    expect(lanes.textContent).toMatch(/10 follows/i);
   });
 
   it("unlinks a tracked copy from a disconnected account", async () => {
@@ -322,13 +415,15 @@ describe("AnalyticsBoard", () => {
         {
           ...analytics.ranked[0],
           insights_linked: 11,
-          tracked: [analytics.ranked[0].tracked[0]],
+          tracked: [analytics.ranked[0]!.tracked![0]!],
         },
         analytics.ranked[1],
       ],
     });
     render(<AnalyticsBoard />);
-    fireEvent.click(await screen.findByRole("button", { name: /remove copy 07 from tracking/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /winner.*winner\.mp4/i }));
+    const sheet = await screen.findByRole("dialog", { name: /winner\.mp4 insights/i });
+    fireEvent.click(within(sheet).getByRole("button", { name: /remove copy 07 from tracking/i }));
     await waitFor(() => {
       expect(mockUnlinkInstagramMedia).toHaveBeenCalledWith({
         source_id: "winner",
@@ -338,7 +433,7 @@ describe("AnalyticsBoard", () => {
     await waitFor(() => {
       expect(screen.queryByText(/mckenzie.trial/i)).toBeNull();
     });
-    expect(screen.getByText("copy 03")).toBeTruthy();
+    expect(within(sheet).getByText("copy 03")).toBeTruthy();
   });
 
   it("moves a tracked Reel onto another Gallery original", async () => {
@@ -379,9 +474,11 @@ describe("AnalyticsBoard", () => {
     });
 
     render(<AnalyticsBoard />);
-    fireEvent.click(await screen.findByRole("button", { name: /move copy 07 to another original/i }));
-    expect(await screen.findByLabelText(/move to gallery pack/i)).toHaveValue("jeff");
-    fireEvent.click(screen.getByRole("button", { name: /^move reel$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /winner.*winner\.mp4/i }));
+    const sheet = await screen.findByRole("dialog", { name: /winner\.mp4 insights/i });
+    fireEvent.click(within(sheet).getByRole("button", { name: /move copy 07 to another original/i }));
+    expect(await within(sheet).findByLabelText(/move to gallery pack/i)).toHaveValue("jeff");
+    fireEvent.click(within(sheet).getByRole("button", { name: /^move reel$/i }));
 
     await waitFor(() => {
       expect(mockLinkInstagramMedia).toHaveBeenCalledWith({

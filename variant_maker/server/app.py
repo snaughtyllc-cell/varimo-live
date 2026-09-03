@@ -74,12 +74,14 @@ from .events import VariantEvent, event_to_dict
 from .experience import resolve_experience
 from .instagram_insights import (
     IgMedia,
+    InstagramSyncStamp,
     InstagramUnmatchedStore,
     VariantLink,
     export_caption_hints,
     fetch_media_insights,
     gallery_analytics,
     lanes_from_sources,
+    latest_insights_fetched_at,
     list_media as list_ig_media,
     match_media,
     merge_insight_snapshots,
@@ -651,6 +653,12 @@ def create_app(
             return InstagramUnmatchedStore(bundle.ws.instagram_unmatched_path())
         return InstagramUnmatchedStore(fallback_store._ws.instagram_unmatched_path())
 
+    def _ig_sync_stamp() -> InstagramSyncStamp:
+        bundle = current_bundle()
+        if bundle is not None:
+            return InstagramSyncStamp(bundle.ws.instagram_sync_stamp_path())
+        return InstagramSyncStamp(fallback_store._ws.instagram_sync_stamp_path())
+
     def _linked_ig_media_ids() -> set[str]:
         ids: set[str] = set()
         for job in store.list():
@@ -1021,6 +1029,7 @@ def create_app(
         media_rows: list[IgMedia] = []
         media_owner: dict[str, str] = {}
         list_errors: list[str] = []
+        listed_any = False
         for acc in accounts:
             token = acc.get("access_token")
             user_id = str(acc.get("user_id") or "")
@@ -1033,6 +1042,7 @@ def create_app(
                 list_errors.append(f"@{handle}: {exc}")
                 print(f"instagram list_media failed for @{handle}: {exc}", flush=True)
                 continue
+            listed_any = True
             for row in listed:
                 mid = str(row.get("id") or "")
                 if not mid:
@@ -1097,6 +1107,8 @@ def create_app(
             matched += 1
         leftover = unmatched_payload(media_rows, hits)
         _ig_unmatched().save(leftover)
+        if listed_any:
+            _ig_sync_stamp().write(fetched_at)
         analytics = _ig_analytics_body()
         print(
             "instagram sync "
@@ -1148,6 +1160,9 @@ def create_app(
             })
         body["lanes"] = lanes
         body["unmatched"] = _ig_unmatched().drop_linked(_linked_ig_media_ids())
+        body["insights_fetched_at"] = latest_insights_fetched_at(
+            sources, last_sync=_ig_sync_stamp().read(),
+        )
         return body
 
     def _run_workflow_tick(wf: Workflow) -> Workflow:

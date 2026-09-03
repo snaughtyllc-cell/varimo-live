@@ -90,6 +90,9 @@ class Workspace:
     def instagram_unmatched_path(self) -> str:
         return os.path.join(self.instagram_dir(), "unmatched.json")
 
+    def instagram_sync_stamp_path(self) -> str:
+        return os.path.join(self.instagram_dir(), "last_sync.json")
+
     def workflow_ledger_path(self, workflow_id: str) -> str:
         d = os.path.join(self.drive_dir(), "workflow-ledgers")
         os.makedirs(d, exist_ok=True)

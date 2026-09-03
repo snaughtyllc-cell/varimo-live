@@ -2,6 +2,9 @@
 
 export const AMPLIFY_MORE_N = 20;
 
+/** Graph Insights lag by hours. Re-pull when Stats opens after this long. */
+export const INSIGHTS_STALE_HOURS = 2;
+
 export const INSTAGRAM_OAUTH_START = "/api/instagram/oauth/start";
 
 export const INSTAGRAM_TESTER_HINT =
@@ -9,6 +12,27 @@ export const INSTAGRAM_TESTER_HINT =
   "Instagram → Settings → Apps and websites → Tester invites, then tap Connect. " +
   "Each Connect adds another account (main / trial / growth). Studio stores the token; " +
   "you do not paste the long Meta generate-token string.";
+
+export function insightsAreStale(
+  fetchedAt: string | null | undefined,
+  nowMs: number = Date.now(),
+  maxAgeHours: number = INSIGHTS_STALE_HOURS,
+): boolean {
+  const raw = (fetchedAt ?? "").trim();
+  if (!raw) return true;
+  const t = Date.parse(raw);
+  if (!Number.isFinite(t)) return true;
+  return nowMs - t >= maxAgeHours * 60 * 60 * 1000;
+}
+
+export function shouldRefreshInsights(opts: {
+  connected: boolean;
+  fetchedAt?: string | null;
+  nowMs?: number;
+}): boolean {
+  if (!opts.connected) return false;
+  return insightsAreStale(opts.fetchedAt, opts.nowMs);
+}
 
 export function formatViews(n: number | null | undefined): string {
   if (n == null || Number.isNaN(n)) return "—";

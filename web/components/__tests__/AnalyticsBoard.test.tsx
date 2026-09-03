@@ -31,6 +31,7 @@ const accounts = [{ user_id: "1", username: "jeff", name: "Jeff" }];
 const analytics = {
   insights_views: 312400,
   insights_linked: 14,
+  insights_fetched_at: "2099-01-01T00:00:00Z",
   ranked: [
     {
       source_id: "winner",
@@ -138,6 +139,62 @@ describe("AnalyticsBoard", () => {
     });
     mockGetInstagramAnalytics.mockResolvedValue(analytics);
     mockGetGallery.mockResolvedValue([]);
+    mockSyncInstagram.mockResolvedValue({
+      matched: 14,
+      accounts: 1,
+      media: 20,
+      unmatched: [],
+      analytics,
+    });
+  });
+
+  it("does not hit Graph again when the last Insights pull is still fresh", async () => {
+    render(<AnalyticsBoard />);
+    expect(await screen.findByText(/Winner · winner.mp4/)).toBeTruthy();
+    expect(mockSyncInstagram).not.toHaveBeenCalled();
+  });
+
+  it("syncs Insights when Stats opens on a stale pull", async () => {
+    mockGetInstagramAnalytics.mockResolvedValue({
+      ...analytics,
+      insights_fetched_at: "2026-09-01T00:00:00Z",
+    });
+    mockSyncInstagram.mockResolvedValue({
+      matched: 14,
+      accounts: 1,
+      media: 20,
+      unmatched: [],
+      analytics: {
+        ...analytics,
+        insights_views: 320000,
+        insights_fetched_at: "2026-09-03T08:00:00Z",
+      },
+    });
+    render(<AnalyticsBoard />);
+    expect(await screen.findByText(/Winner · winner.mp4/)).toBeTruthy();
+    await waitFor(() => {
+      expect(mockSyncInstagram).toHaveBeenCalledTimes(1);
+    });
+    expect(await screen.findByText(/320k views across 14 linked posts/i)).toBeTruthy();
+  });
+
+  it("does not auto-sync when no Instagram account is connected", async () => {
+    mockGetInstagramStatus.mockResolvedValue({
+      oauth_available: true,
+      connected: false,
+      message: "",
+      accounts: [],
+    });
+    mockGetInstagramAnalytics.mockResolvedValue({
+      insights_views: null,
+      insights_linked: 0,
+      insights_fetched_at: null,
+      ranked: [],
+      accounts: [],
+    });
+    render(<AnalyticsBoard />);
+    expect(await screen.findByRole("button", { name: /sync insights/i })).toBeDisabled();
+    expect(mockSyncInstagram).not.toHaveBeenCalled();
   });
 
   it("paints a look still on ranked originals so phones do not wait on a video frame", async () => {
@@ -396,6 +453,7 @@ describe("AnalyticsBoard", () => {
     mockGetInstagramAnalytics.mockResolvedValue({
       insights_views: null,
       insights_linked: 3,
+      insights_fetched_at: "2099-01-01T00:00:00Z",
       ranked: [
         {
           source_id: "winner",

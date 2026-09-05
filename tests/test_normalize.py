@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -140,6 +141,62 @@ def test_proxy_upload_downscales_oversized(tmp_path: Path) -> None:
     assert got.width == w
     assert got.height == h
     assert dest.stat().st_size < src.stat().st_size
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
+def test_proxy_upload_keeps_audio(tmp_path: Path) -> None:
+    from variant_maker.ffmpeg import run
+    from variant_maker.normalize import proxy_upload
+
+    src = tmp_path / "talk.mp4"
+    dest = tmp_path / "proxy.mp4"
+    run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", "testsrc=duration=0.5:size=2000x1120:rate=24",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=0.5",
+            "-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "ultrafast",
+            "-c:a", "aac", "-shortest", str(src),
+        ]
+    )
+    meta = probe(str(src))
+    assert meta.has_audio
+    out = proxy_upload(src, dest, meta)
+    got = probe(str(out))
+    assert got.has_audio
+    assert got.width < meta.width or got.height < meta.height
+
+
+def test_proxy_upload_does_not_strip_audio_when_aac_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """iPhone spatial / odd audio must not fall back to a silent proxy."""
+    from variant_maker.normalize import proxy_upload
+
+    src = tmp_path / "talk.mp4"
+    dest = tmp_path / "proxy.mp4"
+    src.write_bytes(b"clip")
+    info = replace(_sdr_4k(), path=str(src))
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str]) -> None:
+        calls.append(list(cmd))
+        if "-an" in cmd:
+            raise AssertionError("proxy must not strip audio when the source has it")
+        try:
+            codec = cmd[cmd.index("-c:a") + 1]
+        except ValueError:
+            return
+        if codec == "aac":
+            raise subprocess.CalledProcessError(1, cmd, stderr="aac")
+
+    monkeypatch.setattr("variant_maker.normalize._run_ffmpeg", fake_run)
+    monkeypatch.setattr("variant_maker.normalize._ffprobe_field", lambda *_a, **_k: "yuv420p")
+    proxy_upload(src, dest, info)
+    assert not any("-an" in c for c in calls)
+    codecs = [c[c.index("-c:a") + 1] for c in calls if "-c:a" in c]
+    assert codecs == ["aac", "copy"]
 
 
 def test_rotated_iphone_4k_proxy_targets_1080x1920() -> None:

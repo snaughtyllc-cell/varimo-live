@@ -131,7 +131,10 @@ function packLanes(
   });
 }
 
-function aggregate(copies: InstagramTrackedCopy[], key: keyof MetricSource): number | null {
+function aggregate(
+  copies: InstagramTrackedCopy[],
+  key: Exclude<keyof MetricSource, "insights_views_delta">,
+): number | null {
   let total = 0;
   let seen = false;
   for (const copy of copies) {

@@ -66,13 +66,32 @@ def test_cmd_wires_audio_when_present():
     cmd = ffmpeg.build_render_cmd(make_src(has_audio=True), make_params(), REELS, "out.mp4")
     assert _sublist(["-c:a", "aac"], cmd)
     assert _sublist(["-b:a", "160k"], cmd)
+    assert _sublist(["-map", "0:v:0"], cmd)
+    assert _sublist(["-map", "0:a:0"], cmd)
     assert "-af" in cmd and "-an" not in cmd
+
+
+def test_cmd_omits_empty_audio_filter_but_keeps_aac():
+    """Voice-safe + identity tempo must not pass -af ''. ffmpeg 6 exits 234."""
+    audio = {
+        "speed": 1.0, "loudnorm_i": None, "eq_bands": 1, "eq_gains": [0.0],
+        "pitch_pct": 0.0, "aac_kbps": 160,
+    }
+    params = make_params()
+    params["audio"] = audio
+    cmd = ffmpeg.build_render_cmd(make_src(has_audio=True), params, REELS, "out.mp4")
+    assert "-af" not in cmd
+    assert _sublist(["-c:a", "aac"], cmd)
+    assert _sublist(["-map", "0:a:0"], cmd)
+    assert "-an" not in cmd
 
 
 def test_cmd_drops_audio_when_absent():
     cmd = ffmpeg.build_render_cmd(make_src(has_audio=False), make_params(), REELS, "out.mp4")
     assert "-an" in cmd
     assert "-af" not in cmd and "-c:a" not in cmd
+    assert _sublist(["-map", "0:v:0"], cmd)
+    assert not _sublist(["-map", "0:a:0"], cmd)
 
 
 def test_cmd_uses_filter_complex_for_chroma_cloud():
@@ -90,6 +109,9 @@ def test_cmd_uses_filter_complex_for_chroma_cloud():
     assert "-vf" not in cmd
     graph = cmd[cmd.index("-filter_complex") + 1]
     assert "split[main][s]" in graph
+    assert graph.endswith("[v]")
+    assert _sublist(["-map", "[v]"], cmd)
+    assert _sublist(["-map", "0:a:0"], cmd)
     assert "-af" in cmd
 
 

@@ -141,11 +141,10 @@ export function CompareSlider({ beforeSrc, afterSrc, videoRefs }: CompareSliderP
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
     >
-      {/* AFTER (variant) — bottom layer, fills entire box */}
+      {/* AFTER (variant) — bottom layer. Source stays muted so Play is the copy. */}
       <video
         ref={afterRef}
         src={videoFrameSrc(afterSrc)}
-        muted
         playsInline
         preload="metadata"
         loop

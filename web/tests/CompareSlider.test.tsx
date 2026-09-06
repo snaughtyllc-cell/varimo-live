@@ -45,3 +45,16 @@ describe("CompareSlider aspect", () => {
     expect(box.style.aspectRatio).toBe("9 / 16");
   });
 });
+
+describe("CompareSlider audio", () => {
+  it("plays the variant with sound and keeps the source muted", () => {
+    const { container } = render(
+      <CompareSlider beforeSrc="/src.mp4" afterSrc="/var.mp4" />,
+    );
+    const videos = container.querySelectorAll("video");
+    const after = videos[0] as HTMLVideoElement;
+    const before = videos[1] as HTMLVideoElement;
+    expect(after.muted).toBe(false);
+    expect(before.muted).toBe(true);
+  });
+});

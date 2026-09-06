@@ -121,7 +121,9 @@ def proxy_upload(src: str | Path, dest: str | Path, info: SourceInfo | None = No
     """One cheap H.264 8-bit encode: optional long-edge ≤ 1920 + 8-bit.
 
     Raises on encode failure. Callers that must not break upload/generate
-    (maybe_normalize_upload) catch and keep the original file.
+    (maybe_normalize_upload) catch and keep the original file. If the source
+    has audio, never fall back to ``-an`` — a silent proxy is how talking
+    clips shipped mute.
     """
     src_path = Path(src)
     dest_path = Path(dest)
@@ -142,13 +144,20 @@ def proxy_upload(src: str | Path, dest: str | Path, info: SourceInfo | None = No
         "-pix_fmt", "yuv420p",
         *output_color_args(BT709),
     ]
+    cmd = base + ["-map", "0:v:0"]
     if meta.has_audio:
+        cmd += ["-map", "0:a:0"]
         try:
-            _run_ffmpeg(base + ["-c:a", "aac", "-b:a", "192k", str(dest_path)])
+            _run_ffmpeg(cmd + ["-c:a", "aac", "-b:a", "192k", str(dest_path)])
             return dest_path
-        except _PROXY_FAIL:
-            pass
-    _run_ffmpeg(base + ["-an", str(dest_path)])
+        except _PROXY_FAIL as exc:
+            print(
+                f"upload proxy aac failed, trying audio copy: {type(exc).__name__}: {exc}",
+                flush=True,
+            )
+        _run_ffmpeg(cmd + ["-c:a", "copy", str(dest_path)])
+        return dest_path
+    _run_ffmpeg(cmd + ["-an", str(dest_path)])
     return dest_path
 
 

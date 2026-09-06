@@ -63,13 +63,22 @@ def build_render_cmd(src: SourceInfo, params: dict, platform: Platform, out_path
     out_color = resolve_output_color(src.color)
 
     vf = build_video_filters(params, src, platform)
-    video_flag = "-filter_complex" if ";" in vf else "-vf"
+    use_complex = ";" in vf
     cmd = [
         "ffmpeg", "-y", "-v", "error",
         "-i", src.path,
         "-map_metadata", "-1",
         "-fflags", "+bitexact",
-        video_flag, vf,
+    ]
+    if use_complex:
+        if not vf.endswith("]"):
+            vf = f"{vf}[v]"
+        cmd += ["-filter_complex", vf, "-map", "[v]"]
+    else:
+        cmd += ["-vf", vf, "-map", "0:v:0"]
+    if src.has_audio:
+        cmd += ["-map", "0:a:0"]
+    cmd += [
         "-c:v", "libx264", "-preset", "medium",
         "-crf", str(v["crf"]), "-g", str(v["gop"]),
         *x264_rate_args(platform),
@@ -77,8 +86,10 @@ def build_render_cmd(src: SourceInfo, params: dict, platform: Platform, out_path
         *output_color_args(out_color),
     ]
     if src.has_audio:
-        cmd += ["-af", build_audio_filters(params, src, True),
-                "-c:a", "aac", "-b:a", f"{a['aac_kbps']}k"]
+        af = build_audio_filters(params, src, True)
+        if af:
+            cmd += ["-af", af]
+        cmd += ["-c:a", "aac", "-b:a", f"{a['aac_kbps']}k"]
     else:
         cmd += ["-an"]
     cmd += [out_path]

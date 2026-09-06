@@ -277,6 +277,10 @@ describe("AnalyticsBoard", () => {
     fireEvent.click(pack);
 
     const sheet = await screen.findByRole("dialog", { name: /winner\.mp4 insights/i });
+    const suggestion = sheet.querySelector(".analytics-pack-hero__suggestion");
+    expect(suggestion).toBeTruthy();
+    expect(suggestion).toHaveAttribute("data-kind", "winner");
+    expect(within(suggestion as HTMLElement).getByRole("button", { name: /generate 20 more of this original/i })).toBeTruthy();
     expect(within(sheet).getByText(/^copy 19$/i)).toBeTruthy();
     expect(within(sheet).getAllByRole("link", { name: /open reel/i })
       .some((link) => link.getAttribute("href") === "https://www.instagram.com/reel/GrowthCopy/"))

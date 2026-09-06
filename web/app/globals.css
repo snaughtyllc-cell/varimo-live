@@ -1188,7 +1188,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .drive-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 22px 20px; }
 
 .analytics-shell { background: var(--color-panel); display: flex; flex-direction: column; min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); }
-.analytics-body { display: flex; flex-direction: column; gap: 20px; max-width: 860px; }
+.analytics-body { display: flex; flex-direction: column; gap: 20px; max-width: 860px; min-width: 0; width: 100%; }
 .analytics-board { display: flex; flex-direction: column; gap: 16px; }
 .analytics-hero { align-items: flex-end; display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; }
 .analytics-hero__title { color: var(--color-text); font-family: var(--font-brand); font-size: 28px; font-weight: 700; letter-spacing: -0.04em; line-height: 1.1; margin: 6px 0 0; }
@@ -1611,9 +1611,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .analytics-pack-row__name { color: var(--ink); display: block; font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .analytics-pack-row__metrics { color: var(--color-muted); display: flex; flex-wrap: wrap; font-size: 11.5px; gap: 4px 9px; margin-top: 4px; }
 .analytics-pack-row__metrics b { color: #35565b; font-variant-numeric: tabular-nums; }
+.analytics-pack-row__delta { font-variant-numeric: tabular-nums; margin-left: 4px; }
+.analytics-pack-row__delta[data-dir="up"] { color: #12805a; }
+.analytics-pack-row__delta[data-dir="down"] { color: #e5533d; }
 .analytics-sheet-overlay { background: rgba(23, 42, 46, 0.32); backdrop-filter: blur(3px); inset: 0; position: fixed; touch-action: none; z-index: 50; }
 .analytics-sheet { animation: analytics-sheet-in 220ms cubic-bezier(0.16, 1, 0.3, 1); background: #fbfdfd; border-left: 1px solid #c7dde0; bottom: 0; box-shadow: -20px 0 50px rgba(23, 58, 65, 0.18); display: flex; flex-direction: column; max-width: 100vw; outline: none; overscroll-behavior: contain; position: fixed; right: 0; top: 0; width: 480px; z-index: 51; }
-.analytics-sheet__header { align-items: center; background: #fbfdfd; border-bottom: 1px solid #d4e3e6; display: flex; flex: 0 0 auto; gap: 12px; justify-content: space-between; padding: 14px 16px; }
+.analytics-sheet__header { align-items: center; background: #fbfdfd; border-bottom: 1px solid #d4e3e6; display: flex; flex: 0 0 auto; gap: 12px; justify-content: space-between; min-width: 0; padding: 14px 16px; }
 .analytics-sheet__title-wrap { min-width: 0; }
 .analytics-sheet__title-wrap h2 { color: var(--ink); font-size: 15px; font-weight: 750; line-height: 1.3; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .analytics-sheet__title-wrap span { color: var(--color-muted); display: block; font-size: 11.5px; margin-top: 2px; }
@@ -1624,6 +1627,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .analytics-pack-hero__content { min-width: 0; }
 .analytics-pack-hero__content h3 { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .analytics-pack-hero__content > p, .analytics-sheet__section > p { color: var(--color-muted); font-size: 12px; line-height: 1.45; margin: 8px 0 0; }
+.analytics-pack-hero__suggestion { align-items: flex-start; background: #eef8f9; border: 1px solid #c9e4e7; border-radius: 14px; display: flex; flex-wrap: wrap; gap: 10px 12px; grid-column: 1 / -1; justify-content: space-between; padding: 12px 14px; }
+.analytics-pack-hero__suggestion p { color: var(--ink); flex: 1 1 16rem; font-size: 13px; line-height: 1.45; margin: 0; }
+.analytics-pack-hero__suggestion[data-kind="quiet"] { background: #fdf9ef; border-color: #efdfbd; }
+.analytics-pack-hero__suggestion[data-kind="quiet"] p { color: #8e6119; }
 .analytics-metric-rail { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .analytics-metric-chip { background: #edf6f7; border: 1px solid #cce4e7; border-radius: 999px; color: #426368; font-size: 11px; line-height: 1; padding: 6px 8px; white-space: nowrap; }
 .analytics-metric-chip b { color: #075966; font-variant-numeric: tabular-nums; font-weight: 750; }
@@ -1636,14 +1643,26 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .analytics-lane__identity strong, .analytics-copy-row__head strong { color: var(--ink); font-size: 13px; font-weight: 720; }
 .analytics-lane__identity span, .analytics-copy-row__head span { color: var(--color-muted); font-size: 12px; }
 .analytics-lane__linked { color: var(--color-muted2); display: block; font-size: 11px; margin-top: 8px; }
-.analytics-copy-row__head { display: flex; flex-direction: column; gap: 4px; }
+.analytics-copy-row__head { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .analytics-copy-row__actions, .analytics-copy-row__move-submit { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .analytics-copy-row__actions a { align-items: center; color: var(--color-violet); display: inline-flex; font-size: 12px; font-weight: 650; gap: 4px; text-decoration: none; }
 .analytics-copy-row__move { border-top: 1px solid #e7f0f1; margin-top: 12px; padding-top: 12px; }
 .analytics-sheet__empty { color: var(--color-muted); font-size: 12.5px; padding: 22px 0 4px; }
+.analytics-sheet__lag { color: var(--color-muted); font-size: 12px; line-height: 1.45; margin: 10px 0 0; }
 @keyframes analytics-sheet-in { from { opacity: 0.55; transform: translateX(38px); } to { opacity: 1; transform: translateX(0); } }
 @media (max-width: 639px) {
-  .analytics-sheet { border-left: 0; height: 100dvh; left: 0; max-height: 100dvh; right: 0; width: 100%; }
+  .analytics-sheet {
+    border-left: 0;
+    height: 100dvh;
+    left: 0;
+    max-height: 100dvh;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-top: env(safe-area-inset-top, 0px);
+    right: 0;
+    width: 100%;
+  }
+  .analytics-pack-list { padding: 14px; }
+  .analytics-hero__title { font-size: 24px; }
 }
 
 /* Phase C: /gallery, /drops, /workflows and /settings/drive suppress the shared
@@ -1660,4 +1679,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
     height: calc(100dvh - var(--tab-h));
     min-height: 0;
   }
+  /* iPad / tablet: Insights fills the column next to SideNav so the 480px
+     drawer does not sit as a sliver over a blurred board. */
+  .analytics-sheet-overlay { left: 264px; }
+  .analytics-sheet { left: 264px; max-width: none; width: auto; }
+}
+
+@media (min-width: 1180px) {
+  .analytics-sheet { left: auto; width: 480px; }
 }

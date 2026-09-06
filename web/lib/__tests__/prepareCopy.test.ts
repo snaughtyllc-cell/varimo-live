@@ -1,27 +1,26 @@
 import { describe, expect, it } from "vitest";
 import {
   PREPARING_JOB_ID,
-  captionEmptyCopy,
-  captionNeedSourcesCopy,
-  captionPromptLabel,
-  captionPromptLabelForSource,
-  captionPromptPlaceholder,
+  captionCopiedLabel,
+  captionCopyLabel,
   captionSaveLabel,
   captionSnippet,
   captionStatusHint,
   captionToggleHint,
   captionToggleLabel,
+  hqPrepToggleHint,
+  hqPrepToggleLabel,
   isPreparingJob,
   preparingHeadline,
   preparingSubcopy,
-  stripInternalIndexLines,
-  uniquenessCustomerLabel,
+  wakingHeadline,
+  wakingSlotLabel,
+  wakingSubcopy,
   uniquenessCoverageChips,
   uniquenessCoverageSubcopy,
-  uniquenessGalleryBadgeTitle,
-  packCaptionSeed,
-  packOptionsLabel,
-  rewriteCaptionsLabel,
+  uniquenessCustomerLabel,
+  uniquenessPassHint,
+  uniquenessPassPct,
 } from "@/lib/prepareCopy";
 
 describe("prepare copy", () => {
@@ -29,39 +28,55 @@ describe("prepare copy", () => {
     expect(isPreparingJob(PREPARING_JOB_ID)).toBe(true);
     expect(isPreparingJob("abc")).toBe(false);
     expect(preparingHeadline()).toMatch(/preparing generation/i);
-    expect(preparingSubcopy()).toMatch(/20–30 seconds/i);
-    expect(preparingSubcopy()).toMatch(/request received/i);
+    expect(preparingSubcopy(0)).toMatch(/1–2 minutes/i);
+    expect(preparingSubcopy(0)).toMatch(/elapsed/i);
+    expect(preparingSubcopy(75)).toMatch(/1:15/);
+    expect(wakingHeadline()).toMatch(/waking fast worker/i);
+    expect(wakingSubcopy(8, "queued")).toMatch(/cold-start queue/i);
+    expect(wakingSlotLabel()).toBe("waking");
   });
 
   it("asks for captions on Generate, not a separate bank UI", () => {
     expect(captionToggleLabel()).toMatch(/write captions/i);
     expect(captionToggleHint()).toMatch(/thumbnail/i);
     expect(captionToggleHint()).toMatch(/per source|each clip|source clip/i);
-    expect(captionPromptLabel()).toMatch(/caption for this clip/i);
-    expect(captionPromptPlaceholder()).toMatch(/this clip/i);
-    expect(captionPromptLabelForSource(0, 4)).toMatch(/source 1 of 4/i);
-    expect(captionNeedSourcesCopy()).toMatch(/add videos first/i);
     expect(uniquenessCustomerLabel()).toBe("Originality");
   });
 
-  it("lets Gallery edit captions without tying status to Instagram copy", () => {
-    expect(captionSaveLabel()).toMatch(/save caption/i);
-    expect(captionEmptyCopy()).toMatch(/no caption/i);
-    expect(captionStatusHint()).toMatch(/before/i);
-    expect(captionStatusHint()).toMatch(/instagram/i);
-    expect(captionStatusHint()).toMatch(/video/i);
+  it("names reconstruct-first as one GPU pass, then Fast — not an HQ 20-pack", () => {
+    expect(hqPrepToggleLabel()).toMatch(/reconstruct first/i);
+    expect(hqPrepToggleLabel()).toMatch(/HQ/i);
+    expect(hqPrepToggleHint()).toMatch(/one GPU pass/i);
+    expect(hqPrepToggleHint()).toMatch(/Fast/i);
+    expect(hqPrepToggleHint()).not.toMatch(/20-pack/i);
+    expect(hqPrepToggleHint()).not.toMatch(/lab only/i);
   });
 
-  it("says Originality is 3-frame pixel SSIM, not a platform check", () => {
+  it("names Originality as pixel SSIM, not a platform check", () => {
+    expect(uniquenessCoverageSubcopy()).toMatch(/pixel difference vs the original/i);
     expect(uniquenessCoverageSubcopy()).toMatch(/3 frames/i);
     expect(uniquenessCoverageSubcopy()).toMatch(/not a platform check/i);
-    expect(uniquenessGalleryBadgeTitle(38)).toMatch(/pixel SSIM/i);
-    expect(uniquenessGalleryBadgeTitle(38)).toMatch(/not a platform pass/i);
-    const chips = uniquenessCoverageChips(0.5, null);
-    expect(chips.map((c) => c.kind)).toEqual(["pixel", "visual", "audio"]);
-    expect(chips[0].state).toBe("scored");
-    expect(chips[1].state).toBe("not_scored");
-    expect(chips[2].state).toBe("not_scored");
+    expect(uniquenessCoverageChips(0.5, null).map((c) => c.text)).toEqual([
+      "Pixel · scored",
+      "Visual copy-id · not scored",
+      "Audio · not scored",
+    ]);
+  });
+
+  it("explains the real ~38% pass line, not a 65% verified band", () => {
+    expect(uniquenessPassPct()).toBe(38);
+    expect(uniquenessPassHint()).toBe("38% = pass vs the source");
+    expect(uniquenessPassHint()).not.toMatch(/verified/i);
+    expect(uniquenessPassHint()).not.toMatch(/65%/);
+  });
+
+  it("names caption save and copy actions", () => {
+    expect(captionSaveLabel()).toBe("Save caption");
+    expect(captionCopyLabel()).toBe("Copy caption");
+    expect(captionCopiedLabel()).toBe("Copied");
+    expect(captionStatusHint()).toMatch(/copy pastes this caption/i);
+    expect(captionStatusHint()).toMatch(/pass \/ flag/i);
+    expect(captionStatusHint()).not.toMatch(/duplicate/i);
   });
 
   it("snips captions to a single-line preview", () => {
@@ -69,20 +84,5 @@ describe("prepare copy", () => {
     expect(captionSnippet("  hello   world  ")).toBe("hello world");
     expect(captionSnippet("a".repeat(80))).toBe("a".repeat(80));
     expect(captionSnippet("a".repeat(81))).toBe(`${"a".repeat(79)}…`);
-  });
-
-  it("strips Copy N of M lines from captions and Drive filenames", () => {
-    expect(stripInternalIndexLines("POV boil\n\nCopy 1 of 20\n#reels")).toBe("POV boil\n\n#reels");
-    expect(stripInternalIndexLines("Gym pull\nTake 2 of 8\n#fyp")).toBe("Gym pull\n#fyp");
-    expect(captionSnippet("POV boil\n\nCopy 1 of 20\n#reels")).toBe("POV boil #reels");
-  });
-
-  it("names Gallery pack Options for rewriting captions", () => {
-    expect(packOptionsLabel()).toMatch(/options/i);
-    expect(rewriteCaptionsLabel()).toMatch(/rewrite captions/i);
-    expect(packCaptionSeed({ caption_prompt: "POV boil #reels" })).toBe("POV boil #reels");
-    expect(packCaptionSeed({
-      variants: [{ caption: "Gym pump\n\nCopy 1 of 8\n#fyp" }],
-    })).toBe("Gym pump\n\n#fyp");
   });
 });

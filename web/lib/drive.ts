@@ -39,6 +39,12 @@ export function selectionHasAllOk(selected: Set<string>, sources: SourceOut[]): 
   return keys.length > 0 && keys.every((k) => selected.has(k));
 }
 
+export function packActionSelected(source: SourceOut, selected: Set<string>): Set<string> {
+  const keys = okVariantKeys([source]);
+  const picked = keys.filter((key) => selected.has(key));
+  return new Set(picked.length > 0 ? picked : keys);
+}
+
 export function withOkSelection(
   selected: Set<string>,
   sources: SourceOut[],

@@ -15,6 +15,5 @@ Live destinations, who sees them, and nested surfaces:
 Machine-readable catalog (test-locked to every `web/app/**/page.tsx`):
 `web/lib/studioDestinations.ts`
 
-Phone bar: Studio · Gallery · Drops · Flows · Drive.
-Owner extras under More: Team · Analytics. Site-admin extras: Admin · Diagnostics.
-VAs never see Analytics.
+Phone bar: Studio · Gallery · Stats · Drops · Flows · Drive.
+Owner extras under More: Team. Site-admin extras: Admin · Diagnostics.

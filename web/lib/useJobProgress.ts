@@ -80,7 +80,7 @@ function applyJobDetail(run: RunProgress, detail: Awaited<ReturnType<typeof getJ
       }
     }
   }
-  if (detail.state === "done" || detail.state === "cancelled") {
+  if (detail.state === "done" || detail.state === "cancelled" || detail.state === "completed" || detail.state === "failed") {
     const cleared: RunProgress = {
       ...next,
       complete: true,
@@ -91,6 +91,7 @@ function applyJobDetail(run: RunProgress, detail: Awaited<ReturnType<typeof getJ
     };
     next = reduceEvent(cleared, { state: "job-done" });
   }
+  next = { ...next, waitPhase: detail.wait_phase ?? null };
   return next;
 }
 
@@ -133,7 +134,7 @@ export function useJobProgress(
         const next = applyJobDetail(runRef.current, detail);
         runRef.current = next;
         setRun(next);
-        if (detail.state === "done" || detail.state === "cancelled") es.close();
+        if (detail.state === "done" || detail.state === "cancelled" || detail.state === "completed" || detail.state === "failed") es.close();
       } catch (err) {
         const msg = err instanceof Error ? err.message : "";
         if (msg.startsWith("404")) {

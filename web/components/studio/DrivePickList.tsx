@@ -11,24 +11,26 @@ export function DrivePickList({ picks, onRemove }: DrivePickListProps) {
   if (picks.length === 0) return null;
 
   return (
-    <div className="studio-source-list">
+    <>
       {picks.map((pick, i) => (
-        <div key={`${pick.id}-${i}`} className="studio-source-row">
-          <SourceThumb src={pick.thumbUrl} label="Drive" />
-          <div className="studio-source-row__meta">
-            <b>{pick.name}</b>
-            <span>Google Drive</span>
+        <div className="studio-clip-card" key={`${pick.id}-${i}`}>
+          <div className="studio-clip-card__thumb">
+            <SourceThumb label={pick.name} />
+          </div>
+          <div className="studio-clip-card__meta">
+            <span className="studio-clip-card__name">{pick.name}</span>
+            <span className="studio-clip-card__sub">Google Drive</span>
           </div>
           <button
             type="button"
             onClick={() => onRemove(i)}
-            className="touch-hit studio-source-row__remove"
+            className="studio-clip-card__remove touch-hit"
             aria-label={`Remove ${pick.name}`}
           >
-            ✕
+            <span className="material-symbols-rounded" style={{ fontSize: 18 }}>close</span>
           </button>
         </div>
       ))}
-    </div>
+    </>
   );
 }

@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { VariantOut } from "@/lib/types";
 import {
+  captionCopiedLabel,
+  captionCopyLabel,
   captionEmptyCopy,
   captionPreviewLabel,
   captionSaveLabel,
@@ -36,9 +38,14 @@ function variant(over: Partial<VariantOut> = {}): VariantOut {
 }
 
 describe("CaptionBlock", () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+
   beforeEach(() => {
     setVariantCaption.mockReset();
     setVariantCaption.mockResolvedValue(variant({ caption: "Wait — better hook\n#reels" }));
+    writeText.mockReset();
+    writeText.mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
   });
 
   it("lets the operator edit the caption before a drop", () => {
@@ -48,6 +55,23 @@ describe("CaptionBlock", () => {
     const box = screen.getByRole("textbox", { name: captionPreviewLabel() });
     expect(box).toHaveValue("POV the boil hits different\n#reels");
     expect(screen.getByRole("button", { name: captionSaveLabel() })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: captionCopyLabel() })).toBeEnabled();
+  });
+
+  it("copies the caption in the box", async () => {
+    render(<CaptionBlock sourceId="s1" variant={variant()} onSaved={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: captionCopyLabel() }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("POV the boil hits different\n#reels");
+    });
+    expect(screen.getByRole("button", { name: captionCopiedLabel() })).toBeInTheDocument();
+  });
+
+  it("disables copy when this copy has no caption yet", () => {
+    render(
+      <CaptionBlock sourceId="s1" variant={variant({ caption: null })} onSaved={() => {}} />,
+    );
+    expect(screen.getByRole("button", { name: captionCopyLabel() })).toBeDisabled();
   });
 
   it("saves an edited caption on this variant", async () => {

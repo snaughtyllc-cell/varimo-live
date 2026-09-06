@@ -17,11 +17,11 @@ import {
   ExportVariantRef,
   Invite,
   InviteKind,
+  SplitExportDest,
+  SplitExportResult,
   InstagramAnalytics,
   InstagramStatus,
   InstagramSync,
-  SplitExportDest,
-  SplitExportResult,
   JobDetail,
   JobSummary,
   PlatformResult,
@@ -31,6 +31,7 @@ import {
   VariantOut,
   Workflow,
 } from "./types";
+import type { JobUploadProgress } from "./jobUpload";
 
 /**
  * FastAPI error bodies are `{"detail": string | Array<{msg: string, ...}>}`.
@@ -38,7 +39,7 @@ import {
  * permission/quota errors) reach the UI instead of "400 Bad Request".
  */
 async function errorMessage(res: Response): Promise<string> {
-  if (res.status === 502 || res.status === 503 || res.status === 504) {
+  if (res.status === 502 || res.status === 503) {
     return "Upload dropped before Generate started — hit Generate again.";
   }
   const fallback = `${res.status} ${res.statusText}`;
@@ -67,6 +68,26 @@ export const variantUrl = (sourceId: string, filename: string) =>
 export const sourceUrl = (sourceId: string) => `/api/sources/${sourceId}/source`;
 export const eventsUrl = (jobId: string) => `/api/jobs/${jobId}/events`;
 export const sourceZipUrl = (sourceId: string) => `/api/sources/${sourceId}/zip`;
+export const sourceDownloadsUrl = (sourceId: string) => `/api/sources/${sourceId}/downloads`;
+
+export type DirectUploadInit = {
+  mode: "direct" | "local";
+  url?: string;
+  key?: string;
+  upload_id?: string;
+  method?: string;
+  headers?: Record<string, string>;
+  chunk_hint?: number;
+};
+
+export type SourceDownloads = {
+  source_id: string;
+  files: Array<{ filename: string; url: string; index?: number }>;
+  zip_url?: string | null;
+};
+
+export const getSourceDownloads = (sourceId: string) =>
+  fetch(sourceDownloadsUrl(sourceId)).then(json<SourceDownloads>);
 
 export const getHealth = () => fetch("/api/health").then(json<{ status: string; lab?: boolean }>);
 export const getJobs = () => fetch("/api/jobs").then(json<JobSummary[]>);
@@ -109,7 +130,10 @@ async function putChunk(url: string, body: ArrayBuffer): Promise<void> {
   throw new Error(last);
 }
 
-async function uploadFileChunked(file: File): Promise<string> {
+async function uploadFileChunked(
+  file: File,
+  onBytes?: (loaded: number, total: number) => void,
+): Promise<string> {
   const initFd = new FormData();
   initFd.append("filename", file.name);
   initFd.append("size", String(file.size));
@@ -123,8 +147,67 @@ async function uploadFileChunked(file: File): Promise<string> {
     const buf = await blob.arrayBuffer();
     await putChunk(`/api/uploads/${init.upload_id}?offset=${offset}`, buf);
     offset += blob.size;
+    onBytes?.(Math.min(offset, file.size), file.size);
   }
   return init.upload_id;
+}
+
+async function initDirectUpload(file: File): Promise<DirectUploadInit> {
+  const fd = new FormData();
+  fd.append("filename", file.name);
+  fd.append("size", String(file.size));
+  fd.append("content_type", file.type || "video/mp4");
+  try {
+    const res = await fetch("/api/uploads/direct", { method: "POST", body: fd });
+    if (!res.ok) return { mode: "local" };
+    const body = (await res.json()) as DirectUploadInit;
+    if (body?.mode === "direct" && body.url && body.key) return body;
+    return { ...body, mode: "local" };
+  } catch {
+    return { mode: "local" };
+  }
+}
+
+async function putDirectObject(
+  file: File,
+  init: DirectUploadInit,
+  onBytes?: (loaded: number, total: number) => void,
+): Promise<void> {
+  const url = init.url as string;
+  const method = init.method || "PUT";
+  const headers = init.headers || { "Content-Type": file.type || "video/mp4" };
+  onBytes?.(0, file.size);
+  // Vitest has no ImportMeta.env; Next typecheck rejects import.meta.env.
+  const inVitest = typeof process !== "undefined" && Boolean(process.env.VITEST);
+  const useXhr = typeof XMLHttpRequest === "function" && !inVitest;
+  if (useXhr) {
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(method, url);
+      for (const [key, value] of Object.entries(headers)) {
+        xhr.setRequestHeader(key, value);
+      }
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) onBytes?.(event.loaded, event.total);
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          onBytes?.(file.size, file.size);
+          resolve();
+          return;
+        }
+        reject(new Error(`Upload failed (${xhr.status})`));
+      };
+      xhr.onerror = () => reject(new Error("Upload dropped — hit Generate again."));
+      xhr.send(file);
+    });
+    return;
+  }
+  const res = await fetch(url, { method, headers, body: file });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res));
+  }
+  onBytes?.(file.size, file.size);
 }
 
 function captionFields(generate: boolean, captionPrompt: string | string[]): {
@@ -145,12 +228,66 @@ export async function createJob(
   allowCreativeEscalate: boolean = true,
   qualityMode: "fast" | "hq" = "fast",
   generateCaptions: boolean = false,
+  prepMode: "none" | "hq" = "none",
   captionPrompt: string | string[] = "",
+  onProgress?: (p: JobUploadProgress) => void,
 ): Promise<CreateJobResponse> {
   const captions = generateCaptions ? "true" : "false";
   const prompts = captionFields(generateCaptions, captionPrompt);
+  const report = (
+    phase: JobUploadProgress["phase"],
+    fileIndex: number,
+    file: File | null,
+    loaded: number,
+    total: number,
+  ) => {
+    onProgress?.({
+      phase,
+      fileIndex,
+      fileCount: files.length,
+      filename: file?.name ?? "",
+      loaded,
+      total,
+    });
+  };
+  const first = files[0];
+  if (first) report("direct", 0, first, 0, first.size || 1);
+  const direct = first ? await initDirectUpload(first) : { mode: "local" as const };
+  if (direct.mode === "direct") {
+    try {
+      const items: Array<{ filename: string; key: string }> = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const init = i === 0 ? direct : await initDirectUpload(file);
+        if (init.mode !== "direct" || !init.url || !init.key) {
+          throw new Error("direct upload unavailable");
+        }
+        await putDirectObject(file, init, (loaded, total) => report("direct", i, file, loaded, total));
+        items.push({ filename: file.name, key: init.key });
+      }
+      report("create", Math.max(0, files.length - 1), files[files.length - 1] ?? null, 1, 1);
+      return fetch("/api/jobs/from-object", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items,
+          count,
+          allow_creative_escalate: allowCreativeEscalate,
+          quality_mode: qualityMode,
+          generate_captions: generateCaptions,
+          prep_mode: prepMode,
+          caption_prompt: prompts.caption_prompt,
+          caption_prompts: JSON.parse(prompts.caption_prompts) as string[],
+        }),
+      }).then(json<CreateJobResponse>);
+    } catch {
+      // CORS or object-store PUT failed — fall through to Railway upload.
+    }
+  }
+
   const needsChunk = files.some((f) => f.size > CHUNK_THRESHOLD);
   if (!needsChunk) {
+    report("chunk", 0, files[0] ?? null, 0, files.reduce((sum, f) => sum + f.size, 0) || 1);
     const fd = new FormData();
     fd.append("count", String(count));
     fd.append("allow_creative_escalate", String(allowCreativeEscalate));
@@ -158,14 +295,18 @@ export async function createJob(
     fd.append("generate_captions", captions);
     fd.append("caption_prompt", prompts.caption_prompt);
     fd.append("caption_prompts", prompts.caption_prompts);
+    fd.append("prep_mode", prepMode);
     for (const f of files) fd.append("files", f, f.name);
+    report("create", Math.max(0, files.length - 1), files[files.length - 1] ?? null, 1, 1);
     return fetch("/api/jobs", { method: "POST", body: fd }).then(json<CreateJobResponse>);
   }
 
   const uploadIds: string[] = [];
-  for (const f of files) {
-    uploadIds.push(await uploadFileChunked(f));
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    uploadIds.push(await uploadFileChunked(f, (loaded, total) => report("chunk", i, f, loaded, total)));
   }
+  report("create", Math.max(0, files.length - 1), files[files.length - 1] ?? null, 1, 1);
   const fd = new FormData();
   fd.append("upload_ids", uploadIds.join(","));
   fd.append("count", String(count));
@@ -174,6 +315,7 @@ export async function createJob(
   fd.append("generate_captions", captions);
   fd.append("caption_prompt", prompts.caption_prompt);
   fd.append("caption_prompts", prompts.caption_prompts);
+  fd.append("prep_mode", prepMode);
   return fetch("/api/jobs/from-uploads", { method: "POST", body: fd }).then(json<CreateJobResponse>);
 }
 
@@ -205,6 +347,18 @@ export function setPostUrl(sourceId: string, index: number, url: string): Promis
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url }),
+  }).then(json<VariantOut>);
+}
+
+export function approveLookEncode(
+  sourceId: string,
+  index: number,
+  approved = true,
+): Promise<VariantOut> {
+  return fetch(`/api/variants/${sourceId}/${index}/look-approval`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ approved }),
   }).then(json<VariantOut>);
 }
 
@@ -404,8 +558,18 @@ export function createJobFromDrive(opts: {
   qualityMode?: "fast" | "hq";
   allowCreativeEscalate?: boolean;
   generateCaptions?: boolean;
+  prepMode?: "none" | "hq";
   captionPrompt?: string | string[];
+  onProgress?: (p: JobUploadProgress) => void;
 }): Promise<CreateJobResponse> {
+  opts.onProgress?.({
+    phase: "create",
+    fileIndex: 0,
+    fileCount: opts.fileIds.length,
+    filename: "",
+    loaded: 1,
+    total: 1,
+  });
   const packed = captionFields(opts.generateCaptions ?? false, opts.captionPrompt ?? "");
   return fetch("/api/jobs/from-drive", {
     method: "POST",
@@ -417,6 +581,7 @@ export function createJobFromDrive(opts: {
       quality_mode: opts.qualityMode ?? "fast",
       allow_creative_escalate: opts.allowCreativeEscalate ?? true,
       generate_captions: opts.generateCaptions ?? false,
+      prep_mode: opts.prepMode ?? "none",
       caption_prompt: packed.caption_prompt,
       caption_prompts: JSON.parse(packed.caption_prompts) as string[],
     }),
@@ -431,6 +596,7 @@ export function createWorkflow(body: {
   output_destination_id: string;
   count?: number;
   quality_mode?: "fast" | "hq";
+  prep_mode?: "none" | "hq";
   allow_creative_escalate?: boolean;
   enabled?: boolean;
   poll_seconds?: number;
@@ -441,7 +607,11 @@ export function createWorkflow(body: {
   return fetch("/api/workflows", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      ...body,
+      quality_mode: body.quality_mode ?? "fast",
+      prep_mode: body.prep_mode ?? "none",
+    }),
   }).then(json<Workflow>);
 }
 
@@ -453,6 +623,7 @@ export function updateWorkflow(
     output_destination_id: string;
     count: number;
     quality_mode: "fast" | "hq";
+    prep_mode: "none" | "hq";
     allow_creative_escalate: boolean;
     enabled: boolean;
     poll_seconds: number;

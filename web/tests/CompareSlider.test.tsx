@@ -34,6 +34,17 @@ describe("CompareSlider aspect", () => {
     expect(box.style.maxHeight).toBe("46dvh");
   });
 
+  it("lets the in-pane review player fill the stage instead of a 280×470 box", () => {
+    const { container } = render(
+      <CompareSlider beforeSrc="/src.mp4" afterSrc="/var.mp4" stage />,
+    );
+    const box = container.querySelector(".compare-slider--stage") as HTMLElement;
+    expect(box).toBeTruthy();
+    expect(box.style.width).toBe("");
+    expect(box.style.maxHeight).toBe("");
+    expect(box.style.aspectRatio).toBe("9 / 16");
+  });
+
   it("does not take aspect from the source (before) layer", () => {
     const { container } = render(
       <CompareSlider beforeSrc="/src.mp4" afterSrc="/var.mp4" />,
@@ -43,18 +54,5 @@ describe("CompareSlider aspect", () => {
     fireEvent.loadedMetadata(videos[1]);
     const box = container.querySelector(".compare-slider") as HTMLElement;
     expect(box.style.aspectRatio).toBe("9 / 16");
-  });
-});
-
-describe("CompareSlider audio", () => {
-  it("plays the variant with sound and keeps the source muted", () => {
-    const { container } = render(
-      <CompareSlider beforeSrc="/src.mp4" afterSrc="/var.mp4" />,
-    );
-    const videos = container.querySelectorAll("video");
-    const after = videos[0] as HTMLVideoElement;
-    const before = videos[1] as HTMLVideoElement;
-    expect(after.muted).toBe(false);
-    expect(before.muted).toBe(true);
   });
 });

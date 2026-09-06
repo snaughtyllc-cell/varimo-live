@@ -46,6 +46,8 @@ export function InstagramPanel() {
     void refresh();
   }, [canManage]);
 
+  if (!canManage) return null;
+
   async function handleDisconnect(userId: string, username: string) {
     if (!window.confirm(`Disconnect ${handleLabel(username)}? Other testers stay connected.`)) {
       return;
@@ -81,8 +83,6 @@ export function InstagramPanel() {
 
   const accounts = status?.accounts ?? [];
   const connectLabel = accounts.length > 0 ? "Connect another account" : "Connect Instagram";
-
-  if (!canManage) return null;
 
   return (
     <div className="drive-card ig-panel">

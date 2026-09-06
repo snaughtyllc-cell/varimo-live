@@ -6,6 +6,8 @@ import {
   inFlightSlotLabel,
   inFlightSummaryLine,
   liveRunSubcopy,
+  reconstructFirstHeadline,
+  reconstructFirstSubcopy,
 } from "@/lib/hqWaitCopy";
 
 describe("hqWaitCopy", () => {
@@ -25,6 +27,17 @@ describe("hqWaitCopy", () => {
     expect(liveRunSubcopy("fast")).not.toMatch(/HQ upscale/i);
     expect(liveRunSubcopy("fast")).toMatch(/20 for one clip/i);
     expect(liveRunSubcopy("fast")).toMatch(/tile/i);
+  });
+
+  it("reconstruct-first names one GPU pass then Fast, not a 20-pack HQ", () => {
+    expect(reconstructFirstHeadline()).toMatch(/Reconstruct/i);
+    expect(reconstructFirstSubcopy()).toMatch(/one HQ GPU pass/i);
+    expect(reconstructFirstSubcopy()).toMatch(/Fast/i);
+    const copy = liveRunSubcopy("fast", "hq");
+    expect(copy).toMatch(/reconstruct/i);
+    expect(copy).toMatch(/one/i);
+    expect(copy).toMatch(/Fast/i);
+    expect(copy).not.toMatch(/20 HQ/);
   });
 
   it("slot labels stay short on the tile", () => {

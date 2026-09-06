@@ -43,14 +43,32 @@ export function formatSendDay(createdUtc: string): string {
   return new Date(t).toISOString().slice(0, 10);
 }
 
-export function winRateCopy(packs: DropPack[]): string {
-  const { sent, misses, winRate } = dropStats(packs);
-  if (sent === 0) return DROPS_EMPTY_COPY;
-  const pct = Math.round((winRate ?? 0) * 100);
-  return `${sent} sent · ${misses} miss · ${pct}% pass (unlabeled counts as pass)`;
-}
-
 export function parseDropFilter(raw: string | null): DropFilter {
   if (raw === "week" || raw === "misses" || raw === "flagged_week") return raw;
   return "all";
+}
+
+export function matchesDropQuery(pack: DropPack, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return (
+    pack.destination_name.toLowerCase().includes(q) ||
+    pack.export_id.toLowerCase().includes(q)
+  );
+}
+
+function csvField(value: string): string {
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+export function dropsCsv(packs: DropPack[], resultLabel: (pack: DropPack) => string): string {
+  const header = ["Pack", "Sent", "Files", "Ledger ID", "Result"];
+  const rows = packs.map((pack) => [
+    pack.destination_name,
+    formatSendDay(pack.created_utc),
+    String(pack.count),
+    pack.export_id,
+    resultLabel(pack),
+  ]);
+  return [header, ...rows].map((row) => row.map(csvField).join(",")).join("\n");
 }

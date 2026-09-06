@@ -9,7 +9,6 @@ export interface DrivePick {
   destinationId: string;
   id: string;
   name: string;
-  thumbUrl?: string;
 }
 
 interface DrivePickerModalProps {
@@ -266,7 +265,7 @@ export function DrivePickerModal({ existingDestinationId, onConfirm, onClose }: 
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleVideo(v.id)}
-                          style={{ accentColor: "#0caab8" }}
+                          style={{ accentColor: "var(--color-violet)" }}
                         />
                         <span
                           style={{
@@ -308,7 +307,7 @@ export function DrivePickerModal({ existingDestinationId, onConfirm, onClose }: 
                     fontSize: 12.5,
                     fontWeight: 700,
                     color: "#fff",
-                    background: "#172124",
+                    background: "var(--ink)",
                     border: "none",
                     padding: "8px 16px",
                     borderRadius: 9,

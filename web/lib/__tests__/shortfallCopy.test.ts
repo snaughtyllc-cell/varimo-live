@@ -25,6 +25,11 @@ describe("shortfallCopy", () => {
     expect(msg).not.toMatch(/Diagnostics/i);
   });
 
+  it("says still rendering while job is queued", () => {
+    const msg = shortfallCopy(base({ job_state: "queued", failed: 0 }));
+    expect(msg).toMatch(/still rendering/i);
+  });
+
   it("does not send operators to Diagnostics when variants failed", () => {
     const msg = shortfallCopy(base({ job_state: "done", failed: 2, shortfall: 2 }));
     expect(msg).toMatch(/regenerat/i);

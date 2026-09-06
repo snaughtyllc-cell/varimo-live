@@ -1,13 +1,17 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { VariantOut } from "@/lib/types";
-import { sourceUrl } from "@/lib/api";
+import { sourceUrl, approveLookEncode } from "@/lib/api";
+import { isFileReady } from "@/lib/gallery";
+import { PosterThumb } from "../common/PosterThumb";
 import { CompareSlider } from "./CompareSlider";
 import { ScrubBar } from "./ScrubBar";
 import { CaptionBlock } from "./CaptionBlock";
 import { QualityPanel } from "./QualityPanel";
+import { LookReviewBanner } from "./LookReviewBanner";
 import { VariantActions } from "./VariantActions";
+import { variantWipeHint } from "@/lib/galleryLayout";
 import { insightSnapshotCopy } from "@/lib/instagram";
 
 interface VariantSheetProps {
@@ -18,7 +22,28 @@ interface VariantSheetProps {
   onClose: () => void;
   onNav: (delta: number) => void;
   onRegenerate: () => void;
+  /** In-pane Gallery review — packs stay visible; no dialog overlay. */
+  embedded?: boolean;
+  selectedCount?: number;
+  flaggedCount?: number;
+  packAvgPct?: number | null;
+  onSendToDrive?: () => void;
 }
+
+const navBtnStyle = (disabled: boolean): CSSProperties => ({
+  width: 36,
+  height: 36,
+  borderRadius: 9,
+  background: "#fff",
+  border: "1px solid var(--color-line)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: disabled ? "var(--color-line2)" : "#23393e",
+  cursor: disabled ? "not-allowed" : "pointer",
+  flexShrink: 0,
+  opacity: disabled ? 0.5 : 1,
+});
 
 export function VariantSheet({
   sourceId,
@@ -28,12 +53,24 @@ export function VariantSheet({
   onClose,
   onNav,
   onRegenerate,
+  embedded = false,
+  selectedCount,
+  flaggedCount,
+  packAvgPct,
+  onSendToDrive,
 }: VariantSheetProps) {
   // Create the two video refs here, pass to both CompareSlider and ScrubBar
   const beforeRef = useRef<HTMLVideoElement | null>(null);
   const afterRef = useRef<HTMLVideoElement | null>(null);
+  const [cueNonce, setCueNonce] = useState(0);
+  const [lookRow, setLookRow] = useState(variants[index]);
+  const [approving, setApproving] = useState(false);
 
-  const variant = variants[index];
+  const variant = lookRow && lookRow.index === variants[index]?.index ? lookRow : variants[index];
+  useEffect(() => {
+    setLookRow(variants[index]);
+  }, [variants, index]);
+
   const isFirst = index <= 0;
   const isLast = index >= variants.length - 1;
 
@@ -58,6 +95,228 @@ export function VariantSheet({
 
   if (!variant) return null;
 
+  const titleStyle: CSSProperties = {
+    fontFamily: "var(--font-brand)",
+    fontSize: 14.5,
+    fontWeight: 700,
+    letterSpacing: "-0.01em",
+    color: "var(--color-text)",
+    margin: 0,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  };
+  const subStyle: CSSProperties = {
+    display: "block",
+    fontFamily: "var(--font-space-grotesk), monospace",
+    fontSize: 10.5,
+    color: "var(--color-muted2)",
+    marginTop: 2,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  };
+  const closeStyle: CSSProperties = {
+    width: 36,
+    height: 36,
+    marginLeft: 4,
+    borderRadius: 9,
+    background: "transparent",
+    border: "none",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "var(--color-muted)",
+    cursor: "pointer",
+    flexShrink: 0,
+  };
+
+  const chrome = (title: ReactNode, close: ReactNode) => (
+    <div
+      className="variant-sheet__header"
+      style={{
+        display: "flex",
+        flexShrink: 0,
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => onNav(-1)}
+        disabled={isFirst}
+        aria-label="Previous variant"
+        style={navBtnStyle(isFirst)}
+      >
+        <span className="material-symbols-rounded" style={{ fontSize: 18 }} aria-hidden="true">
+          chevron_left
+        </span>
+      </button>
+
+      <div style={{ flex: 1, minWidth: 0, padding: "0 4px" }}>
+        {title}
+        <span style={subStyle}>
+          variant {index + 1} of {variants.length} · {variant.filename}
+        </span>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onNav(+1)}
+        disabled={isLast}
+        aria-label="Next variant"
+        style={navBtnStyle(isLast)}
+      >
+        <span className="material-symbols-rounded" style={{ fontSize: 18 }} aria-hidden="true">
+          chevron_right
+        </span>
+      </button>
+
+      {close}
+    </div>
+  );
+
+  const body = (
+    <div
+      className="variant-sheet__body"
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: "auto",
+        overflowX: "hidden",
+        overscrollBehavior: "contain",
+        WebkitOverflowScrolling: "touch",
+      }}
+    >
+      <div className="variant-sheet__stage">
+        <div className="variant-sheet__player">
+          <CompareSlider
+            beforeSrc={sourceUrl(sourceId)}
+            afterSrc={variant.file_url}
+            videoRefs={{ beforeRef, afterRef }}
+            stage={embedded}
+          />
+          <div className="variant-sheet__player-hint">
+            <span className="variant-sheet__hint-pill">{variantWipeHint()}</span>
+          </div>
+        </div>
+
+        <div className="variant-sheet__scrub">
+          <ScrubBar
+            videos={[beforeRef, afterRef]}
+            cueTime={variant.look_review_t ?? variant.quality?.look_review_t ?? null}
+            cueNonce={cueNonce}
+          />
+        </div>
+
+        <div className="variant-sheet__filmstrip">
+          <div className="variant-sheet__filmstrip-head">
+            <div className="variant-sheet__filmstrip-label">
+              Pack · {variants.length} variant{variants.length === 1 ? "" : "s"}
+            </div>
+            {(selectedCount != null || flaggedCount != null) && (
+              <div className="variant-sheet__filmstrip-meta">
+                {selectedCount ?? 0} selected · {flaggedCount ?? 0} flagged
+              </div>
+            )}
+          </div>
+          <div className="variant-sheet__filmstrip-row">
+            {variants.map((v, i) => (
+              <button
+                key={v.index}
+                type="button"
+                className="variant-sheet__filmstrip-tile"
+                data-current={i === index}
+                onClick={() => onNav(i - index)}
+                aria-label={`Go to variant ${String(v.index).padStart(2, "0")}`}
+                aria-current={i === index}
+              >
+                {isFileReady(v) ? (
+                  <PosterThumb src={v.look_var_url} className="variant-sheet__filmstrip-thumb" fill />
+                ) : null}
+                <span>{String(v.index).padStart(2, "0")}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="variant-sheet__panel">
+        <div className="variant-sheet__panel-head">
+          <div className="variant-sheet__panel-title">
+            v{padded} <span>of {variants.length}</span>
+          </div>
+          <div className="variant-sheet__panel-sub">
+            delivered
+            {variant.uniqueness != null ? ` · ${Math.round(variant.uniqueness * 100)}% originality` : ""}
+          </div>
+        </div>
+        <div className="variant-sheet__panel-body">
+          <LookReviewBanner
+            variant={variant}
+            busy={approving}
+            onPlayMoment={() => setCueNonce((n) => n + 1)}
+            onApprove={async () => {
+              setApproving(true);
+              try {
+                const next = await approveLookEncode(sourceId, variant.index, true);
+                setLookRow({ ...variant, ...next });
+              } finally {
+                setApproving(false);
+              }
+            }}
+          />
+          <QualityPanel
+            uniqueness={variant.uniqueness}
+            uniquenessStatus={variant.uniqueness_status}
+            bestEffort={variant.status === "best_effort"}
+            packAvgPct={packAvgPct}
+            heads={variant.quality.heads}
+          />
+
+          {insightsCopy && (
+            <>
+              <div className="variant-sheet__hr" />
+              <div className="variant-sheet__insights">
+                <div className="variant-sheet__insights-label">Insights</div>
+                <div>{insightsCopy}</div>
+              </div>
+            </>
+          )}
+
+          <div className="variant-sheet__hr" />
+
+          <CaptionBlock sourceId={sourceId} variant={variant} onSaved={onRegenerate} />
+
+          <div className="variant-sheet__hr" />
+
+          <VariantActions
+            sourceId={sourceId}
+            variant={variant}
+            onRegenerate={onRegenerate}
+            onSendToDrive={onSendToDrive}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  if (embedded) {
+    return (
+      <section className="gallery-review" aria-label="Variant review">
+        {chrome(
+          <h2 style={titleStyle}>
+            {sourceName} · v{padded}
+          </h2>,
+          <button type="button" aria-label="Close" onClick={onClose} style={closeStyle}>
+            <span className="material-symbols-rounded" style={{ fontSize: 20 }} aria-hidden="true">
+              close
+            </span>
+          </button>,
+        )}
+        {body}
+      </section>
+    );
+  }
+
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
       <Dialog.Portal>
@@ -67,14 +326,15 @@ export function VariantSheet({
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(23, 42, 46, 0.32)",
+            background: "rgba(15, 26, 30, 0.5)",
             backdropFilter: "blur(3px)",
             zIndex: 50,
             touchAction: "none",
           }}
         />
 
-        {/* Panel — right-docked slide-over */}
+        {/* Panel — right-docked slide-over. Desktop: dark stage + 372px panel
+            side by side. Mobile: full-screen, stage stacked above panel. */}
         <Dialog.Content
           aria-describedby={undefined}
           className="variant-sheet"
@@ -87,9 +347,6 @@ export function VariantSheet({
             bottom: 0,
             width: 430,
             maxWidth: "100vw",
-            background: "#fbfdfd",
-            borderLeft: "1px solid #c7dde0",
-            boxShadow: "-20px 0 50px rgba(22, 58, 65, 0.22)",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
@@ -106,185 +363,18 @@ export function VariantSheet({
             }
           `}</style>
 
-          {/* Header — row of ‹ title › ✕; never stacks, never scrolls away */}
-          <div
-            className="variant-sheet__header"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "12px 14px",
-              borderBottom: "1px solid #d4e3e6",
-              flexShrink: 0,
-            }}
-          >
-            {/* Prev */}
-            <button
-              type="button"
-              onClick={() => onNav(-1)}
-              disabled={isFirst}
-              aria-label="Previous variant"
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 8,
-                background: "#f3f8f9",
-                border: "1px solid var(--color-line)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: isFirst ? "var(--color-muted2)" : "var(--color-muted)",
-                fontSize: 22,
-                cursor: isFirst ? "not-allowed" : "pointer",
-                flexShrink: 0,
-                opacity: isFirst ? 0.4 : 1,
-              }}
-            >
-              ‹
-            </button>
-
-            {/* Title block */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <Dialog.Title
-                style={{
-                  fontSize: 14.5,
-                  fontWeight: 700,
-                  color: "var(--color-text)",
-                  margin: 0,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {sourceName} · v{padded}
-              </Dialog.Title>
-              <span
-                style={{
-                  display: "block",
-                  fontSize: 11,
-                  color: "var(--color-muted)",
-                  marginTop: 1,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                variant {index + 1} of {variants.length} · {variant.filename}
+          {chrome(
+            <Dialog.Title style={titleStyle}>
+              {sourceName} · v{padded}
+            </Dialog.Title>,
+            <Dialog.Close type="button" aria-label="Close" style={closeStyle}>
+              <span className="material-symbols-rounded" style={{ fontSize: 20 }} aria-hidden="true">
+                close
               </span>
-            </div>
+            </Dialog.Close>,
+          )}
 
-            {/* Next */}
-            <button
-              type="button"
-              onClick={() => onNav(+1)}
-              disabled={isLast}
-              aria-label="Next variant"
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 8,
-                background: "#f3f8f9",
-                border: "1px solid var(--color-line)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: isLast ? "var(--color-muted2)" : "var(--color-muted)",
-                fontSize: 22,
-                cursor: isLast ? "not-allowed" : "pointer",
-                flexShrink: 0,
-                opacity: isLast ? 0.4 : 1,
-              }}
-            >
-              ›
-            </button>
-
-            {/* Close */}
-            <Dialog.Close
-              type="button"
-              aria-label="Close"
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 8,
-                background: "transparent",
-                border: "none",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--color-muted)",
-                fontSize: 18,
-                cursor: "pointer",
-                flexShrink: 0,
-              }}
-            >
-              ✕
-            </Dialog.Close>
-          </div>
-
-          {/* Body — only scroll container; Radix locks document scroll while open */}
-          <div
-            className="variant-sheet__body"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: "auto",
-              overflowX: "hidden",
-              overscrollBehavior: "contain",
-              WebkitOverflowScrolling: "touch",
-              padding: "14px 16px 28px",
-            }}
-          >
-            {/* Compare slider — beforeRef/afterRef wired in from sheet */}
-            <CompareSlider
-              beforeSrc={sourceUrl(sourceId)}
-              afterSrc={variant.file_url}
-              videoRefs={{ beforeRef, afterRef }}
-            />
-
-            {/* Scrub bar — controls both videos in sync */}
-            <div style={{ marginTop: 12 }}>
-              <ScrubBar videos={[beforeRef, afterRef]} />
-            </div>
-
-            <CaptionBlock sourceId={sourceId} variant={variant} onSaved={onRegenerate} />
-
-            {insightsCopy && (
-              <div style={{ marginTop: 14 }}>
-                <div
-                  style={{
-                    color: "var(--color-violet)",
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                    letterSpacing: "0.14em",
-                    textTransform: "uppercase",
-                    marginBottom: 6,
-                  }}
-                >
-                  Insights
-                </div>
-                <div style={{ fontSize: 13.5, lineHeight: 1.5, color: "var(--color-text)" }}>
-                  {insightsCopy}
-                </div>
-              </div>
-            )}
-
-            <QualityPanel
-              uniqueness={variant.uniqueness}
-              uniquenessStatus={variant.uniqueness_status}
-              bestEffort={variant.status === "best_effort"}
-              heads={variant.quality?.heads}
-            />
-
-            {/* Actions */}
-            <VariantActions
-              sourceId={sourceId}
-              variant={variant}
-              onRegenerate={onRegenerate}
-            />
-
-            {/* Bottom breathing room */}
-            <div style={{ height: 24 }} />
-          </div>
+          {body}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

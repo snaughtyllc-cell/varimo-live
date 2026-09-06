@@ -21,9 +21,11 @@ export function StatusStrip() {
       {/* Engine status pill */}
       <span
         className="status-engine inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-line"
+        aria-label={loading ? "Checking" : ready && online ? "Ready" : "Offline"}
       >
         <span
-          className="w-[7px] h-[7px] rounded-full flex-none"
+          className="status-engine__dot w-[7px] h-[7px] rounded-full flex-none"
+          aria-hidden="true"
           style={
             ready && online
               ? { background: "#22c55e", boxShadow: "0 0 8px #22c55e88" }
@@ -32,7 +34,7 @@ export function StatusStrip() {
               : { background: "#f87171", boxShadow: "0 0 8px #f8717188" }
           }
         />
-        {loading ? "…" : ready && online ? <span className="status-ready-text">Ready</span> : <span className="status-ready-text">Offline</span>}
+        {loading ? <span className="status-ready-text">…</span> : ready && online ? <span className="status-ready-text">Ready</span> : <span className="status-ready-text">Offline</span>}
       </span>
 
       {queueLabel && (

@@ -92,7 +92,6 @@ describe("VariantCard uniqueness", () => {
       />,
     );
     expect(screen.getByText("50%")).toBeInTheDocument();
-    expect(screen.getByTitle(/pixel SSIM vs the original/i)).toBeInTheDocument();
     expect(screen.queryByText("esc")).not.toBeInTheDocument();
     expect(screen.queryByText("95")).not.toBeInTheDocument();
     expect(screen.queryByText(/spatial/i)).not.toBeInTheDocument();
@@ -146,7 +145,7 @@ describe("VariantCard uniqueness", () => {
     render(
       <VariantCard
         variant={variant({
-          ig_media_id: "178",
+          ig_media_id: "m1",
           ig_insights: { views: 312400 },
         })}
         sourceId="s1"
@@ -177,7 +176,7 @@ describe("VariantCard uniqueness", () => {
 });
 
 describe("VariantCard aspect", () => {
-  it("lets VideoThumb own the frame instead of a hardcoded 9:16 card", () => {
+  it("locks a small 9:16 preview frame so the video cannot blow the tile to native size", () => {
     const { container } = render(
       <VariantCard
         variant={variant()}
@@ -187,16 +186,16 @@ describe("VariantCard aspect", () => {
         onToggle={() => {}}
       />,
     );
-    const card = screen.getByText("v01").parentElement as HTMLElement;
-    expect(card.style.aspectRatio).toBe("");
-    expect(card.style.position).toBe("relative");
-    const thumb = container.querySelector("video")?.parentElement as HTMLElement;
-    expect(thumb.className).not.toMatch(/absolute/);
-    expect(thumb.className).not.toMatch(/inset-0/);
-    expect(thumb.style.aspectRatio).toBe("9 / 16");
+    const frame = container.querySelector(".gallery-tile__frame") as HTMLElement;
+    expect(frame).toBeTruthy();
+    expect(frame.style.aspectRatio).toBe("9 / 16");
+    const tile = container.querySelector(".gallery-tile") as HTMLElement;
+    expect(tile).toHaveClass("gallery-tile");
+    const thumb = container.querySelector(".gallery-tile__thumb") as HTMLElement;
+    expect(thumb).toHaveAttribute("data-fill", "true");
   });
 
-  it("keeps a 9:16 box for variants that are not on Studio", () => {
+  it("keeps a 9:16 box for variants that are not ready", () => {
     render(
       <VariantCard
         variant={variant({ file_ready: false })}
@@ -206,7 +205,7 @@ describe("VariantCard aspect", () => {
         onToggle={() => {}}
       />,
     );
-    const placeholder = screen.getByText("Not on Studio");
+    const placeholder = screen.getByText("Not ready");
     expect(placeholder.style.aspectRatio).toBe("9 / 16");
     expect(placeholder.className).not.toMatch(/absolute/);
   });

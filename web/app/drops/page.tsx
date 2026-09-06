@@ -13,25 +13,25 @@ export default function DropsPage() {
   return (
     <RequireAgency>
       <main className="drops-page">
-        <Suspense
-          fallback={
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "60px 0",
-                color: "var(--color-muted)",
-                fontSize: 13,
-              }}
-            >
-              Loading…
-            </div>
-          }
-        >
-          <DropsContent />
-        </Suspense>
-      </main>
+      <Suspense
+        fallback={
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "60px 0",
+              color: "var(--color-muted)",
+              fontSize: 13,
+            }}
+          >
+            Loading…
+          </div>
+        }
+      >
+        <DropsContent />
+      </Suspense>
+    </main>
     </RequireAgency>
   );
 }

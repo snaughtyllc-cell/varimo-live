@@ -26,7 +26,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Generate: drop files or pick from Drive, set copies, Fast (HQ coming soon), captions, Advanced, live queue.",
+      "Generate: drop files or pick from Drive, set copies, Fast, optional Reconstruct first (HQ), captions, Advanced, live queue.",
   },
   {
     href: "/gallery",
@@ -51,7 +51,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack.",
+      "Watch folder auto-poll, inbox-to-output Drive folders, optional Reconstruct first (HQ), cancel a live pack.",
   },
   {
     href: "/settings/drive",
@@ -59,7 +59,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Share the varimo Drive email with a folder, paste the link, captions, Drop Ledger, password.",
+      "Share the varimo Drive email with a folder, paste the link, captions, Drop Ledger, Instagram testers, password.",
   },
   {
     href: "/team",
@@ -71,7 +71,6 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
   {
     href: "/analytics",
     label: "Analytics",
-    short: "Stats",
     audience: "owner",
     tab: "extra",
     summary:

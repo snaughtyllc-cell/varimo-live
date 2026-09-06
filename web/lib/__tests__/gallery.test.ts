@@ -1,17 +1,22 @@
 import { describe, it, expect, vi } from "vitest";
 import {
+  copyLandingCopy,
   copyMissingCopy,
   deliveryComplete,
+  expiresLabel,
   filesReadyCount,
   filterSources,
   gallerySearchPath,
   isFileReady,
+  packOriginalityColor,
   parseGalleryVariantQuery,
   pushGallerySearch,
   sortSources,
+  tileOriginalityColor,
   zipEmptyCopy,
   removePackCopy,
 } from "@/lib/gallery";
+import { uniquenessPassPct } from "@/lib/prepareCopy";
 const mk = (id: string, shortfall: number, created_utc = "") => ({
   source_id: id, filename: id, requested: 5, delivered: 5 - shortfall, shortfall,
   variants: [], created_utc,
@@ -37,8 +42,8 @@ describe("gallery helpers", () => {
     ];
     expect(sortSources(all, "newest").map(s => s.source_id)).toEqual(["zebra", "apple"]);
   });
-  it("explains an empty zip as missing GPU copies, not a Files app glitch", () => {
-    expect(zipEmptyCopy()).toMatch(/copied back from the GPU/i);
+  it("explains an empty zip as a missing download package, not a Files app glitch", () => {
+    expect(zipEmptyCopy()).toMatch(/available for download/i);
   });
 
   it("does not treat metadata delivery as files on Studio", () => {
@@ -50,7 +55,15 @@ describe("gallery helpers", () => {
     };
     expect(filesReadyCount(missing)).toBe(0);
     expect(deliveryComplete(missing)).toBe(false);
-    expect(copyMissingCopy()).toMatch(/Retry copy/i);
+    expect(copyMissingCopy()).toMatch(/Retry delivery/i);
+    expect(copyLandingCopy()).toMatch(/landing/i);
+  });
+
+  it("formats download expiration without loading media", () => {
+    const now = new Date("2026-09-04T12:00:00Z");
+    expect(expiresLabel("2026-09-05T15:42:00Z", now)).toMatch(/Expires/i);
+    expect(expiresLabel("2026-09-04T11:00:00Z", now)).toBe("Downloads expired");
+    expect(expiresLabel(null, now)).toBeNull();
   });
 
   it("explains removing a pack, including a live one", () => {
@@ -80,6 +93,18 @@ describe("gallery helpers", () => {
   it("builds a Gallery path that can be pushed without a Next.js navigation", () => {
     expect(gallerySearchPath("abc", 3)).toBe("/gallery?v=abc:3");
     expect(gallerySearchPath()).toBe("/gallery");
+  });
+
+  it("colors originality from the 38% pass line, not a 65% verified band", () => {
+    expect(uniquenessPassPct()).toBe(38);
+    expect(tileOriginalityColor(null)).toBe("var(--color-muted2)");
+    expect(tileOriginalityColor(37)).toBe("var(--color-amber2)");
+    expect(tileOriginalityColor(38)).toBe("var(--color-mint)");
+    expect(tileOriginalityColor(52)).toBe("var(--color-mint)");
+    expect(tileOriginalityColor(64)).toBe("var(--color-mint)");
+    expect(packOriginalityColor(null)).toBe("var(--color-muted2)");
+    expect(packOriginalityColor(37)).toBe("var(--color-amber)");
+    expect(packOriginalityColor(38)).toBe("var(--color-violet)");
   });
 
   it("writes the Gallery query with history.pushState, not a page remount", () => {

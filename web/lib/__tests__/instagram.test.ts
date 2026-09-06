@@ -10,8 +10,10 @@ import {
   handleLabel,
   igOauthErrorMessage,
   insightSnapshotCopy,
+  GALLERY_LIVE_STRIP_PREVIEW_HINT,
   moveCopyLabel,
   packConversionCopy,
+  packLiveStripModel,
   packPickerOptions,
   packSuggestionHint,
   packViewsCopy,
@@ -156,6 +158,37 @@ describe("packConversionCopy", () => {
 
   it("omits missing conversion metrics instead of writing zero", () => {
     expect(packConversionCopy(1500, null, undefined, 4, 8)).toBe("1.5k views · 4 of 8 linked");
+  });
+});
+
+describe("packLiveStripModel", () => {
+  it("uses a sample layout when nothing is linked so Gallery can show the Insights strip", () => {
+    const model = packLiveStripModel({ variants: [1, 2], insights_linked: 0 });
+    expect(model.preview).toBe(true);
+    expect(model.hint).toBe(GALLERY_LIVE_STRIP_PREVIEW_HINT);
+    expect(model.metrics.map((row) => `${row.value} ${row.label}`)).toEqual([
+      "25k views",
+      "20k reach",
+      "1.8k likes",
+      "94 comments",
+      "210 shares",
+    ]);
+    expect(model.linkedCopy).toBe("3 of 10 linked");
+  });
+
+  it("uses live totals when Reels are linked", () => {
+    const model = packLiveStripModel({
+      variants: [1, 2, 3],
+      insights_linked: 2,
+      insights_views: 1234,
+      insights_likes: 40,
+      suggestion_kind: "quiet",
+    });
+    expect(model.preview).toBe(false);
+    expect(model.metrics[0]).toEqual({ label: "views", value: "1.2k" });
+    expect(model.metrics).toContainEqual({ label: "likes", value: "40" });
+    expect(model.linkedCopy).toBe("2 of 3 linked");
+    expect(model.hint).toMatch(/quiet/i);
   });
 });
 

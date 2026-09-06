@@ -11,15 +11,26 @@ import {
 } from "@/lib/api";
 import { oauthErrorMessage, truncateFolderId } from "@/lib/drive";
 import {
+  DRIVE_OPERATOR_WAIT,
   DRIVE_SHARE_BODY,
   DRIVE_SHARE_HEADING,
   driveShareEmail,
 } from "@/lib/driveShareCopy";
+import { canManageDriveOAuth } from "@/lib/navAccess";
+import { useAuthMe } from "@/lib/useAuthMe";
 import type { Destination, DriveStatus } from "@/lib/types";
 
 type TestResult = { ok: boolean; message: string };
 
+const STATE_COLORS: Record<"ok" | "untested" | "failed", string> = {
+  ok: "#12b76a",
+  untested: "#e0a32e",
+  failed: "#e5533d",
+};
+
 export function DestinationsPanel() {
+  const { data: me } = useAuthMe();
+  const manageOAuth = canManageDriveOAuth(me);
   const [status, setStatus] = useState<DriveStatus | null>(null);
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -177,194 +188,116 @@ export function DestinationsPanel() {
   }
 
   return (
-    <div>
-      {oauthBanner && (
-        <div
-          style={{
-            padding: "12px 16px",
-            marginBottom: 18,
-            background: "#fff8eb",
-            border: "1px solid #efdfbd",
-            borderRadius: 12,
-            fontSize: 12.5,
-            color: "#8e6119",
-          }}
-        >
-          {oauthBanner}
-        </div>
-      )}
-      {/* Share-email is the operator path until Connect-your-own-Google is the default. */}
-      <div
-        data-testid="drive-share-card"
-        style={{
-          background: "var(--color-panel)",
-          border: "1px solid var(--color-line)",
-          borderRadius: 14,
-          padding: 16,
-          marginBottom: 18,
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-        }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)" }}>
-          {DRIVE_SHARE_HEADING}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <code
-            data-testid="drive-share-email"
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: "var(--color-text)",
-              background: "var(--color-panel2)",
-              border: "1px solid var(--color-line)",
-              borderRadius: 9,
-              padding: "8px 12px",
-              flex: 1,
-              minWidth: 180,
-            }}
-          >
-            {shareEmail}
-          </code>
-          <button type="button" onClick={copyShareEmail} style={secondaryBtnStyle}>
-            {copiedShare ? "Copied" : "Copy"}
-          </button>
-        </div>
-        <div style={{ fontSize: 12.5, color: "var(--color-muted)", lineHeight: 1.45 }}>
-          {DRIVE_SHARE_BODY}
-        </div>
-        {shareMismatch && (
-          <div style={{ fontSize: 12, color: "#8e6119", lineHeight: 1.45 }}>
-            Studio is still signed in as {connectedEmail}. Reconnect Google as {shareEmail}{" "}
-            so shared folders actually open — operators should not share with a personal inbox.
+    <div className="drive-panel-root">
+      {/* Left column, part 1: connect flow — Step 1 share card. */}
+      <div className="drive-slot-a">
+        {oauthBanner && (
+          <div className="drive-banner" role="alert">
+            {oauthBanner}
           </div>
         )}
+
+        {/* Share-email is the operator path until Connect-your-own-Google is the default. */}
+        <div className="drive-eyebrow">Step 1 · {DRIVE_SHARE_HEADING}</div>
+        <div data-testid="drive-share-card" className="drive-step1-card">
+          <div className="drive-step1-card__row">
+            <code data-testid="drive-share-email" className="drive-step1-card__email">
+              {shareEmail}
+            </code>
+            <button type="button" onClick={copyShareEmail} className="drive-btn drive-btn--aqua">
+              <span className="material-symbols-rounded" aria-hidden="true">content_copy</span>
+              {copiedShare ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <div className="drive-step1-card__body">{DRIVE_SHARE_BODY}</div>
+          {shareMismatch && manageOAuth && (
+            <div className="drive-step1-card__mismatch">
+              Studio is still signed in as {connectedEmail}. Reconnect Google as {shareEmail}{" "}
+              so shared folders actually open — operators should not share with a personal inbox.
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Connection card */}
-      <div
-        style={{
-          background: "var(--color-panel)",
-          border: "1px solid var(--color-line)",
-          borderRadius: 14,
-          padding: 16,
-          marginBottom: 18,
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-        }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)" }}>
-          Google account
-        </div>
-        {status?.status === "ready" && connectedEmail ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: "var(--color-text)" }}>
-              Connected as <b>{connectedEmail}</b>
-              {status.auth_mode ? (
-                <span style={{ color: "var(--color-muted)" }}> · {status.auth_mode}</span>
-              ) : null}
-            </div>
-            {isOauth && (
-              <button
-                type="button"
-                onClick={handleDisconnect}
-                disabled={disconnecting}
-                style={{
-                  ...secondaryBtnStyle,
-                  color: "var(--color-red)",
-                  cursor: disconnecting ? "not-allowed" : "pointer",
-                  opacity: disconnecting ? 0.7 : 1,
-                }}
-              >
-                {disconnecting ? "Disconnecting…" : "Disconnect"}
-              </button>
-            )}
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ fontSize: 12.5, color: "var(--color-muted)" }}>
-              {status?.message ?? "Checking Drive configuration…"}
-            </div>
-            {oauthAvailable ? (
-              <a
-                href="/api/drive/oauth/start"
-                style={{
-                  ...primaryBtnStyle,
-                  display: "inline-block",
-                  textAlign: "center",
-                  textDecoration: "none",
-                  width: "fit-content",
-                }}
-              >
-                Connect Google
-              </a>
+      {/* Right column: Google account — site admin only. Operators share studio@. */}
+      <div className="drive-slot-account">
+        {manageOAuth ? (
+          <div className="drive-card">
+            <div className="drive-card__title">Google account</div>
+            {status?.status === "ready" && connectedEmail ? (
+              <>
+                <div className="drive-card__row">
+                  <div className="drive-card__row-label">Google account</div>
+                  <div className="drive-card__row-value">
+                    {connectedEmail}
+                    {status.auth_mode ? ` · ${status.auth_mode}` : ""}
+                  </div>
+                </div>
+                {isOauth && (
+                  <button
+                    type="button"
+                    onClick={handleDisconnect}
+                    disabled={disconnecting}
+                    className="drive-card__row drive-card__row--action"
+                  >
+                    <div className="drive-card__row-label">
+                      {disconnecting ? "Disconnecting…" : "Disconnect Drive"}
+                    </div>
+                    <span className="material-symbols-rounded" style={{ color: "var(--color-red)", fontSize: 18 }} aria-hidden="true">
+                      logout
+                    </span>
+                  </button>
+                )}
+              </>
             ) : (
-              <div style={{ fontSize: 12, color: "#8e6119" }}>
-                OAuth client not set on this Pod — ask an admin to set{" "}
-                <code>VARIANT_DRIVE_OAUTH_CLIENT_ID</code> /{" "}
-                <code>VARIANT_DRIVE_OAUTH_CLIENT_SECRET</code>.
+              <div className="drive-card__row" style={{ flexDirection: "column", alignItems: "flex-start", gap: 10, borderTop: "none" }}>
+                <div style={{ fontSize: 12.5, color: "var(--color-muted)" }}>
+                  {status?.message ?? "Checking Drive configuration…"}
+                </div>
+                {oauthAvailable ? (
+                  <a href="/api/drive/oauth/start" className="drive-btn drive-btn--dark drive-btn--sm">
+                    Connect Google
+                  </a>
+                ) : (
+                  <div style={{ fontSize: 12, color: "#8e6119" }}>
+                    OAuth client not set on this Pod — ask an admin to set{" "}
+                    <code>VARIANT_DRIVE_OAUTH_CLIENT_ID</code> /{" "}
+                    <code>VARIANT_DRIVE_OAUTH_CLIENT_SECRET</code>.
+                  </div>
+                )}
               </div>
             )}
           </div>
+        ) : (
+          <div className="drive-card">
+            <div className="drive-card__title">Account</div>
+            <div className="drive-card__row" style={{ flexDirection: "column", alignItems: "flex-start", gap: 10, borderTop: "none" }}>
+              <div style={{ fontSize: 12.5, color: "var(--color-muted)", lineHeight: 1.45 }}>
+                {DRIVE_OPERATOR_WAIT}
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Banner when Drive is not ready */}
-      {driveNotReady && (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-            padding: "12px 16px",
-            marginBottom: 18,
-            background: "#fff8eb",
-            border: "1px solid #efdfbd",
-            borderRadius: 12,
-            fontSize: 12.5,
-            color: "#8e6119",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span>⚠</span>
-            <b>{status!.message}</b>
+      {/* Left column, part 2: Step 2 add-destination form + the table. */}
+      <div className="drive-slot-b">
+        {driveNotReady && (
+          <div className="drive-banner">
+            <strong>{manageOAuth ? status!.message : DRIVE_OPERATOR_WAIT}</strong>
+            <small>Share folders as Editor with {shareEmail}</small>
           </div>
-          <div style={{ color: "var(--color-muted)", fontSize: 12 }}>
-            Share folders as Editor with {shareEmail}
-          </div>
-        </div>
-      )}
-
-      {/* Add destination form */}
-      <form
-        onSubmit={handleCreate}
-        style={{
-          background: "var(--color-panel)",
-          border: "1px solid var(--color-line)",
-          borderRadius: 14,
-          padding: 16,
-          marginBottom: 18,
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-        }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)" }}>
-          Add destination
-        </div>
-        {driveNotReady && status && (
-          <div style={{ fontSize: 12, color: "#8e6119" }}>{status.message}</div>
         )}
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+
+        <div className="drive-eyebrow">Step 2 · Add a destination</div>
+        <form onSubmit={handleCreate} className="drive-step2-form">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Name"
             required
             disabled={driveNotReady}
-            style={disabledInputStyle(driveNotReady)}
+            className="drive-input drive-input--name"
           />
           <input
             value={folderUrl}
@@ -372,199 +305,121 @@ export function DestinationsPanel() {
             placeholder="Paste Drive folder link"
             required
             disabled={driveNotReady}
-            style={{ ...disabledInputStyle(driveNotReady), flex: 1, minWidth: 220 }}
+            className="drive-input drive-input--url"
           />
-          <button
-            type="submit"
-            disabled={addFormDisabled}
-            style={{
-              fontSize: 12.5,
-              fontWeight: 700,
-              color: "#fff",
-              background: "var(--ink)",
-              border: "none",
-              padding: "9px 16px",
-              borderRadius: 9,
-              cursor: addFormDisabled ? "not-allowed" : "pointer",
-              opacity: addFormDisabled ? 0.7 : 1,
-            }}
-          >
+          <button type="submit" disabled={addFormDisabled} className="drive-btn drive-btn--dark">
             {submitting ? "Adding…" : "Add"}
           </button>
-        </div>
-        {formError && (
-          <div style={{ fontSize: 12, color: "var(--color-red)" }}>{formError}</div>
-        )}
-      </form>
+          {formError && <div className="drive-form-error">{formError}</div>}
+        </form>
 
-      {/* Destinations list */}
-      {isLoading && (
-        <div style={{ padding: "40px 0", textAlign: "center", color: "var(--color-muted)", fontSize: 13 }}>
-          Loading destinations…
-        </div>
-      )}
-
-      {!isLoading && destinations.length === 0 && (
-        <div
-          style={{
-            padding: "14px 16px",
-            border: "1px dashed var(--color-line2)",
-            borderRadius: 12,
-            color: "var(--color-muted)",
-            fontSize: 12.5,
-            background: "#0d0d13",
-          }}
-        >
-          No destinations yet — add a Drive folder above.
-        </div>
-      )}
-
-      {destinations.map((dest) => {
-        const isEditing = editingId === dest.id;
-        const testResult = testResults[dest.id];
-        const editSaveDisabled = driveNotReady || savingEditId === dest.id;
-        return (
-          <div
-            key={dest.id}
-            style={{
-              background: "var(--color-panel)",
-              border: "1px solid var(--color-line)",
-              borderRadius: 14,
-              padding: "14px 16px",
-              marginBottom: 10,
-            }}
-          >
-            {isEditing ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {driveNotReady && status && (
-                  <div style={{ fontSize: 12, color: "#8e6119" }}>{status.message}</div>
-                )}
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <input
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    placeholder="Name"
-                    disabled={driveNotReady}
-                    style={disabledInputStyle(driveNotReady)}
-                  />
-                  <input
-                    value={editFolderUrl}
-                    onChange={(e) => setEditFolderUrl(e.target.value)}
-                    placeholder="New Drive folder link (optional)"
-                    disabled={driveNotReady}
-                    style={{ ...disabledInputStyle(driveNotReady), flex: 1, minWidth: 220 }}
-                  />
-                </div>
-                {editError && (
-                  <div style={{ fontSize: 12, color: "var(--color-red)" }}>{editError}</div>
-                )}
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => handleSaveEdit(dest.id)}
-                    disabled={editSaveDisabled}
-                    style={{
-                      ...primaryBtnStyle,
-                      cursor: editSaveDisabled ? "not-allowed" : "pointer",
-                      opacity: editSaveDisabled ? 0.7 : 1,
-                    }}
-                  >
-                    {savingEditId === dest.id ? "Saving…" : "Save"}
-                  </button>
-                  <button onClick={cancelEdit} style={secondaryBtnStyle}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text)" }}>
-                    {dest.name}
-                  </div>
-                  <div style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 2 }}>
-                    {truncateFolderId(dest.folder_id)} · {dest.auth_mode}
-                  </div>
-                  {testResult && (
-                    <div
-                      style={{
-                        fontSize: 11.5,
-                        marginTop: 4,
-                        color: testResult.ok ? "#247955" : "var(--color-red)",
-                      }}
-                    >
-                      {testResult.ok ? "✓ " : "✕ "}
-                      {testResult.message}
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                  <button
-                    onClick={() => handleTest(dest.id)}
-                    disabled={testingId === dest.id || driveNotReady}
-                    style={{
-                      ...secondaryBtnStyle,
-                      opacity: testingId === dest.id || driveNotReady ? 0.7 : 1,
-                      cursor: testingId === dest.id || driveNotReady ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {testingId === dest.id ? "Testing…" : "Test access"}
-                  </button>
-                  <button onClick={() => startEdit(dest)} style={secondaryBtnStyle}>
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(dest.id)}
-                    style={{ ...secondaryBtnStyle, color: "var(--color-red)" }}
-                  >
-                    Delete
-                  </button>
-                </div>
+        <div className="drive-destinations">
+          <div className="drive-destinations__head">
+            <div className="drive-eyebrow">Destinations · {destinations.length}</div>
+            <div className="drive-destinations__filter" aria-hidden="true">
+              <span className="material-symbols-rounded">search</span>
+              <span>Filter destinations</span>
+            </div>
+          </div>
+          <div className="drive-table">
+            {!isLoading && destinations.length > 0 && (
+              <div className="drive-table__row drive-table__row--head" aria-hidden="true">
+                <div>Name</div>
+                <div>Folder</div>
+                <div>Access</div>
+                <div />
               </div>
             )}
+
+            {isLoading && <div className="drive-table__empty">Loading destinations…</div>}
+
+            {!isLoading && destinations.length === 0 && (
+              <div className="drive-table__empty">No destinations yet — add a Drive folder above.</div>
+            )}
+
+            {destinations.map((dest) => {
+              const isEditing = editingId === dest.id;
+              const testResult = testResults[dest.id];
+              const editSaveDisabled = driveNotReady || savingEditId === dest.id;
+              const stateKind: "ok" | "untested" | "failed" = !testResult
+                ? "untested"
+                : testResult.ok
+                  ? "ok"
+                  : "failed";
+              const stateLabel = testResult ? testResult.message : "Not tested";
+
+              if (isEditing) {
+                return (
+                  <div key={dest.id} className="drive-table__edit">
+                    {driveNotReady && status && <div className="drive-form-error">{status.message}</div>}
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        placeholder="Name"
+                        disabled={driveNotReady}
+                        className="drive-input drive-input--name"
+                      />
+                      <input
+                        value={editFolderUrl}
+                        onChange={(e) => setEditFolderUrl(e.target.value)}
+                        placeholder="New Drive folder link (optional)"
+                        disabled={driveNotReady}
+                        className="drive-input drive-input--url"
+                      />
+                    </div>
+                    {editError && <div className="drive-form-error">{editError}</div>}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEdit(dest.id)}
+                        disabled={editSaveDisabled}
+                        className="drive-btn drive-btn--dark drive-btn--sm"
+                      >
+                        {savingEditId === dest.id ? "Saving…" : "Save"}
+                      </button>
+                      <button type="button" onClick={cancelEdit} className="drive-btn drive-btn--outline drive-btn--sm">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={dest.id} className="drive-table__row">
+                  <div className="drive-table__name">{dest.name}</div>
+                  <div className="drive-table__id">{truncateFolderId(dest.folder_id)}</div>
+                  <div className="drive-table__state">
+                    <div className="drive-table__dot" style={{ background: STATE_COLORS[stateKind] }} />
+                    <div className="drive-table__state-label">{stateLabel}</div>
+                  </div>
+                  <div className="drive-table__actions">
+                    <button
+                      onClick={() => handleTest(dest.id)}
+                      disabled={testingId === dest.id || driveNotReady}
+                      className="drive-btn drive-btn--outline drive-btn--sm"
+                      title="Test access"
+                    >
+                      {testingId === dest.id ? "Testing…" : "Test"}
+                    </button>
+                    <button onClick={() => startEdit(dest)} className="drive-btn drive-btn--outline drive-btn--sm" title="Edit">
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(dest.id)}
+                      className="drive-btn drive-btn--outline drive-btn--sm drive-btn--danger"
+                      title="Delete"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
+        </div>
+      </div>
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--color-panel2)",
-  border: "1px solid var(--color-line)",
-  borderRadius: 9,
-  padding: "8px 12px",
-  fontSize: 12.5,
-  color: "var(--color-text)",
-  outline: "none",
-};
-
-function disabledInputStyle(disabled: boolean): React.CSSProperties {
-  return {
-    ...inputStyle,
-    opacity: disabled ? 0.6 : 1,
-    cursor: disabled ? "not-allowed" : "text",
-  };
-}
-
-const secondaryBtnStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 600,
-  color: "var(--color-text)",
-  background: "var(--color-panel2)",
-  border: "1px solid var(--color-line)",
-  padding: "7px 12px",
-  borderRadius: 9,
-  cursor: "pointer",
-};
-
-const primaryBtnStyle: React.CSSProperties = {
-  fontSize: 12.5,
-  fontWeight: 700,
-  color: "#fff",
-  background: "var(--ink)",
-  border: "none",
-  padding: "8px 14px",
-  borderRadius: 9,
-  cursor: "pointer",
-};

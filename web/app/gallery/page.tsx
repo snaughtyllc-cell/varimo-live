@@ -1,12 +1,12 @@
 "use client";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { FolderOpen } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useGallery } from "@/lib/useGallery";
 import { useRun } from "@/lib/runStore";
 import {
   filterSources,
   sortSources,
+  avgOriginalityPct,
   filesReadyCount,
   parseGalleryVariantQuery,
   gallerySearchPath,
@@ -24,7 +24,6 @@ import {
   fillFileCache,
   filesReadyNow,
   phoneShareHintCopy,
-  preparingClipsCopy,
   saveNoneSelectedCopy,
   saveOrShareVideoFiles,
   selectedShareableVariants,
@@ -39,7 +38,10 @@ import {
 import { getDriveStatus, listDestinations } from "@/lib/api";
 import type { Destination, DriveStatus, SourceOut } from "@/lib/types";
 import { GalleryToolbar } from "@/components/gallery/GalleryToolbar";
+import { GalleryFloatingToolbar } from "@/components/gallery/GalleryFloatingToolbar";
+import { PackList } from "@/components/gallery/PackList";
 import { SourceGroup } from "@/components/gallery/SourceGroup";
+import { PackLiveStrip } from "@/components/gallery/PackLiveStrip";
 import { VariantSheet } from "@/components/variant/VariantSheet";
 import { SendToDriveModal } from "@/components/drive/SendToDriveModal";
 
@@ -53,6 +55,8 @@ export function GalleryContent() {
 
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [sort, setSort] = useState<SortMode>("newest");
+  const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
+  const [packSearch, setPackSearch] = useState("");
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [driveStatus, setDriveStatus] = useState<DriveStatus | null>(null);
@@ -65,7 +69,6 @@ export function GalleryContent() {
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [pendingShareFiles, setPendingShareFiles] = useState<File[] | null>(null);
-  const [clipsPrepared, setClipsPrepared] = useState(false);
   const fileCacheRef = useRef(new Map<string, File>());
 
   // Load Drive status + destinations once, in parallel with the gallery SWR fetch.
@@ -116,6 +119,7 @@ export function GalleryContent() {
 
   function handleOpenVariant(sourceId: string, index: number) {
     setSheetQuery({ sourceId, index });
+    setSelectedPackId(sourceId);
     pushGallerySearch(gallerySearchPath(sourceId, index));
   }
 
@@ -146,6 +150,11 @@ export function GalleryContent() {
   const filtered = filterSources(allSources, filterMode);
   const sorted = sortSources(filtered, sort);
 
+  // A deep-linked/open variant sheet (via ?v=) takes priority so the PACKS
+  // list stays focused on it; otherwise the last pack clicked, else the top one.
+  const activePackId = activeQuery?.sourceId ?? selectedPackId ?? undefined;
+  const activePack = sorted.find((s) => s.source_id === activePackId) ?? sorted[0];
+
   const totalVariants = allSources.reduce((acc, s) => acc + filesReadyCount(s), 0);
 
   const okRefs = okVariantRefs(allSources, selected);
@@ -160,26 +169,14 @@ export function GalleryContent() {
   const disabledReason = sendDisabledReason(driveStatus, destinations, okRefs);
   const visibleOkCount = okVariantKeys(sorted).length;
   const allVisibleSelected = selectionHasAllOk(selected, sorted);
-  const selectedKey = [...selected].sort().join(",");
   const selectedVariants = selectedShareableVariants(allSources, selected);
 
   useEffect(() => {
-    if (selectedVariants.length === 0) {
-      setClipsPrepared(false);
+    if (selected.size === 0) {
       setPendingShareFiles(null);
       setSaveMsg(null);
-      return;
     }
-    let cancelled = false;
-    setClipsPrepared(false);
-    void fillFileCache(fileCacheRef.current, selectedVariants).then((files) => {
-      if (cancelled) return;
-      setClipsPrepared(files.length === selectedVariants.length);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedKey, sources]);
+  }, [selected.size]);
 
   function handleSelectAllVisible() {
     setSelected((prev) => withOkSelection(prev, sorted, !allVisibleSelected));
@@ -198,7 +195,6 @@ export function GalleryContent() {
       setSaveMsg(shareLoadingCopy());
       void fillFileCache(fileCacheRef.current, selectedVariants)
         .then((files) => {
-          setClipsPrepared(files.length === selectedVariants.length);
           setPendingShareFiles(files.length ? files : null);
           setSaveMsg(files.length ? shareRetryCopy() : shareEmptyCopy());
         })
@@ -244,20 +240,23 @@ export function GalleryContent() {
   }
 
   return (
-    <main className="workspace-page gallery-page">
-      <section className="workspace-page-shell">
-        <header className="workspace-heading">
-          <span className="workspace-heading__icon"><FolderOpen size={19} /></span>
-          <div>
-            <p className="workspace-heading__eyebrow">Review library</p>
-            <h1>Gallery</h1>
-            <p className="workspace-heading__copy">Finished packs by source. Select clips, then Save to Photos on a phone — or send copies to Drive.</p>
-          </div>
-        </header>
-      </section>
+    <main className="gallery-page">
       <GalleryToolbar
-        count={allSources.length}
+        count={sorted.length}
         variantCount={totalVariants}
+        crumb={activePack?.filename}
+        review={
+          sheetSource && pos >= 0
+            ? {
+                variantLabel: `v${String(sheetSource.variants[pos].index).padStart(2, "0")}`,
+                onBack: handleSheetClose,
+                onPrev: () => handleSheetNav(-1),
+                onNext: () => handleSheetNav(1),
+                canPrev: pos > 0,
+                canNext: pos < sheetSource.variants.length - 1,
+              }
+            : null
+        }
         filterMode={filterMode}
         onFilter={setFilterMode}
         sort={sort}
@@ -273,83 +272,94 @@ export function GalleryContent() {
         saveDisabledReason={
           okRefs.length === 0
             ? saveNoneSelectedCopy()
-            : offerPhotos && !clipsPrepared && !pendingShareFiles
-              ? preparingClipsCopy()
-              : null
+            : null
         }
         saveHint={phoneShareHintCopy()}
         onSave={() => { handleSaveSelected(); }}
         saveMsg={saveMsg}
       />
 
-      {/* Gallery grid — always mounted; dimmed by the sheet overlay when open */}
-      <div className="gallery-content" style={{ padding: "8px 16px 22px" }}>
-        {isLoading && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "60px 0",
-              color: "var(--color-muted)",
-              fontSize: 13,
-            }}
-          >
-            Loading gallery…
-          </div>
-        )}
-
-        {!isLoading && sorted.length === 0 && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "80px 0",
-              color: "var(--color-muted)",
-              textAlign: "center",
-              gap: 12,
-            }}
-          >
-            <div style={{ fontSize: 36, opacity: 0.4 }}>⬡</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--color-text)", opacity: 0.6 }}>
-              {filterMode === "shortfall" ? "No sources with shortfall" : "No completed runs yet"}
-            </div>
-            <div style={{ fontSize: 12.5, maxWidth: 320, lineHeight: 1.6 }}>
-              {filterMode === "shortfall"
-                ? "All sources have delivered their full requested count."
-                : "Start a run in Studio and stay on that page until variant tiles appear. Gallery only lists finished variants — and a Studio redeploy clears unfinished jobs."}
-            </div>
-          </div>
-        )}
-
-        {sorted.map((source) => (
-          <SourceGroup
-            key={source.source_id}
-            source={source}
-            onOpenVariant={handleOpenVariant}
-            onRegenerate={() => mutate()}
-            selected={selected}
-            onToggleVariant={handleToggleVariant}
-            onToggleSelectSource={handleToggleSelectSource}
-            onRemove={() => handleRemoveSource(source)}
-          />
-        ))}
-      </div>
-
-      {/* Variant side-panel — mounts over the still-visible grid */}
-      {sheetSource && pos >= 0 && (
-        <VariantSheet
-          sourceId={sheetSource.source_id}
-          sourceName={sheetSource.filename.replace(/\.[^.]+$/, "")}
-          variants={sheetSource.variants}
-          index={pos}
-          onClose={handleSheetClose}
-          onNav={handleSheetNav}
-          onRegenerate={() => mutate()}
+      <div className={sheetSource && pos >= 0 ? "gallery-body gallery-body--review" : "gallery-body"}>
+        <PackList
+          packs={sorted}
+          totalCount={sorted.length}
+          activeId={activePack?.source_id}
+          onSelect={(id) => {
+            setSelectedPackId(id);
+            if (sheetSource) handleSheetClose();
+          }}
+          search={packSearch}
+          onSearchChange={setPackSearch}
+          loading={isLoading}
         />
-      )}
+
+        <div className="gallery-main">
+        {activePack && !(sheetSource && pos >= 0) && <PackLiveStrip source={activePack} />}
+
+        <section className={sheetSource && pos >= 0 ? "gallery-grid-pane gallery-grid-pane--review" : "gallery-grid-pane"}>
+          {isLoading && <div className="gallery-loading">Loading gallery…</div>}
+
+          {!isLoading && sorted.length === 0 && (
+            <div className="gallery-empty">
+              <div className="gallery-empty__icon">⬡</div>
+              <strong>{filterMode === "shortfall" ? "No packs need attention" : "No completed runs yet"}</strong>
+              <p>
+                {filterMode === "shortfall"
+                  ? "All packs have delivered their full requested count."
+                  : "Start a run in Studio and stay on that page until variant tiles appear. Gallery only lists finished variants — and a Studio redeploy clears unfinished jobs."}
+              </p>
+            </div>
+          )}
+
+          {!isLoading && activePack && !(sheetSource && pos >= 0) && (
+            <SourceGroup
+              key={activePack.source_id}
+              source={activePack}
+              onOpenVariant={handleOpenVariant}
+              onRegenerate={() => mutate()}
+              selected={selected}
+              onToggleVariant={handleToggleVariant}
+              onToggleSelectSource={handleToggleSelectSource}
+              onRemove={() => handleRemoveSource(activePack)}
+            />
+          )}
+
+          {sheetSource && pos >= 0 && (
+            <VariantSheet
+              embedded
+              sourceId={sheetSource.source_id}
+              sourceName={sheetSource.filename.replace(/\.[^.]+$/, "")}
+              variants={sheetSource.variants}
+              index={pos}
+              onClose={handleSheetClose}
+              onNav={handleSheetNav}
+              onRegenerate={() => mutate()}
+              selectedCount={okRefs.length}
+              flaggedCount={sheetSource.variants.filter((v) => v.platform_result === "flagged" || v.platform_result === "duplicate_reject").length}
+              packAvgPct={avgOriginalityPct(sheetSource)}
+              onSendToDrive={disabledReason == null ? () => setSendModalOpen(true) : undefined}
+            />
+          )}
+
+          {selected.size > 0 && !(sheetSource && pos >= 0) && (
+            <GalleryFloatingToolbar
+              count={selected.size}
+              onSend={() => setSendModalOpen(true)}
+              sendDisabled={disabledReason != null}
+              sendTitle={disabledReason}
+              onSave={handleSaveSelected}
+              saveLabel={saveBusy ? shareVideosBusyLabel() : shareVideosLabel(offerPhotos)}
+              saveDisabled={
+                saveBusy ||
+                okRefs.length === 0
+              }
+              saveTitle={phoneShareHintCopy()}
+              onClose={() => setSelected(new Set())}
+            />
+          )}
+        </section>
+        </div>
+      </div>
 
       {/* Send to Drive modal — only opened when the toolbar button is enabled */}
       {sendModalOpen && (

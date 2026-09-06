@@ -41,7 +41,7 @@ describe("StudioQueueCard", () => {
     expect(screen.getByText("2 packs generating")).toBeInTheDocument();
     expect(screen.getByText("1. Fast · IMG_0683.mp4 · 3/8")).toBeInTheDocument();
     expect(screen.getByText("2. HQ · partner.mov · 0/5")).toBeInTheDocument();
-    expect(screen.getByText(/starts now/i)).toBeInTheDocument();
+    expect(screen.getByText(/waits in line/i)).toBeInTheDocument();
   });
 
   it("marks your pack when this browser started it", () => {

@@ -36,6 +36,28 @@ describe("GalleryToolbar drops chips", () => {
   });
 });
 
+describe("GalleryToolbar review chrome", () => {
+  it("swaps grid actions for Back to grid when a variant is open", () => {
+    render(
+      <GalleryToolbar
+        {...toolbarProps}
+        crumb="boil.mp4"
+        review={{
+          variantLabel: "v03",
+          onBack: () => undefined,
+          onPrev: () => undefined,
+          onNext: () => undefined,
+          canPrev: false,
+          canNext: true,
+        }}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /back to grid/i })).toBeInTheDocument();
+    expect(screen.getByText("v03")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /select all/i })).not.toBeInTheDocument();
+  });
+});
+
 describe("GalleryToolbar select and save", () => {
   it("shows Select all and a disabled Save to phone until clips are selected", () => {
     render(<GalleryToolbar {...toolbarProps} />);

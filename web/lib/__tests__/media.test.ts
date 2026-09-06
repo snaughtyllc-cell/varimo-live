@@ -56,6 +56,10 @@ describe("mobile first-frame helpers", () => {
     expect(videoFrameSrc("/x.mp4#t=1")).toBe("/x.mp4#t=1");
   });
 
+  it("does not put a media fragment on blob URLs", () => {
+    expect(videoFrameSrc("blob:http://localhost/abc")).toBe("blob:http://localhost/abc");
+  });
+
   it("keeps preview time inside short clips", () => {
     expect(previewTime(10)).toBe(0.15);
     expect(previewTime(0.2)).toBe(0.05);

@@ -3,16 +3,19 @@ import { useState } from "react";
 import { useRun } from "@/lib/runStore";
 import { cancelJob } from "@/lib/api";
 import { runDeliveredNone, runHasStarted } from "@/lib/progress";
-import { liveRunSubcopy } from "@/lib/hqWaitCopy";
+import { liveRunSubcopy, reconstructFirstHeadline, reconstructFirstSubcopy } from "@/lib/hqWaitCopy";
 import {
   isPreparingJob,
   preparingHeadline,
   preparingSubcopy,
+  wakingHeadline,
+  wakingSubcopy,
 } from "@/lib/prepareCopy";
+import { useElapsedSeconds } from "@/lib/useElapsedSeconds";
 import { SourceProgressCard } from "./SourceProgressCard";
 
 export function ProgressPanel() {
-  const { jobId, progress, complete, clear, qualityMode } = useRun();
+  const { jobId, progress, complete, clear, qualityMode, prepMode, waitStartedAt } = useRun();
   const [cancelling, setCancelling] = useState(false);
 
   async function handleCancel() {
@@ -45,8 +48,8 @@ export function ProgressPanel() {
             width: 44,
             height: 44,
             borderRadius: 12,
-            background: "#223a3e",
-            border: "1px solid #355156",
+            background: "#16272c",
+            border: "1px solid #24393f",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -54,13 +57,13 @@ export function ProgressPanel() {
             marginBottom: 4,
           }}
         >
-          <span style={{ color: "#57dfe6" }}>●</span>
+          <span style={{ color: "var(--color-cyan)" }}>●</span>
         </div>
         <p
           style={{
             fontSize: 14,
             fontWeight: 700,
-            color: "#f1fafb",
+            color: "#eaf6f7",
             margin: 0,
           }}
         >
@@ -69,7 +72,7 @@ export function ProgressPanel() {
         <p
           style={{
             fontSize: 12,
-            color: "#b7c9cc",
+            color: "#7e979d",
             margin: 0,
             lineHeight: 1.5,
             maxWidth: 200,
@@ -85,10 +88,17 @@ export function ProgressPanel() {
   const preparing = isPreparingJob(jobId);
   const started = runHasStarted(progress);
   const early = !complete && !progress.failed && (preparing || !started);
+  const waking = Boolean(early && !preparing && prepMode !== "hq");
+  const elapsed = useElapsedSeconds(early, waitStartedAt);
+  const reconstructing = Boolean(prepMode === "hq" && !started && !complete && !preparing && !progress.failed);
   const emptyFail = runDeliveredNone(progress);
   const failed = progress.failed;
   const cancelled = Boolean(failed && /cancelled/i.test(failed));
-  const headline = early
+  const headline = reconstructing
+    ? reconstructFirstHeadline()
+    : waking
+    ? wakingHeadline()
+    : early
     ? preparingHeadline()
     : failed
       ? cancelled
@@ -99,15 +109,19 @@ export function ProgressPanel() {
           ? "No variants"
           : "Complete"
         : "Generating…";
-  const sub = early
-    ? preparingSubcopy()
+  const sub = reconstructing
+    ? reconstructFirstSubcopy()
+    : waking
+    ? wakingSubcopy(elapsed, progress.waitPhase)
+    : early
+    ? preparingSubcopy(elapsed)
     : failed
       ? failed
       : complete
         ? emptyFail
           ? "The job ended without any playable variants. Try a smaller 1080p file."
           : "All variants done — open Gallery, or New run for another pack"
-        : liveRunSubcopy("fast");
+        : liveRunSubcopy(qualityMode, prepMode ?? "none");
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -124,10 +138,10 @@ export function ProgressPanel() {
         }}
       >
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#f1fafb" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#eaf6f7" }}>
             {headline}
           </div>
-          <div style={{ fontSize: 11.5, color: "#b7c9cc", marginTop: 2, maxWidth: "100%", lineHeight: 1.4 }}>
+          <div style={{ fontSize: 11.5, color: "#7e979d", marginTop: 2, maxWidth: "100%", lineHeight: 1.4 }}>
             {sub}
           </div>
         </div>
@@ -139,8 +153,8 @@ export function ProgressPanel() {
               onClick={handleCancel}
               disabled={cancelling}
               style={{
-                background: "#2a0e0e",
-                border: "1px solid #5a1a1a",
+                background: "rgba(229, 83, 61, 0.14)",
+                border: "1px solid rgba(229, 83, 61, 0.4)",
                 color: "var(--color-red)",
                 borderRadius: 8,
                 padding: "10px 12px",
@@ -187,13 +201,13 @@ export function ProgressPanel() {
                 borderRadius: "50%",
                 background: complete ? "var(--color-green)" : "var(--color-cyan)",
                 boxShadow: complete
-                  ? "0 0 8px #22c55e88"
-                  : "0 0 8px #22d3ee99",
+                  ? "0 0 8px rgba(18, 183, 106, 0.5)"
+                  : "0 0 8px rgba(126, 224, 230, 0.55)",
                 display: "inline-block",
                 flexShrink: 0,
               }}
             />
-            {early ? "starting" : complete ? "done" : "live"}
+            {early ? (waking ? "waking" : "starting") : complete ? "done" : "live"}
           </span>
         </div>
       </div>
@@ -207,6 +221,7 @@ export function ProgressPanel() {
             qualityMode={qualityMode}
             complete={complete}
             preparing={early}
+            waking={waking}
           />
         ))}
       </div>

@@ -36,12 +36,13 @@ export interface RunProgress {
   bySource: Record<string, SourceProgress>;
   complete: boolean;
   failed?: string | null;
+  waitPhase?: string | null;
 }
 
 export function initRun(sources: { source_id: string; filename: string; requested: number }[]): RunProgress {
   const bySource: Record<string, SourceProgress> = {};
   for (const s of sources) bySource[s.source_id] = { ...s, delivered: 0, done: 0, variants: [], inFlights: {} };
-  return { bySource, complete: false, failed: null };
+  return { bySource, complete: false, failed: null, waitPhase: null };
 }
 
 function dropFlight(next: SourceProgress, index: number): void {

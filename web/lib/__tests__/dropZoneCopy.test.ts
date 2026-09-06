@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { dropZoneBrowse, dropZoneHint, dropZoneSubcopy, dropZoneTitle } from "@/lib/dropZoneCopy";
-import { studioProgressIdleClass, studioShellClass } from "@/lib/studioLayout";
+import {
+  STUDIO_LIVE_RAIL_PX,
+  studioProgressIdleClass,
+  studioShellClass,
+} from "@/lib/studioLayout";
 
 describe("drop zone copy", () => {
   it("tells phone users to tap, not only drop", () => {
@@ -12,13 +16,17 @@ describe("drop zone copy", () => {
 });
 
 describe("studio layout classes", () => {
-  it("marks a live run so mobile can pin progress first", () => {
+  it("marks a live run without a second layout class that resizes the studio side", () => {
     expect(studioShellClass(false)).toBe("studio-shell");
-    expect(studioShellClass(true)).toBe("studio-shell studio-shell--live");
+    expect(studioShellClass(true)).toBe("studio-shell");
   });
 
   it("hides the empty progress pane on phones", () => {
     expect(studioProgressIdleClass(false)).toBe("studio-progress studio-progress--idle");
     expect(studioProgressIdleClass(true)).toBe("studio-progress");
+  });
+
+  it("keeps the desktop live rail a fixed column", () => {
+    expect(STUDIO_LIVE_RAIL_PX).toBe(460);
   });
 });

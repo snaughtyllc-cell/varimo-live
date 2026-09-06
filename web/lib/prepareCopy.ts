@@ -7,16 +7,53 @@ export function isPreparingJob(jobId: string | null | undefined): boolean {
   return jobId === PREPARING_JOB_ID;
 }
 
+export function formatWaitClock(elapsedSec: number): string {
+  const s = Math.max(0, Math.floor(elapsedSec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return m > 0 ? `${m}:${String(r).padStart(2, "0")}` : `${s}s`;
+}
+
 export function preparingHeadline(): string {
   return "Preparing generation";
 }
 
-export function preparingSubcopy(): string {
-  return "Request received. The processing environment can take 20–30 seconds to start — tiles update as soon as encoding begins.";
+export function preparingSubcopy(elapsedSec = 0): string {
+  return (
+    `${formatWaitClock(elapsedSec)} elapsed. Uploading the clip, then waking the Fast worker. ` +
+    "First pack after idle can take 1–2 minutes — that wait is the worker starting, not a hang."
+  );
+}
+
+export function wakingHeadline(): string {
+  return "Waking Fast worker";
+}
+
+export function wakingSubcopy(elapsedSec = 0, waitPhase?: string | null): string {
+  const clock = formatWaitClock(elapsedSec);
+  if (waitPhase === "queued") {
+    return (
+      `${clock} elapsed. Fast worker is in the cold-start queue. ` +
+      "First pack after idle often takes 1–2 minutes. Tiles update when encoding starts."
+    );
+  }
+  if (waitPhase === "booting") {
+    return (
+      `${clock} elapsed. Fast worker is booting. Encoding starts as soon as it is up.`
+    );
+  }
+  return (
+    `${clock} elapsed. The Fast worker scales to zero when idle. ` +
+    "First pack often takes 1–2 minutes. Tiles update when encoding starts."
+  );
 }
 
 export function preparingSlotLabel(): string {
   return "starting";
+}
+
+export function wakingSlotLabel(): string {
+  return "waking";
 }
 
 export function captionToggleLabel(): string {
@@ -67,6 +104,14 @@ export function stripInternalIndexLines(text: string | null | undefined): string
     .trim();
 }
 
+export function hqPrepToggleLabel(): string {
+  return "Reconstruct first (HQ)";
+}
+
+export function hqPrepToggleHint(): string {
+  return "One GPU pass, then Fast variants. Off by default.";
+}
+
 export function captionPreviewLabel(): string {
   return "Caption";
 }
@@ -79,11 +124,19 @@ export function captionSaveLabel(): string {
   return "Save caption";
 }
 
+export function captionCopyLabel(): string {
+  return "Copy caption";
+}
+
+export function captionCopiedLabel(): string {
+  return "Copied";
+}
+
 export function captionStatusHint(): string {
   return (
-    "Edit here before Send to Drive or a drop. After it is posted, pass / duplicate " +
-    "is for this video — not the caption. If you change the caption on Instagram, " +
-    "this box will not update; use the post link to find the right copy."
+    "Edit here before Send to Drive or a drop. Copy pastes this caption onto the post. " +
+    "After it is posted, pass / flag is for this video — not the caption. If you change " +
+    "the caption on Instagram, this box will not update; use the post link to find the right copy."
   );
 }
 
@@ -131,6 +184,15 @@ export function uniquenessCoverageSubcopy(): string {
 
 export function uniquenessGalleryBadgeTitle(pct: number): string {
   return `Originality ${pct}% is pixel SSIM vs the original (3 frames). Not a platform pass.`;
+}
+
+/** UI % for the 24/64 vs-source pass (do not raise the gate). */
+export function uniquenessPassPct(): number {
+  return 38;
+}
+
+export function uniquenessPassHint(): string {
+  return "38% = pass vs the source";
 }
 
 export type UniquenessCoverageKind = "pixel" | "visual" | "audio";
@@ -219,7 +281,7 @@ export function uniquenessCoverageChips(
 }
 
 export function captionSnippet(text: string | null | undefined, max = 80): string {
-  const one = stripInternalIndexLines(text).replace(/\s+/g, " ").trim();
+  const one = (text || "").replace(/\s+/g, " ").trim();
   if (!one) return "";
   if (one.length <= max) return one;
   return `${one.slice(0, Math.max(1, max - 1)).trimEnd()}…`;

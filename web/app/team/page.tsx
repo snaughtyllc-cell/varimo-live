@@ -7,10 +7,12 @@ import {
   getWorkspaceTeam,
   removeWorkspaceMember,
 } from "@/lib/api";
-import { showTeamNav } from "@/lib/navAccess";
 import { useAuthMe } from "@/lib/useAuthMe";
 import type { Team } from "@/lib/types";
 import { UsersRound } from "lucide-react";
+
+import { showTeamNav } from "@/lib/navAccess";
+import { memberWeekCopy } from "@/lib/usage";
 
 export default function TeamPage() {
   const router = useRouter();
@@ -175,6 +177,9 @@ export default function TeamPage() {
                     <div style={{ color: "var(--color-muted)", marginTop: 2 }}>
                       {m.role}
                       {isYou ? " · you" : ""}
+                    </div>
+                    <div style={{ color: "var(--color-muted2)", marginTop: 2, fontSize: 11 }}>
+                      {memberWeekCopy(m)}
                     </div>
                   </div>
                   {!isYou && (

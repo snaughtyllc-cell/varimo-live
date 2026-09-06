@@ -10,9 +10,13 @@ interface ScrubBarProps {
    * All refs are play/pause/seeked together.
    */
   videos: Array<React.RefObject<HTMLVideoElement | null>>;
+  /** Seek + play around this timestamp when cueNonce changes. */
+  cueTime?: number | null;
+  cueNonce?: number;
+  cuePad?: number;
 }
 
-export function ScrubBar({ videos }: ScrubBarProps) {
+export function ScrubBar({ videos, cueTime = null, cueNonce = 0, cuePad = 0.75 }: ScrubBarProps) {
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -66,6 +70,31 @@ export function ScrubBar({ videos }: ScrubBarProps) {
     }
   }, [playing, videos, startRaf, stopRaf]);
 
+  useEffect(() => {
+    if (!cueNonce || cueTime == null) return;
+    const start = Math.max(0, Number(cueTime) - Math.max(0, cuePad));
+    videos.forEach((r) => {
+      const v = r.current;
+      if (!v) return;
+      v.currentTime = clampTime(start, v.duration || Number(cueTime) + cuePad);
+      v.play().catch(() => {});
+    });
+    startRaf();
+    setPlaying(true);
+  }, [cueNonce, cueTime, cuePad, videos, startRaf]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== " " && e.code !== "Space") return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest("input, textarea, select, [contenteditable='true']")) return;
+      e.preventDefault();
+      togglePlayPause();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [togglePlayPause]);
+
   // Seek all videos to a fraction of the primary video's duration
   const seekToFraction = useCallback((fraction: number) => {
     const pv = primaryVideo();
@@ -111,18 +140,15 @@ export function ScrubBar({ videos }: ScrubBarProps) {
         gap: 10,
       }}
     >
-      {/* Play / Pause button */}
+      {/* Play / Pause */}
       <button
         onClick={togglePlayPause}
         aria-label={playing ? "Pause" : "Play"}
         style={{
-          width: 34,
-          height: 34,
-          borderRadius: "50%",
-          backgroundImage: "var(--background-image-cta)",
+          background: "transparent",
           border: "none",
-          color: "#fff",
-          fontSize: 13,
+          color: "var(--color-cyan)",
+          padding: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -130,7 +156,9 @@ export function ScrubBar({ videos }: ScrubBarProps) {
           flexShrink: 0,
         }}
       >
-        {playing ? "⏸" : "▶"}
+        <span className="material-symbols-rounded" style={{ fontSize: 28 }} aria-hidden="true">
+          {playing ? "pause_circle" : "play_circle"}
+        </span>
       </button>
 
       {/* Progress track */}
@@ -138,9 +166,9 @@ export function ScrubBar({ videos }: ScrubBarProps) {
         ref={trackRef}
         style={{
           flex: 1,
-          height: 5,
+          height: 4,
           borderRadius: 99,
-          background: "#20202c",
+          background: "#24393f",
           position: "relative",
           cursor: "pointer",
           touchAction: "none",
@@ -159,7 +187,7 @@ export function ScrubBar({ videos }: ScrubBarProps) {
             bottom: 0,
             width: `${pct}%`,
             borderRadius: 99,
-            backgroundImage: "var(--background-image-progress)",
+            background: "var(--color-cyan)",
             pointerEvents: "none",
           }}
         />
@@ -173,8 +201,8 @@ export function ScrubBar({ videos }: ScrubBarProps) {
             width: 12,
             height: 12,
             borderRadius: "50%",
-            background: "#fff",
-            boxShadow: "0 1px 6px #000",
+            background: "#f6fbfb",
+            boxShadow: "0 1px 6px rgba(0,0,0,0.6)",
             pointerEvents: "none",
           }}
         />
@@ -183,13 +211,35 @@ export function ScrubBar({ videos }: ScrubBarProps) {
       {/* Time label */}
       <span
         style={{
+          fontFamily: "var(--font-space-grotesk), monospace",
           fontSize: 11,
-          color: "var(--color-muted)",
+          color: "#9fb7bc",
           flexShrink: 0,
           fontVariantNumeric: "tabular-nums",
         }}
       >
         {formatDuration(currentTime)} / {formatDuration(duration)}
+      </span>
+
+      {/* Decorative state icons — both videos are always muted + looped so the
+          two clips stay in lockstep; these reflect that rather than toggle it. */}
+      <span
+        className="material-symbols-rounded"
+        role="img"
+        aria-label="Muted for comparison"
+        title="Muted for comparison"
+        style={{ fontSize: 19, color: "#7e979d" }}
+      >
+        volume_off
+      </span>
+      <span
+        className="material-symbols-rounded"
+        role="img"
+        aria-label="Loops automatically"
+        title="Loops automatically"
+        style={{ fontSize: 19, color: "#7e979d" }}
+      >
+        repeat
       </span>
     </div>
   );

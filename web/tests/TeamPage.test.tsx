@@ -44,15 +44,14 @@ const OWNER: AuthMe = {
   role: "owner",
   is_admin: false,
   has_password: true,
-  experience: "agency",
 };
 
 const team: Team = {
   workspace_id: "ws_ops",
   workspace_name: "Ops studio",
   members: [
-    { email: "ops@example.com", name: "Ops", role: "owner" },
-    { email: "va@example.com", name: "VA", role: "member" },
+    { email: "ops@example.com", name: "Ops", role: "owner", week_fast: 4, week_hq: 1, week_packs: 1 },
+    { email: "va@example.com", name: "VA", role: "member", week_fast: 0, week_hq: 0, week_packs: 0 },
   ],
   invites: [
     {
@@ -86,6 +85,8 @@ describe("Team page", () => {
   it("lists members and pending join invites for the owner", async () => {
     render(<TeamPage />);
     expect(await screen.findByText("va@example.com")).toBeInTheDocument();
+    expect(screen.getByText("This week: 4 Fast · 1 HQ · 1 pack")).toBeInTheDocument();
+    expect(screen.getByText("This week: no packs")).toBeInTheDocument();
     expect(screen.getByText("helper@example.com")).toBeInTheDocument();
     expect(screen.getByText(/join this workspace/i)).toBeInTheDocument();
     expect(screen.queryByLabelText("Invite kind")).not.toBeInTheDocument();
@@ -141,17 +142,6 @@ describe("Team page", () => {
     await waitFor(() => {
       expect(replace).toHaveBeenCalledWith("/");
     });
-  });
-
-  it("sends solo creators home even when they own the workspace", async () => {
-    me.data = { ...OWNER, experience: "solo", role: "owner", is_admin: false };
-    vi.mocked(getWorkspaceTeam).mockClear();
-    render(<TeamPage />);
-    await waitFor(() => {
-      expect(replace).toHaveBeenCalledWith("/");
-    });
-    expect(screen.queryByRole("heading", { name: "Team" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^invite$/i })).not.toBeInTheDocument();
   });
 
   it("warns when the site admin is viewing another studio", async () => {

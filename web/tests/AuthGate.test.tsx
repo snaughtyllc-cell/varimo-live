@@ -25,6 +25,10 @@ vi.mock("@/components/nav/TopNav", () => ({
   TopNav: () => <div>TopNav</div>,
 }));
 
+vi.mock("@/components/nav/SideNav", () => ({
+  SideNav: () => <div>SideNav</div>,
+}));
+
 vi.mock("@/components/nav/LabBanner", () => ({
   LabBanner: () => null,
 }));
@@ -90,6 +94,7 @@ describe("AuthGate", () => {
     );
     expect(screen.getByText("Studio")).toBeInTheDocument();
     expect(screen.getByText("TopNav")).toBeInTheDocument();
+    expect(screen.getByText("SideNav")).toBeInTheDocument();
     expect(container.querySelector(".app-main")).toContainElement(screen.getByText("Studio"));
     expect(nav.replace).not.toHaveBeenCalled();
   });
@@ -119,6 +124,7 @@ describe("AuthGate", () => {
     );
     expect(screen.getByText("Login")).toBeInTheDocument();
     expect(screen.queryByText("TopNav")).not.toBeInTheDocument();
+    expect(screen.queryByText("SideNav")).not.toBeInTheDocument();
     expect(container.querySelector(".app-main")).toBeNull();
     expect(nav.replace).not.toHaveBeenCalled();
   });
@@ -133,6 +139,7 @@ describe("AuthGate", () => {
     );
     expect(screen.getByText("Studio")).toBeInTheDocument();
     expect(screen.getByText("TopNav")).toBeInTheDocument();
+    expect(screen.getByText("SideNav")).toBeInTheDocument();
     expect(nav.replace).not.toHaveBeenCalled();
   });
 

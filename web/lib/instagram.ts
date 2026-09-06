@@ -59,6 +59,84 @@ export function packViewsCopy(
   return packConversionCopy(views, null, null, linked, copies);
 }
 
+/** Sample Insights used on Gallery phone when a pack has no linked Reels yet. */
+export const GALLERY_LIVE_STRIP_PREVIEW = {
+  views: 25400,
+  reach: 19800,
+  likes: 1820,
+  comments: 94,
+  shares: 210,
+  linked: 3,
+  copies: 10,
+} as const;
+
+export const GALLERY_LIVE_STRIP_PREVIEW_HINT =
+  "Sample layout — a live drop with views would look like this. Connect Instagram on Analytics for real numbers.";
+
+export type PackLiveMetric = { label: string; value: string };
+
+export type PackLiveStripModel = {
+  preview: boolean;
+  metrics: PackLiveMetric[];
+  linkedCopy: string;
+  hint: string | null;
+  hintKind: string | null;
+};
+
+function liveStripMetrics(
+  views: number | null | undefined,
+  extras: PackInsightExtras & { shares?: number | null },
+): PackLiveMetric[] {
+  const metrics: PackLiveMetric[] = [
+    { label: "views", value: views == null ? "—" : formatViews(views) },
+  ];
+  if (typeof extras.reach === "number") metrics.push({ label: "reach", value: formatViews(extras.reach) });
+  if (typeof extras.likes === "number") metrics.push({ label: "likes", value: formatViews(extras.likes) });
+  if (typeof extras.comments === "number") {
+    metrics.push({ label: "comments", value: formatViews(extras.comments) });
+  }
+  if (typeof extras.shares === "number") metrics.push({ label: "shares", value: formatViews(extras.shares) });
+  return metrics;
+}
+
+/** Compact Insights strip under Gallery pack tiles (phone). */
+export function packLiveStripModel(source: {
+  insights_views?: number | null;
+  insights_likes?: number | null;
+  insights_comments?: number | null;
+  insights_shares?: number | null;
+  insights_reach?: number | null;
+  insights_linked?: number;
+  variants: { length: number };
+  suggestion_kind?: string | null;
+  suggestion_copy?: string | null;
+}): PackLiveStripModel {
+  const copies = source.variants.length;
+  const linked = source.insights_linked ?? 0;
+  if (linked <= 0) {
+    const sample = GALLERY_LIVE_STRIP_PREVIEW;
+    return {
+      preview: true,
+      metrics: liveStripMetrics(sample.views, sample),
+      linkedCopy: `${sample.linked} of ${sample.copies} linked`,
+      hint: GALLERY_LIVE_STRIP_PREVIEW_HINT,
+      hintKind: "winner",
+    };
+  }
+  return {
+    preview: false,
+    metrics: liveStripMetrics(source.insights_views, {
+      likes: source.insights_likes,
+      comments: source.insights_comments,
+      shares: source.insights_shares,
+      reach: source.insights_reach,
+    }),
+    linkedCopy: copies > 0 ? `${linked} of ${copies} linked` : `${linked} linked`,
+    hint: source.suggestion_copy || packSuggestionHint(source.suggestion_kind),
+    hintKind: source.suggestion_kind ?? null,
+  };
+}
+
 export type PackInsightExtras = {
   likes?: number | null;
   comments?: number | null;
@@ -391,6 +469,7 @@ export function copiesForPack(
 }
 
 export function analyticsPackThumb(source?: {
+  poster_url?: string | null;
   look_preview?: {
     look_var_url?: string | null;
     look_src_url?: string | null;
@@ -402,6 +481,8 @@ export function analyticsPackThumb(source?: {
     look_src_url?: string | null;
   }>;
 } | null): { kind: "image" | "video"; src: string } | null {
+  const poster = (source?.poster_url || "").trim();
+  if (poster) return { kind: "image", src: poster };
   const variants = source?.variants ?? [];
   const stills = [
     ...variants,

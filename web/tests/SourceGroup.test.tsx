@@ -7,11 +7,20 @@ vi.mock("@/lib/api", () => ({
   retryCopy: vi.fn(),
   sourceUrl: () => "/api/source/s1",
   sourceZipUrl: () => "/api/sources/s1/zip",
+  getSourceDownloads: vi.fn(async () => ({
+    source_id: "s1",
+    files: [{ filename: "v01.mp4", url: "https://objects.test/v01.mp4" }],
+    zip_url: "https://objects.test/zip",
+  })),
   removeSource: vi.fn(),
-  rewriteSourceCaptions: vi.fn(),
+  setVariantCaption: vi.fn().mockResolvedValue({}),
+  setPlatformResult: vi.fn().mockResolvedValue({}),
+  setPostUrl: vi.fn().mockResolvedValue({}),
+  approveLookEncode: vi.fn().mockResolvedValue({}),
 }));
 
 import { SourceGroup } from "@/components/gallery/SourceGroup";
+import { uniquenessCoverageSubcopy } from "@/lib/prepareCopy";
 import { phoneShareHintCopy, zipSecondaryCopy } from "@/lib/shareVideos";
 
 const quality = {
@@ -87,7 +96,6 @@ describe("SourceGroup phone save/share", () => {
       phoneShareHintCopy(),
     );
     expect(screen.getByRole("button", { name: /select all/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^options$/i })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Diagnostics/i);
   });
 
@@ -151,8 +159,9 @@ describe("SourceGroup phone save/share", () => {
       await waitFor(() => {
         expect(downloads).toEqual(["v01.mp4", "v02.mp4"]);
       });
-      expect(fetchMock).toHaveBeenCalledWith("/api/variants/s1/v01.mp4");
-      expect(fetchMock).toHaveBeenCalledWith("/api/variants/s1/v02.mp4");
+      const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+      expect(urls).toContain("/api/variants/s1/v01.mp4");
+      expect(urls).toContain("/api/variants/s1/v02.mp4");
     } finally {
       HTMLAnchorElement.prototype.click = protoClick;
     }
@@ -229,58 +238,73 @@ describe("SourceGroup live post count", () => {
   });
 });
 
-describe("SourceGroup insights line", () => {
-  it("shows pack views when copies are linked", () => {
+describe("SourceGroup insights", () => {
+  it("shows packViewsCopy when insights are linked", () => {
     render(
       <SourceGroup
         source={source({
           insights_views: 1234,
-          insights_linked: 2,
-          variants: [
-            variant({ ig_media_id: "1", ig_insights: { views: 1000 } }),
-            variant({
-              index: 2,
-              filename: "v02.mp4",
-              file_url: "/api/variants/s1/v02.mp4",
-              ig_media_id: "2",
-              ig_insights: { views: 234 },
-            }),
-          ],
+          insights_linked: 1,
         })}
         {...props}
       />,
     );
-    expect(screen.getByText(/1\.2k views/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/pack insights/i).textContent).toMatch(/1\.2k views/i);
+    expect(screen.getByText("1.2k views · 1 of 2 linked")).toBeInTheDocument();
+  });
+});
+
+describe("SourceGroup job record", () => {
+  it("shows processing charge, Drive destination, and expiration", () => {
+    render(
+      <SourceGroup
+        source={source({
+          processing_charge: "Fast 20 pack",
+          delivery_destination: "google_drive",
+          expires_utc: "2099-09-05T15:42:00Z",
+        })}
+        {...props}
+      />,
+    );
+    expect(screen.getByText("Fast 20 pack")).toBeInTheDocument();
+    expect(screen.getByText("Google Drive")).toBeInTheDocument();
+    expect(screen.getByText(/Expires/i)).toBeInTheDocument();
   });
 
-  it("adds shares and follows on the pack chip", () => {
+  it("offers Retry delivery when the download package is missing", () => {
     render(
       <SourceGroup
         source={source({
-          insights_views: 1234,
-          insights_shares: 9,
-          insights_follows: 2,
-          insights_linked: 2,
-          suggestion_kind: "held_no_push",
-          suggestion_copy: "Hold looks fine, but these copies are not getting push versus the rest of this account.",
+          copy_status: "missing",
+          files_ready: 0,
+          delivered: 2,
+          job_state: "done",
+        })}
+        {...props}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /retry delivery/i })).toBeInTheDocument();
+  });
+});
+
+describe("SourceGroup originality", () => {
+  it("titles the Originality average as pixel SSIM, not a platform check", () => {
+    render(
+      <SourceGroup
+        source={source({
           variants: [
-            variant({ ig_media_id: "1", ig_insights: { views: 1000 } }),
+            variant({ uniqueness: 0.5 }),
             variant({
               index: 2,
               filename: "v02.mp4",
               file_url: "/api/variants/s1/v02.mp4",
-              ig_media_id: "2",
-              ig_insights: { views: 234 },
+              uniqueness: 0.4,
             }),
           ],
         })}
         {...props}
       />,
     );
-    expect(screen.getByLabelText(/pack insights/i).textContent).toMatch(/9 shares/i);
-    expect(screen.getByLabelText(/pack insights/i).textContent).toMatch(/2 follows/i);
-    expect(screen.getByText(/Held, little push/i)).toBeInTheDocument();
-    expect(screen.getByText(/Held, little push/i).textContent).not.toMatch(/flagged/i);
+    const summary = screen.getByText(/Originality 45% avg/);
+    expect(summary).toHaveAttribute("title", uniquenessCoverageSubcopy());
   });
 });

@@ -53,6 +53,12 @@ describe("SourceProgressCard in-flight slot", () => {
     expect(screen.queryByText("queued")).toBeNull();
   });
 
+  it("labels waiting slots as waking while the Fast worker is cold-starting", () => {
+    render(<SourceProgressCard source={{ ...base, requested: 8 }} waking />);
+    expect(screen.getAllByText("waking")).toHaveLength(8);
+    expect(screen.queryByText("queued")).toBeNull();
+  });
+
   it("keeps every live copy on its own tile instead of hopping one slot", () => {
     render(
       <SourceProgressCard

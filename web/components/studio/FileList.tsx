@@ -12,24 +12,28 @@ export function FileList({ files, durations, onRemove }: FileListProps) {
   if (files.length === 0) return null;
 
   return (
-    <div className="studio-source-list">
+    <>
       {files.map((file, i) => (
-        <div key={`${file.name}-${file.size}-${i}`} className="studio-source-row">
-          <SourceThumb file={file} />
-          <div className="studio-source-row__meta">
-            <b>{file.name}</b>
-            <span>{durations[i] != null ? formatDuration(durations[i]) : "…"}</span>
+        <div className="studio-clip-card" key={`${file.name}-${i}`}>
+          <div className="studio-clip-card__thumb">
+            <SourceThumb file={file} label={file.name} />
+          </div>
+          <div className="studio-clip-card__meta">
+            <span className="studio-clip-card__name">{file.name}</span>
+            <span className="studio-clip-card__sub">
+              {durations[i] != null ? formatDuration(durations[i]) : "…"}
+            </span>
           </div>
           <button
             type="button"
             onClick={() => onRemove(i)}
-            className="touch-hit studio-source-row__remove"
+            className="studio-clip-card__remove touch-hit"
             aria-label={`Remove ${file.name}`}
           >
-            ✕
+            <span className="material-symbols-rounded" style={{ fontSize: 18 }}>close</span>
           </button>
         </div>
       ))}
-    </div>
+    </>
   );
 }

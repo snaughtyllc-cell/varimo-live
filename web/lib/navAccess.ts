@@ -1,5 +1,17 @@
 import { isAgencyExperience } from "./experience";
-import { PRIMARY_TABS, type StudioDestination } from "./studioDestinations";
+import {
+  EXTRA_TABS,
+  PRIMARY_TABS,
+  STUDIO_DESTINATIONS,
+  type StudioDestination,
+} from "./studioDestinations";
+
+const PHONE_BAR_HREFS = ["/", "/gallery", "/analytics", "/workflows"] as const;
+const PHONE_OVERFLOW_HREFS = ["/drops", "/settings/drive"] as const;
+
+function destination(href: string): StudioDestination | undefined {
+  return STUDIO_DESTINATIONS.find((tab) => tab.href === href);
+}
 
 const SOLO_PRIMARY_HREFS = new Set(["/", "/gallery", "/settings/drive"]);
 
@@ -10,6 +22,16 @@ export function showDiagnosticsNav(me: {
 } | undefined): boolean {
   if (!me) return false;
   if (!me.auth_required) return true;
+  return Boolean(me.is_admin);
+}
+
+/** OAuth Connect Google is site admin only. Operators share the studio mailbox. */
+export function canManageDriveOAuth(me: {
+  auth_required?: boolean;
+  is_admin?: boolean;
+} | undefined): boolean {
+  if (!me) return false;
+  if (me.auth_required === false) return true;
   return Boolean(me.is_admin);
 }
 
@@ -52,6 +74,44 @@ export function visiblePrimaryTabs(me: {
 } | undefined): readonly StudioDestination[] {
   if (isAgencyExperience(me)) return PRIMARY_TABS;
   return PRIMARY_TABS.filter((tab) => SOLO_PRIMARY_HREFS.has(tab.href));
+}
+
+/**
+ * Phone bottom bar: Studio, Gallery, Analytics (when allowed), Flows.
+ * Drive and Drops sit under More — they stay in the catalog, just not the bar.
+ */
+export function visiblePhoneBarTabs(me: {
+  experience?: string | null;
+  is_admin?: boolean;
+  auth_required?: boolean;
+  role?: string | null;
+} | undefined): StudioDestination[] {
+  const agencyLike = visiblePrimaryTabs(me).some((tab) => tab.href === "/workflows");
+  const out: StudioDestination[] = [];
+  for (const href of PHONE_BAR_HREFS) {
+    if (href === "/analytics" && !showAnalyticsNav(me)) continue;
+    if (href === "/workflows" && !agencyLike) continue;
+    const tab = destination(href);
+    if (tab) out.push(tab);
+  }
+  return out;
+}
+
+/** Drive, Drops, and role extras that are not already on the phone bar. */
+export function visiblePhoneMoreTabs(me: {
+  experience?: string | null;
+  is_admin?: boolean;
+  auth_required?: boolean;
+  role?: string | null;
+} | undefined): StudioDestination[] {
+  const primary = visiblePrimaryTabs(me);
+  const onBar = new Set(visiblePhoneBarTabs(me).map((tab) => tab.href));
+  const overflow = PHONE_OVERFLOW_HREFS.map(destination).filter(
+    (tab): tab is StudioDestination =>
+      tab != null && primary.some((item) => item.href === tab.href),
+  );
+  const extras = EXTRA_TABS.filter((tab) => extraTabVisible(tab.href, me) && !onBar.has(tab.href));
+  return [...overflow, ...extras];
 }
 
 /**

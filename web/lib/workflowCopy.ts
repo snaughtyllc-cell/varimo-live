@@ -26,8 +26,16 @@ export function workflowOutputHint(): string {
 
 export function workflowAutoCaptionHint(): string {
   return (
-    "Names Drive files from a caption folder (Generic if none). All clips share that folder's vibe. " +
-    "Remaining counts down so you know when a 20-pack will wrap."
+    "Off by default. When on, each file is named from the caption folder you pick " +
+    "(Generic if none). Remaining on that folder counts down so you know when a " +
+    "20-pack will wrap. Gallery Send to Drive can use a folder or Custom (type the filename)."
+  );
+}
+
+export function workflowReconstructHint(): string {
+  return (
+    "One GPU pass rewrites the pixels, then Fast builds the pack. " +
+    "Not a 20 HQ run — that is too slow."
   );
 }
 

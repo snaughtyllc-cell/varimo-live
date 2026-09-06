@@ -206,8 +206,8 @@ export function CaptionBankPanel() {
             style={{
               fontSize: 12,
               fontWeight: 600,
-              color: bankId === f.id ? "#075966" : "var(--color-text)",
-              background: bankId === f.id ? "#dff4f5" : "var(--color-panel2)",
+              color: bankId === f.id ? "#0e7c86" : "var(--color-text)",
+              background: bankId === f.id ? "#eef8f9" : "var(--color-panel2)",
               border: `1px solid ${f.low ? "var(--color-red)" : "var(--color-line)"}`,
               padding: "7px 10px",
               borderRadius: 8,

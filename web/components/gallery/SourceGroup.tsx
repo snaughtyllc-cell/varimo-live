@@ -1,29 +1,47 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { SourceOut } from "@/lib/types";
-import { regenerate, retryCopy, sourceUrl, sourceZipUrl, removeSource } from "@/lib/api";
-import { copyMissingCopy, deliveryComplete, filesReadyCount, isFileReady, zipEmptyCopy, removePackCopy } from "@/lib/gallery";
+import { regenerate, retryCopy, sourceZipUrl, removeSource, getSourceDownloads } from "@/lib/api";
+import {
+  copyLandingCopy,
+  copyMissingCopy,
+  deliveryComplete,
+  expiresLabel,
+  filesReadyCount,
+  removePackCopy,
+  zipEmptyCopy,
+} from "@/lib/gallery";
 import { shortfallCopy } from "@/lib/shortfallCopy";
-import { okVariantKeys, selectAllLabel, selectionHasAllOk } from "@/lib/drive";
+import { jobIsLive } from "@/lib/queue";
+import {
+  okVariantKeys,
+  packActionSelected,
+  selectAllLabel,
+  selectionHasAllOk,
+} from "@/lib/drive";
 import {
   fillFileCache,
   filesReadyNow,
   phoneShareHintCopy,
   readyShareableVariants,
   saveOrShareVideoFiles,
+  selectedShareableVariants,
   shareEmptyCopy,
   shareOutcomeMessage,
+  sharePrepareProgressCopy,
   shareVideosBusyLabel,
   shareVideosLabel,
   shouldOfferPhotosSave,
   zipSecondaryCopy,
   zipVisibleOnDevice,
+  type FileCacheProgress,
 } from "@/lib/shareVideos";
 import { postedCountCopy } from "@/lib/postUrl";
-import { uniquenessCustomerLabel } from "@/lib/prepareCopy";
-import { packSuggestionHint, packConversionCopy } from "@/lib/instagram";
-import { VariantCard } from "./VariantCard";
+import { packViewsCopy } from "@/lib/instagram";
+import { uniquenessCoverageSubcopy, uniquenessCustomerLabel } from "@/lib/prepareCopy";
+import { SavePreparePanel } from "./SavePreparePanel";
 import { PackOptions } from "./PackOptions";
+import { VariantCard } from "./VariantCard";
 
 interface SourceGroupProps {
   source: SourceOut;
@@ -35,11 +53,15 @@ interface SourceGroupProps {
   onRemove: () => void;
 }
 
+/**
+ * The single active pack's detail panel — grid-pane content to the right of
+ * the 300px PACKS list. One pack shown at a time (mock: "Gallery (grid)"),
+ * not a stacked accordion of every pack.
+ */
 export function SourceGroup({
-  source, onOpenVariant, onRegenerate, selected, onToggleVariant,   onToggleSelectSource,
+  source, onOpenVariant, onRegenerate, selected, onToggleVariant, onToggleSelectSource,
   onRemove,
 }: SourceGroupProps) {
-  const [open, setOpen] = useState(true);
   const [regenLoading, setRegenLoading] = useState(false);
   const [copyLoading, setCopyLoading] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -48,16 +70,18 @@ export function SourceGroup({
   const [offerPhotos, setOfferPhotos] = useState(false);
   const [showZip, setShowZip] = useState(true);
   const [pendingShareFiles, setPendingShareFiles] = useState<File[] | null>(null);
+  const [prepareProgress, setPrepareProgress] = useState<FileCacheProgress | null>(null);
   const fileCacheRef = useRef(new Map<string, File>());
+  const shareLock = useRef(false);
 
   const hasShortfall = source.shortfall > 0;
   const filesReady = filesReadyCount(source);
   const fullDelivery = deliveryComplete(source);
-  const stillRunning = source.job_state === "running" || !!source.in_flight;
+  const stillRunning = jobIsLive(source.job_state) || !!source.in_flight;
   const shareable = readyShareableVariants(source.variants);
-  const shareableRefs = shareable.map((v) => ({ file_url: v.file_url, filename: v.filename }));
+  const actionSelected = packActionSelected(source, selected);
+  const actionShareable = selectedShareableVariants([source], actionSelected);
   const canSaveVideos = shareable.length > 0 && !stillRunning;
-  const shareableKey = shareableRefs.map((v) => v.file_url).join("|");
 
   useEffect(() => {
     const nav = typeof navigator === "undefined" ? undefined : navigator;
@@ -69,17 +93,9 @@ export function SourceGroup({
     setShowZip(zipVisibleOnDevice(matchMedia));
   }, []);
 
-  useEffect(() => {
-    if (!canSaveVideos || shareableRefs.length === 0) return;
-    void fillFileCache(fileCacheRef.current, shareableRefs);
-  }, [canSaveVideos, shareableKey]);
   const copyMissing = source.copy_status === "missing" && !stillRunning;
   const copyLanding = source.copy_status === "copying";
   const shortfallMsg = shortfallCopy(source);
-  const postedCopy = postedCountCopy(
-    source.variants.filter((v) => Boolean(v.post_url)).length,
-  );
-
   const uniquenessValues = source.variants
     .map((v) => v.uniqueness)
     .filter((u): u is number => typeof u === "number");
@@ -91,33 +107,13 @@ export function SourceGroup({
       ? uniquenessValues.length === 1
         ? `${uniquenessCustomerLabel()} ${avgUniquenessPct}%`
         : `${uniquenessCustomerLabel()} ${avgUniquenessPct}% avg`
-      : source.variants.length === 0
-        ? "no variants yet"
-        : "";
-  const viewsCopy = packConversionCopy(
-    source.insights_views,
-    source.insights_shares,
-    source.insights_follows,
-    source.insights_linked ?? 0,
-    source.variants.length,
-    {
-      likes: source.insights_likes,
-      comments: source.insights_comments,
-      saved: source.insights_saved,
-      reach: source.insights_reach,
-    },
-  );
-  const suggestionHint = packSuggestionHint(source.suggestion_kind);
-  const summaryLine = [originalitySummary, postedCopy, suggestionHint]
-    .filter(Boolean)
-    .join(" · ");
+      : "";
+  const expiresCopy = expiresLabel(source.expires_utc);
 
-  function handleSaveShare(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (stillRunning || shareBusy || shareableRefs.length === 0) return;
+  function handleSaveShare() {
+    if (stillRunning || shareBusy || shareLock.current || actionShareable.length === 0) return;
     const nav = typeof navigator === "undefined" ? undefined : navigator;
-    const ready = filesReadyNow(fileCacheRef.current, shareableRefs, pendingShareFiles);
+    const ready = filesReadyNow(fileCacheRef.current, actionShareable, pendingShareFiles);
     setShareBusy(true);
     setZipMsg(null);
     const run = async (files: File[]) => {
@@ -138,34 +134,37 @@ export function SourceGroup({
       setPendingShareFiles(null);
       if (outcome.result === "unsupported") setZipMsg(shareEmptyCopy());
     };
-    const task = ready ? run(ready) : fillFileCache(fileCacheRef.current, shareableRefs).then(run);
+    const task = ready
+      ? run(ready)
+      : fillFileCache(fileCacheRef.current, actionShareable, undefined, setPrepareProgress).then(run);
     void task.catch(() => setZipMsg(shareEmptyCopy())).finally(() => setShareBusy(false));
   }
 
   async function handleZip(e: React.MouseEvent) {
     e.preventDefault();
-    e.stopPropagation();
     if (stillRunning) return;
     setZipMsg(null);
     try {
-      const res = await fetch(sourceZipUrl(source.source_id));
-      if (!res.ok) {
+      const pack = await getSourceDownloads(source.source_id);
+      const zipUrl = pack.zip_url;
+      if (zipUrl) {
+        window.location.assign(zipUrl);
+        return;
+      }
+      const files = pack.files || [];
+      if (files.length === 0) {
         setZipMsg(zipEmptyCopy());
         return;
       }
-      const blob = await res.blob();
-      if (blob.size < 64) {
-        setZipMsg(zipEmptyCopy());
-        return;
+      for (const file of files) {
+        const a = document.createElement("a");
+        a.href = file.url;
+        a.download = file.filename;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${source.source_id}_variants.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 2000);
     } catch {
       setZipMsg(zipEmptyCopy());
     }
@@ -191,14 +190,13 @@ export function SourceGroup({
       await retryCopy(source.source_id);
       onRegenerate();
     } catch (e) {
-      console.error("Retry copy failed", e);
+      console.error("Retry delivery failed", e);
     } finally {
       setCopyLoading(false);
     }
   }
 
-  async function handleRemove(e: React.MouseEvent) {
-    e.stopPropagation();
+  async function handleRemove() {
     if (removing) return;
     if (!window.confirm(removePackCopy(stillRunning))) return;
     setRemoving(true);
@@ -211,149 +209,50 @@ export function SourceGroup({
     }
   }
 
-  const thumbReady = isFileReady(source.variants[0] ?? {});
-  const thumbUrl = thumbReady ? source.variants[0]?.file_url : undefined;
-  const thumbSrc = thumbUrl ?? sourceUrl(source.source_id);
   const okCount = okVariantKeys([source]).length;
   const sourceAllSelected = selectionHasAllOk(selected, [source]);
   const sourceSelectLabel = selectAllLabel(sourceAllSelected);
+  const postedCopy = postedCountCopy(source.variants.filter((v) => Boolean(v.post_url)).length);
+  const viewsCopy = packViewsCopy(
+    source.insights_views,
+    source.insights_linked ?? 0,
+    source.variants.length,
+  );
 
   return (
-    <div
-      style={{
-        background: "var(--color-panel)",
-        border: "1px solid var(--color-line)",
-        borderRadius: 14,
-        marginBottom: 16,
-        overflow: "hidden",
-      }}
-    >
-      {/* Group header */}
-      <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 13,
-            padding: "14px 16px",
-            borderBottom: "1px solid var(--color-line)",
-            cursor: "pointer",
-            userSelect: "none",
-            flexWrap: "wrap",
-          }}
-        onClick={() => setOpen(o => !o)}
-      >
-        {/* Chevron */}
-        <span
-          style={{
-            color: "var(--color-muted2)",
-            fontSize: 12,
-            transition: "transform 0.15s ease",
-            transform: open ? "rotate(0deg)" : "rotate(-90deg)",
-            display: "inline-block",
-          }}
-        >
-          ▾
+    <div className="gallery-pack-panel">
+      <div className="gallery-pack-header">
+        <span className="gallery-pack-header__name" title={source.filename}>
+          {source.filename}
         </span>
-
-        {/* Thumbnail */}
-        <div
-          style={{
-            width: 46,
-            height: 33,
-            borderRadius: 7,
-            flexShrink: 0,
-            overflow: "hidden",
-            background: "#dce9eb",
-            border: "1px solid var(--color-line)",
-          }}
+        <span
+          className="gallery-pack-header__pill"
+          data-tone={fullDelivery ? "ok" : "warn"}
         >
-          {thumbUrl ? (
-            <video
-              src={thumbSrc}
-              muted
-              playsInline
-              preload="metadata"
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-            />
-          ) : (
-            <div style={{ width: "100%", height: "100%", background: "#1e1e2a" }} />
-          )}
-        </div>
-
-        {/* Name + summary */}
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text)" }}>
-            {source.filename}
-          </div>
-          {summaryLine ? (
-            <div
-              style={{ fontSize: 11.5, color: "var(--color-muted)", marginTop: 1 }}
-              title={source.suggestion_copy || undefined}
-            >
-              {summaryLine}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Right side: delivery pill + folder link */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          {viewsCopy ? (
-            <span
-              aria-label="Pack insights"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                fontSize: 12,
-                fontWeight: 700,
-                padding: "4px 10px",
-                borderRadius: 999,
-                color: "#0e5f66",
-                background: "#e7f6f7",
-                border: "1px solid #bfe3e6",
-              }}
-            >
-              {viewsCopy}
-            </span>
-          ) : null}
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 12,
-              fontWeight: 700,
-              padding: "4px 10px",
-              borderRadius: 999,
-              ...(fullDelivery
-                ? { color: "#247955", background: "#e9f8f0", border: "1px solid #c6e8d7" }
-                : { color: "#8e6119", background: "#fff3e5", border: "1px solid #efd9b0" }),
-            }}
-          >
-            {fullDelivery ? "✓ " : ""}
-            {copyMissing
-              ? `${filesReady} / ${source.requested} on Studio`
-              : copyLanding
-              ? `${filesReady} / ${source.requested} copying`
+          {fullDelivery ? "✓ " : ""}
+          {copyMissing
+            ? `${filesReady} / ${source.requested} ready`
+            : copyLanding
+              ? `${filesReady} / ${source.requested} landing`
               : `${filesReady} / ${source.requested} delivered`}
-          </span>
+        </span>
+        {postedCopy && <span className="gallery-pack-header__meta">{postedCopy}</span>}
+        {viewsCopy && <span className="gallery-pack-header__meta">{viewsCopy}</span>}
+        {source.processing_charge && (
+          <span className="gallery-pack-header__meta">{source.processing_charge}</span>
+        )}
+        {source.delivery_destination === "google_drive" && (
+          <span className="gallery-pack-header__meta">Google Drive</span>
+        )}
+        {expiresCopy && (
+          <span className="gallery-pack-header__meta">{expiresCopy}</span>
+        )}
+        <div className="gallery-pack-header__actions">
           {okCount > 0 && (
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleSelectSource(source, !sourceAllSelected);
-              }}
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                color: "var(--color-violet-l)",
-                background: "#15101f",
-                border: "1px solid #2c2748",
-                padding: "7px 10px",
-                minHeight: 36,
-                borderRadius: 8,
-                cursor: "pointer",
-              }}
+              className="gallery-pack-header__link"
+              onClick={() => onToggleSelectSource(source, !sourceAllSelected)}
             >
               {sourceSelectLabel}
             </button>
@@ -361,24 +260,16 @@ export function SourceGroup({
           {canSaveVideos && (
             <button
               type="button"
+              className="gallery-pack-header__link"
               title={phoneShareHintCopy()}
-              aria-label={shareVideosLabel(offerPhotos)}
               onClick={handleSaveShare}
               disabled={shareBusy}
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                color: "var(--color-violet-l)",
-                background: "#15101f",
-                border: "1px solid #2c2748",
-                padding: "7px 10px",
-                minHeight: 36,
-                borderRadius: 8,
-                cursor: shareBusy ? "wait" : "pointer",
-                opacity: shareBusy ? 0.7 : 1,
-              }}
             >
-              {shareBusy ? shareVideosBusyLabel() : shareVideosLabel(offerPhotos)}
+              {shareBusy
+                ? prepareProgress && prepareProgress.ready + prepareProgress.failed < prepareProgress.total
+                  ? sharePrepareProgressCopy(prepareProgress)
+                  : shareVideosBusyLabel()
+                : shareVideosLabel(offerPhotos)}
             </button>
           )}
           {filesReady > 0 && !stillRunning && showZip && (
@@ -389,169 +280,91 @@ export function SourceGroup({
               onClick={handleZip}
               className="gallery-zip-link"
             >
+              <span className="material-symbols-rounded" aria-hidden="true">folder_zip</span>
               Download ZIP
             </a>
           )}
-          <span
-            className="source-folder-link"
-            style={{ fontSize: 12, color: "var(--color-violet-l)", textDecoration: "none" }}
-          >
-            ⌅ Open source folder
+          <span className="gallery-pack-header__icon-btn source-folder-link" title="Open source folder">
+            <span className="material-symbols-rounded" aria-hidden="true">folder_open</span>
           </span>
           <button
             type="button"
+            className="gallery-pack-header__icon-btn"
             aria-label="Remove pack from Gallery"
             title="Remove from Gallery"
             onClick={handleRemove}
             disabled={removing}
-            className="touch-hit"
-            style={{
-              width: 44,
-              height: 44,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 22,
-              lineHeight: 1,
-              fontWeight: 700,
-              color: "var(--color-muted)",
-              background: "transparent",
-              border: "1px solid var(--color-line)",
-              borderRadius: 8,
-              cursor: removing ? "wait" : "pointer",
-              opacity: removing ? 0.6 : 1,
-              flexShrink: 0,
-            }}
           >
-            ×
+            <span className="material-symbols-rounded" aria-hidden="true">close</span>
           </button>
         </div>
       </div>
 
-      {/* Shortfall bar — ONLY when shortfall > 0 */}
-      {zipMsg && (
-        <div
-          style={{
-            padding: "10px 16px",
-            background: "#fff8eb",
-            borderBottom: "1px solid #efdfbd",
-            fontSize: 12.5,
-            color: "#8e6119",
-          }}
-        >
-          ⚠ {zipMsg}
+      {zipMsg && <div className="gallery-banner">⚠ {zipMsg}</div>}
+      {shareBusy && prepareProgress && prepareProgress.total > 0 && (
+        <div className="gallery-save-progress-wrap">
+          <SavePreparePanel progress={prepareProgress} />
         </div>
       )}
       {copyMissing && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            padding: "10px 16px",
-            background: "#fff8eb",
-            borderBottom: "1px solid #efdfbd",
-            fontSize: 12.5,
-            color: "#8e6119",
-            flexWrap: "wrap",
-          }}
-        >
-          <span>⚠ {copyMissingCopy()}</span>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); handleRetryCopy(); }}
-            disabled={copyLoading}
-            style={{
-              marginLeft: "auto",
-              fontSize: 12.5,
-              fontWeight: 700,
-              color: "#fff",
-              background: "var(--ink)",
-              border: "none",
-              padding: "7px 14px",
-              borderRadius: 9,
-              cursor: copyLoading ? "not-allowed" : "pointer",
-              boxShadow: "none",
-              opacity: copyLoading ? 0.7 : 1,
-            }}
-          >
-            {copyLoading ? "Copying…" : "↻ Retry copy"}
+        <div className="gallery-banner">
+          ⚠ {copyMissingCopy()}
+          <button type="button" onClick={handleRetryCopy} disabled={copyLoading}>
+            {copyLoading ? "Retrying…" : "↻ Retry delivery"}
           </button>
         </div>
       )}
       {copyLanding && !copyMissing && (
-        <div
-          style={{
-            padding: "10px 16px",
-            background: "#fff8eb",
-            borderBottom: "1px solid #efdfbd",
-            fontSize: 12.5,
-            color: "#8e6119",
-          }}
-        >
-          Videos are still landing on Studio…
-        </div>
+        <div className="gallery-banner">{copyLandingCopy()}</div>
       )}
-      {open && hasShortfall && shortfallMsg && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            padding: "10px 16px",
-            background: "#fff8eb",
-            borderBottom: "1px solid #efdfbd",
-            fontSize: 12.5,
-            color: "#8e6119",
-          }}
-        >
-          <span>⚠ {shortfallMsg}</span>
+      {hasShortfall && shortfallMsg && (
+        <div className="gallery-banner">
+          ⚠ {shortfallMsg}
           {!stillRunning && (
-            <button
-              onClick={(e) => { e.stopPropagation(); handleRegenerate(); }}
-              disabled={regenLoading}
-              style={{
-                marginLeft: "auto",
-                fontSize: 12.5,
-                fontWeight: 700,
-                color: "#fff",
-                background: "var(--ink)",
-                border: "none",
-                padding: "7px 14px",
-                borderRadius: 9,
-                cursor: regenLoading ? "not-allowed" : "pointer",
-                boxShadow: "none",
-                opacity: regenLoading ? 0.7 : 1,
-              }}
-            >
+            <button type="button" onClick={handleRegenerate} disabled={regenLoading}>
               {regenLoading ? "Regenerating…" : `↻ Regenerate ${source.shortfall}`}
             </button>
           )}
         </div>
       )}
 
-      {/* Variant grid — 8-across responsive */}
-      {open && (
-        <>
-          <PackOptions source={source} disabled={stillRunning} onRewritten={onRegenerate} />
-          <div style={{ padding: 16 }}>
-          <div className="grid grid-cols-3 min-[700px]:grid-cols-5 min-[1100px]:grid-cols-8 gap-2.5">
-            {source.variants.map((variant) => {
-              const key = `${source.source_id}:${variant.index}`;
-              return (
-                <VariantCard
-                  key={variant.index}
-                  variant={variant}
-                  sourceId={source.source_id}
-                  onOpen={() => onOpenVariant(source.source_id, variant.index)}
-                  selected={selected.has(key)}
-                  onToggle={() => onToggleVariant(key)}
-                />
-              );
-            })}
+      <div className="gallery-summary-row">
+        <div>
+          <div className="gallery-summary-row__eyebrow">Review library</div>
+          <div className="gallery-summary-row__title">
+            {source.variants.length} variant{source.variants.length === 1 ? "" : "s"}
+            {originalitySummary ? (
+              <>
+                {" · "}
+                <span title={uniquenessCoverageSubcopy()}>{originalitySummary}</span>
+              </>
+            ) : null}
           </div>
         </div>
-        </>
+      </div>
+
+      <PackOptions source={source} disabled={stillRunning} onRewritten={onRegenerate} />
+
+      {source.variants.length === 0 ? (
+        <div className="gallery-empty">
+          <strong>No variants in this pack yet</strong>
+        </div>
+      ) : (
+        <div className="gallery-grid">
+          {source.variants.map((variant) => {
+            const key = `${source.source_id}:${variant.index}`;
+            return (
+              <VariantCard
+                key={variant.index}
+                variant={variant}
+                sourceId={source.source_id}
+                onOpen={() => onOpenVariant(source.source_id, variant.index)}
+                selected={selected.has(key)}
+                onToggle={() => onToggleVariant(key)}
+              />
+            );
+          })}
+        </div>
       )}
     </div>
   );

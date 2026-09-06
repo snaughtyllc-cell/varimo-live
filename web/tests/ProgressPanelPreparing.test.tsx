@@ -20,7 +20,8 @@ describe("ProgressPanel preparing", () => {
   it("shows preparing copy and hides Cancel until a real job exists", () => {
     render(<ProgressPanel />);
     expect(screen.getByText("Preparing generation")).toBeInTheDocument();
-    expect(screen.getByText(/20–30 seconds/)).toBeInTheDocument();
+    expect(screen.getByText(/1–2 minutes/)).toBeInTheDocument();
+    expect(screen.getByText(/elapsed/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^cancel$/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New run" })).toBeInTheDocument();
   });

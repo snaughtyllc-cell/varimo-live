@@ -133,7 +133,7 @@ function packLanes(
 
 function aggregate(
   copies: InstagramTrackedCopy[],
-  key: Exclude<keyof MetricSource, "insights_views_delta">,
+  key: keyof MetricSource & keyof InstagramTrackedCopy,
 ): number | null {
   let total = 0;
   let seen = false;

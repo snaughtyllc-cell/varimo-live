@@ -49,10 +49,11 @@ export const PREVIEW_SECONDS = 0.15;
 /**
  * Media-fragment URL so Safari can paint a first frame without hover-to-play.
  * Leaves an existing `#…` hash alone (caller already chose the fragment).
+ * Blob URLs stay unfragmented — Safari often fails to decode `blob:…#t=`.
  */
 export function videoFrameSrc(src: string, seconds: number = PREVIEW_SECONDS): string {
   const s = (src ?? "").trim();
-  if (!s || s.includes("#")) return s;
+  if (!s || s.includes("#") || s.startsWith("blob:")) return s;
   return `${s}#t=${seconds}`;
 }
 

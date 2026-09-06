@@ -6,12 +6,18 @@ interface VideoThumbProps {
   src: string;
   badge?: ReactNode;
   className?: string;
+  /** Fill a sized parent (gallery preview) instead of sizing to the video. */
+  fill?: boolean;
+  /** Mount the video immediately — live-queue tiles sit in overflow parents. */
+  eager?: boolean;
 }
 
-export function VideoThumb({ src, badge, className }: VideoThumbProps) {
+export function VideoThumb({ src, badge, className, fill = false, eager = false }: VideoThumbProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [inView, setInView] = useState(false);
+  const [inView, setInView] = useState(
+    () => eager || typeof IntersectionObserver === "undefined",
+  );
   const [aspect, setAspect] = useState(DEFAULT_CSS_ASPECT);
 
   useEffect(() => {
@@ -19,6 +25,10 @@ export function VideoThumb({ src, badge, className }: VideoThumbProps) {
   }, [src]);
 
   useEffect(() => {
+    if (eager) {
+      setInView(true);
+      return;
+    }
     const el = boxRef.current;
     if (!el) return;
     if (typeof IntersectionObserver === "undefined") {
@@ -33,7 +43,7 @@ export function VideoThumb({ src, badge, className }: VideoThumbProps) {
     );
     io.observe(el);
     return () => io.disconnect();
-  }, []);
+  }, [eager]);
 
   function applyVideoAspect(video: HTMLVideoElement | null) {
     if (!video) return;
@@ -60,10 +70,12 @@ export function VideoThumb({ src, badge, className }: VideoThumbProps) {
     <div
       ref={boxRef}
       className={className}
+      data-fill={fill || undefined}
       style={{
-        aspectRatio: aspect,
+        aspectRatio: fill ? undefined : aspect,
         width: "100%",
-        alignSelf: "start",
+        height: fill ? "100%" : undefined,
+        alignSelf: fill ? "stretch" : "start",
         borderRadius: 6,
         position: "relative",
         overflow: "hidden",
@@ -85,7 +97,7 @@ export function VideoThumb({ src, badge, className }: VideoThumbProps) {
           style={{
             width: "100%",
             height: "100%",
-            objectFit: "contain",
+            objectFit: fill ? "cover" : "contain",
             display: "block",
           }}
         />

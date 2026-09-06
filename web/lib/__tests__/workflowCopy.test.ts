@@ -7,6 +7,7 @@ import {
   workflowAutoCaptionHint,
   workflowPageBlurb,
   workflowCanCancel,
+  workflowReconstructHint,
   workflowFilenameCaptionCardLabel,
   workflowFilenameCaptionHint,
   workflowFilenameCaptionLabel,
@@ -20,12 +21,18 @@ describe("workflow folder layout copy", () => {
     expect(workflowFoldersMustDiffer()).toMatch(/different/i);
     expect(workflowNeedTwoFolders()).toMatch(/two Drive folders/i);
     expect(workflowOutputHint()).toMatch(/one subfolder per source/i);
-    expect(workflowAutoCaptionHint()).toMatch(/off by default|caption folder/i);
-    expect(workflowAutoCaptionHint()).toMatch(/remaining|folder/i);
+    expect(workflowAutoCaptionHint()).toMatch(/off by default/i);
+    expect(workflowAutoCaptionHint()).toMatch(/remaining/i);
+    expect(workflowAutoCaptionHint()).toMatch(/custom/i);
+    expect(workflowAutoCaptionHint()).not.toMatch(/always/i);
     expect(workflowFilenameCaptionLabel()).toMatch(/filename/i);
     expect(workflowFilenameCaptionCardLabel()).toMatch(/^filenames as captions$/i);
     expect(workflowFilenameCaptionHint()).toMatch(/drive name|filename/i);
     expect(workflowFilenameCaptionHint()).toMatch(/unique/i);
+    expect(workflowReconstructHint()).toMatch(/one GPU pass/i);
+    expect(workflowReconstructHint()).toMatch(/Fast/i);
+    expect(workflowReconstructHint()).toMatch(/not a 20 HQ/i);
+    expect(workflowReconstructHint()).not.toMatch(/coming soon/i);
   });
 
   it("treats the same destination or the same Drive folder as a clash", () => {

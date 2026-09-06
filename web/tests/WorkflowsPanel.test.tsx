@@ -57,6 +57,7 @@ const live: Workflow = {
   },
   auto_caption: false,
   caption_bank_id: null,
+  prep_mode: "none",
 };
 
 beforeEach(() => {
@@ -67,7 +68,40 @@ beforeEach(() => {
   vi.mocked(cancelWorkflow).mockResolvedValue({ ...live, enabled: false, last_summary: { ...live.last_summary!, running: 0 } });
 });
 
-describe("WorkflowsPanel captions", () => {
+describe("WorkflowsPanel reconstruct-first", () => {
+  it("offers Reconstruct first, not an HQ 20-pack coming soon", async () => {
+    render(<WorkflowsPanel />);
+    await screen.findByRole("button", { name: /create flow/i });
+    expect(screen.getByRole("checkbox", { name: /reconstruct first \(hq\)/i })).toBeInTheDocument();
+    expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /hq/i })).not.toBeInTheDocument();
+  });
+
+  it("sends prep_mode hq and quality_mode fast when reconstruct first is on", async () => {
+    vi.mocked(createWorkflow).mockResolvedValue({
+      ...live,
+      id: "wf_new",
+      name: "Reels inbox",
+      prep_mode: "hq",
+    });
+    render(<WorkflowsPanel />);
+    const name = await screen.findByPlaceholderText(/reels inbox/i);
+    fireEvent.change(name, { target: { value: "Reels inbox" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /reconstruct first \(hq\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create flow/i }));
+    await waitFor(() => {
+      expect(createWorkflow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Reels inbox",
+          prep_mode: "hq",
+          quality_mode: "fast",
+        }),
+      );
+    });
+  });
+});
+
+describe("WorkflowsPanel filename captions", () => {
   it("creates a workflow with Drive filenames as the caption seed", async () => {
     vi.mocked(listWorkflows).mockResolvedValue([]);
     vi.mocked(createWorkflow).mockResolvedValue({
@@ -79,12 +113,12 @@ describe("WorkflowsPanel captions", () => {
     });
     render(<WorkflowsPanel />);
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /create workflow/i })).not.toBeDisabled();
+      expect(screen.getByRole("button", { name: /create flow/i })).not.toBeDisabled();
     });
     const name = screen.getByPlaceholderText(/reels inbox/i);
     fireEvent.change(name, { target: { value: "Mixed inbox" } });
     fireEvent.click(screen.getByRole("checkbox", { name: /use drive filenames as captions/i }));
-    fireEvent.click(screen.getByRole("button", { name: /create workflow/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create flow/i }));
     await waitFor(() => {
       expect(createWorkflow).toHaveBeenCalledWith(expect.objectContaining({
         name: "Mixed inbox",
@@ -109,13 +143,11 @@ describe("WorkflowsPanel captions", () => {
     ]);
     render(<WorkflowsPanel />);
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /create workflow/i })).not.toBeDisabled();
+      expect(screen.getByRole("button", { name: /create flow/i })).not.toBeDisabled();
     });
     expect(screen.getByText(/^caption folder$/i)).toBeInTheDocument();
-    expect(screen.getByText(/auto-caption from bank/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox", { name: /use drive filenames as captions/i }));
     expect(screen.queryByText(/^caption folder$/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/auto-caption from bank/i)).not.toBeInTheDocument();
   });
 
   it("turns Filenames on for an existing workflow and turns the bank off", async () => {
@@ -125,6 +157,7 @@ describe("WorkflowsPanel captions", () => {
       auto_caption: false,
     });
     render(<WorkflowsPanel />);
+    fireEvent.click(await screen.findByRole("button", { name: /show flow settings/i }));
     const box = await screen.findByRole("checkbox", { name: /^filenames as captions/i });
     fireEvent.click(box);
     await waitFor(() => {

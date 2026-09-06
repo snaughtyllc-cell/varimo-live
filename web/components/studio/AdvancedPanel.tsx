@@ -21,39 +21,21 @@ export function AdvancedPanel({
   const hqHint = hqBatchHint(qualityMode, totalVariants);
 
   return (
-    <div
-      style={{
-        marginTop: 16,
-        fontSize: 12.5,
-        color: "var(--color-muted)",
-        borderTop: "1px solid var(--color-line)",
-        paddingTop: 14,
-      }}
-    >
+    <div style={{ fontSize: 12.5, color: "var(--color-muted)" }}>
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          cursor: "pointer",
-          userSelect: "none",
-        }}
+        className="studio-option-row studio-option-row--static studio-option-row--last"
+        style={{ userSelect: "none", cursor: "pointer" }}
         onClick={() => setOpen((o) => !o)}
       >
-        <span style={{ color: "var(--color-muted2)" }}>{open ? "▾" : "▸"}</span>
-        Advanced
-        <span
-          style={{
-            marginLeft: "auto",
-            color: "var(--color-text)",
-            background: "#edf6f7",
-            border: "1px solid var(--color-line)",
-            padding: "4px 10px",
-            borderRadius: 999,
-            fontSize: 11.5,
-          }}
-        >
+        <span className="studio-option-row__label">Advanced</span>
+        <span className="studio-option-row__value">
           Output: Matches source
+          <span
+            className="material-symbols-rounded studio-option-row__chevron"
+            data-open={open || undefined}
+          >
+            chevron_right
+          </span>
         </span>
       </div>
       {open && (
@@ -97,7 +79,8 @@ export function AdvancedPanel({
                   lineHeight: 1.4,
                 }}
               >
-                Fast is the usual ~20. HQ is coming soon.
+                Fast is the usual pack. HQ as a 20-pack is off.
+                Reconstruct first is the Options switch above.
               </span>
             </span>
             <select
@@ -106,7 +89,7 @@ export function AdvancedPanel({
               style={{
                 marginLeft: 12,
                 flexShrink: 0,
-                background: "#fbfdfd",
+                background: "var(--color-panel)",
                 color: "var(--color-text)",
                 border: "1px solid var(--color-line)",
                 borderRadius: 8,
@@ -116,7 +99,7 @@ export function AdvancedPanel({
             >
               <option value="fast">Fast</option>
               <option value="hq" disabled>
-                HQ — coming soon
+                HQ — not a 20-pack
               </option>
             </select>
           </div>
@@ -156,17 +139,17 @@ export function AdvancedPanel({
                 }}
               >
                 Optimized for uniqueness while keeping a clean look. Even one
-                file is scored vs the original. Pass is 38% pixel SSIM. If medium misses
+                file is scored vs the original. Pass is 38%. If medium misses
                 38%, one strong pass always runs. Only after that hunt: 30%
                 and up still ships. Under 30% is a uniqueness miss — not a
-                Drive file. Not a platform check.
+                Drive file.
               </span>
             </span>
             <input
               type="checkbox"
               checked={allowCreativeEscalate}
               onChange={(e) => onAllowCreativeEscalateChange(e.target.checked)}
-              style={{ width: 16, height: 16, flexShrink: 0, marginLeft: 12, accentColor: "#0caab8" }}
+              style={{ width: 16, height: 16, flexShrink: 0, marginLeft: 12, accentColor: "var(--color-violet)" }}
             />
           </label>
         </div>

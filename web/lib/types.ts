@@ -13,6 +13,14 @@ export interface Quality {
   spatial_vmaf: number | null; spatial_ok: boolean | null;
   bits?: number | null;
   heads?: Record<string, QualityHead> | null;
+  look_status?: string | null;
+  look_mae?: number | null;
+  look_mae_max?: number | null;
+  look_frames?: Array<{ frac?: number; t_src?: number; t_var?: number; mae?: number | null }>;
+  look_artifact_sha256?: string | null;
+  look_review_t?: number | null;
+  look_crop?: { crop_keep?: number | null; crop_x_frac?: number | null; crop_y_frac?: number | null } | null;
+  vmaf_scope?: string | null;
 }
 export type Status = "ok" | "best_effort" | "corrupt" | "uniqueness_fail";
 export type PlatformResult = "passed" | "duplicate_reject" | "flagged" | "unknown";
@@ -26,8 +34,14 @@ export interface VariantOut {
   file_ready?: boolean;
   look_status?: string | null;
   look_mae?: number | null;
+  look_mae_max?: number | null;
   look_src_url?: string | null;
   look_var_url?: string | null;
+  look_frames?: Array<{ frac?: number; t_src?: number; t_var?: number; mae?: number | null }>;
+  look_artifact_sha256?: string | null;
+  look_approved_sha256?: string | null;
+  look_review_t?: number | null;
+  look_deliverable?: boolean;
   caption?: string | null;
   ig_media_id?: string | null;
   ig_user_id?: string | null;
@@ -38,12 +52,6 @@ export interface VariantOut {
     comments?: number;
     shares?: number;
     saved?: number;
-    follows?: number;
-    profile_visits?: number;
-    reposts?: number;
-    reels_skip_rate?: number;
-    ig_reels_avg_watch_time?: number;
-    video_duration?: number;
     fetched_at?: string;
   } | null;
 }
@@ -57,8 +65,10 @@ export interface LookPreviewOut {
   index: number;
   look_status?: string | null;
   look_mae?: number | null;
+  look_mae_max?: number | null;
   look_src_url?: string | null;
   look_var_url?: string | null;
+  look_review_t?: number | null;
 }
 export interface SourceOut {
   source_id: string; filename: string; requested: number; delivered: number; shortfall: number;
@@ -85,11 +95,17 @@ export interface SourceOut {
   hold_kind?: string | null;
   suggestion_kind?: string | null;
   suggestion_copy?: string | null;
+  processing_charge?: string | null;
+  delivery_destination?: string | null;
+  expires_utc?: string | null;
+  poster_url?: string | null;
 }
 export interface JobSummary { job_id: string; count: number; created_utc: string; state: "running" | "done"; source_count: number; }
 export interface QueueItem {
   job_id: string;
   quality_mode: "fast" | "hq" | string;
+  prep_mode?: "none" | "hq" | string;
+  prep_status?: string | null;
   state: string;
   created_utc: string;
   count: number;
@@ -105,7 +121,21 @@ export interface QueueSnapshot {
   hq: number;
   jobs: QueueItem[];
 }
-export interface JobDetail { job_id: string; count: number; created_utc: string; state: string; sources: SourceOut[]; error?: string | null; }
+export interface JobDetail {
+  job_id: string;
+  count: number;
+  created_utc: string;
+  state: string;
+  sources: SourceOut[];
+  error?: string | null;
+  quality_mode?: string;
+  prep_mode?: "none" | "hq" | string;
+  prep_status?: string | null;
+  processing_charge?: string | null;
+  delivery_destination?: string | null;
+  outputs_expires_utc?: string | null;
+  wait_phase?: "queued" | "booting" | string | null;
+}
 export interface CreateJobResponse { job_id: string; sources: SourceOut[]; }
 export interface DiagnosticsItem { source_id: string; index: number; filename: string; status: "best_effort" | "corrupt" | "uniqueness_fail"; quality: Quality; }
 export interface VariantEvent {
@@ -121,10 +151,14 @@ export interface VariantEvent {
   platform_result?: PlatformResult | null;
   look_status?: string | null;
   look_mae?: number | null;
+  look_mae_max?: number | null;
   look_src?: string | null;
   look_var?: string | null;
   look_src_url?: string | null;
   look_var_url?: string | null;
+  look_frames?: Array<{ frac?: number; t_src?: number; t_var?: number; mae?: number | null }>;
+  look_artifact_sha256?: string | null;
+  look_review_t?: number | null;
 }
 export const VMAF_FLOOR = 90;
 
@@ -259,6 +293,7 @@ export interface Workflow {
   output_destination_id: string;
   count: number;
   quality_mode: "fast" | "hq";
+  prep_mode?: "none" | "hq";
   allow_creative_escalate: boolean;
   enabled: boolean;
   poll_seconds: number;
@@ -298,6 +333,9 @@ export interface AdminMember {
   email: string;
   name: string;
   role: AuthRole;
+  week_fast?: number;
+  week_hq?: number;
+  week_packs?: number;
 }
 
 export interface Team {
@@ -316,6 +354,9 @@ export interface AdminWorkspace {
   running: number;
   fast: number;
   hq: number;
+  week_fast?: number;
+  week_hq?: number;
+  week_packs?: number;
   last_job_utc: string | null;
   last_error: string | null;
   experience?: "solo" | "agency";

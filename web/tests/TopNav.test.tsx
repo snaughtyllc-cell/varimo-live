@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { AuthMe } from "@/lib/types";
 
@@ -22,7 +22,6 @@ vi.mock("@/components/nav/StatusStrip", () => ({
 }));
 
 import { TopNav } from "@/components/nav/TopNav";
-import { EXTRA_TABS, PRIMARY_TABS } from "@/lib/studioDestinations";
 
 const BASE: AuthMe = {
   auth_required: true,
@@ -42,79 +41,12 @@ beforeEach(() => {
   me.data = BASE;
 });
 
+// TopNav now only owns the mobile top bar / "More" flyout / bottom tab bar
+// (desktop breakpoint gets the SideNav rail instead — see SideNav.test.tsx,
+// which carries the role-gating assertions that used to live here against
+// the old `.vf-desktop-nav` row).
 describe("TopNav", () => {
-  it("shows Team for workspace owners", () => {
-    render(<TopNav />);
-    expect(screen.getAllByRole("link", { name: "Team" })[0]).toHaveAttribute("href", "/team");
-    expect(screen.getAllByRole("link", { name: "Analytics" })[0]).toHaveAttribute(
-      "href",
-      "/analytics",
-    );
-    expect(screen.queryByRole("link", { name: "Admin" })).not.toBeInTheDocument();
-  });
-
-  it("hides Team and Analytics for members", () => {
-    me.data = { ...BASE, role: "member" };
-    render(<TopNav />);
-    expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Analytics" })).not.toBeInTheDocument();
-  });
-
-  it("shows Team and Admin for the site admin", () => {
-    me.data = { ...BASE, email: "jeff@example.com", is_admin: true };
-    render(<TopNav />);
-    expect(screen.getAllByRole("link", { name: "Team" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: "Admin" })[0]).toHaveAttribute("href", "/admin");
-  });
-
-  it("hides Diagnostics for operators", () => {
-    render(<TopNav />);
-    expect(screen.queryByRole("link", { name: "Diagnostics" })).not.toBeInTheDocument();
-  });
-
-  it("shows Diagnostics for the site admin", () => {
-    me.data = { ...BASE, email: "jeff@example.com", is_admin: true };
-    render(<TopNav />);
-    expect(screen.getAllByRole("link", { name: "Diagnostics" })[0]).toHaveAttribute(
-      "href",
-      "/diagnostics",
-    );
-  });
-
-  it("keeps Diagnostics when login is off", () => {
-    me.data = {
-      ...BASE,
-      auth_required: false,
-      email: null,
-      role: null,
-      is_admin: false,
-    };
-    render(<TopNav />);
-    expect(screen.getAllByRole("link", { name: "Diagnostics" }).length).toBeGreaterThan(0);
-  });
-
-  it("exposes primary destinations including Drops", () => {
-    render(<TopNav />);
-    for (const tab of PRIMARY_TABS) {
-      expect(screen.getAllByRole("link", { name: tab.label })[0]).toHaveAttribute(
-        "href",
-        tab.href,
-      );
-    }
-  });
-
-  it("hides Team for solo creators who own the workspace", () => {
-    me.data = { ...BASE, experience: "solo", role: "owner", is_admin: false };
-    render(<TopNav />);
-    expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Drops" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Analytics" })[0]).toHaveAttribute(
-      "href",
-      "/analytics",
-    );
-  });
-
-  it("hides Drops and Workflows for solo members", () => {
+  it("hides Drops and Workflows for solo members on the phone tab bar", () => {
     me.data = { ...BASE, experience: "solo", role: "member", is_admin: false };
     render(<TopNav />);
     expect(screen.queryByRole("link", { name: "Drops" })).not.toBeInTheDocument();
@@ -122,20 +54,58 @@ describe("TopNav", () => {
     expect(screen.queryByRole("link", { name: "Flows" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Studio" })[0]).toHaveAttribute("href", "/");
     expect(screen.getAllByRole("link", { name: "Gallery" })[0]).toHaveAttribute("href", "/gallery");
+    expect(screen.queryByRole("link", { name: "Stats" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Analytics" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Drive" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
     expect(screen.getAllByRole("link", { name: "Drive" })[0]).toHaveAttribute(
       "href",
       "/settings/drive",
     );
   });
 
-  it("renders role extras from the same catalog as the IA doc", () => {
-    me.data = { ...BASE, email: "jeff@example.com", is_admin: true };
+  it("puts Analytics on the phone bar for owners and Drive in More", () => {
+    me.data = { ...BASE, experience: "solo", role: "owner", is_admin: false };
     render(<TopNav />);
-    for (const tab of EXTRA_TABS) {
-      expect(screen.getAllByRole("link", { name: tab.label })[0]).toHaveAttribute(
-        "href",
-        tab.href,
-      );
-    }
+    expect(screen.queryByRole("link", { name: "Drops" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Studio" })[0]).toHaveAttribute("href", "/");
+    expect(screen.getAllByRole("link", { name: "Analytics" })[0]).toHaveAttribute("href", "/analytics");
+    expect(screen.queryByRole("link", { name: "Drive" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(screen.getAllByRole("link", { name: "Drive" })[0]).toHaveAttribute(
+      "href",
+      "/settings/drive",
+    );
+  });
+
+  it("keeps agency phone bar at Studio, Gallery, Analytics, Flows with Drive and Drops in More", () => {
+    render(<TopNav />);
+    const bar = document.querySelector(".vf-mobile-tabs") as HTMLElement;
+    expect([...bar.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toEqual([
+      "/",
+      "/gallery",
+      "/analytics",
+      "/workflows",
+    ]);
+    expect(screen.queryByRole("link", { name: "Drive" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Drops" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(screen.getAllByRole("link", { name: "Drive" })[0]).toHaveAttribute(
+      "href",
+      "/settings/drive",
+    );
+    expect(screen.getAllByRole("link", { name: "Drops" })[0]).toHaveAttribute("href", "/drops");
+    expect(screen.getAllByRole("link", { name: "Team" })[0]).toHaveAttribute("href", "/team");
+  });
+
+  it("centers the varimo wordmark and keeps More as an icon-only control", () => {
+    render(<TopNav />);
+    expect(screen.getByRole("link", { name: /varimo studio home/i })).toBeInTheDocument();
+    expect(document.querySelector(".vf-brand-wordmark")).toBeTruthy();
+    const more = screen.getByRole("button", { name: "More" });
+    expect(more).toHaveAttribute("aria-label", "More");
+    expect(more.textContent?.trim()).toBe("");
+    expect(document.querySelector(".vf-topbar-left")).toBeTruthy();
   });
 });

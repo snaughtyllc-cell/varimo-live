@@ -24,13 +24,13 @@ vi.mock("@/lib/api", () => ({
   listDestinations: () => Promise.resolve([]),
   sourceUrl: (id: string) => `/api/sources/${id}/source`,
   sourceZipUrl: () => "/api/sources/s1/zip",
+  getSourceDownloads: vi.fn(async () => ({ source_id: "s1", files: [], zip_url: null })),
   regenerate: vi.fn(),
   retryCopy: vi.fn(),
   removeSource: vi.fn(),
   setPlatformResult: vi.fn().mockResolvedValue({}),
   setPostUrl: vi.fn().mockResolvedValue({}),
-  setVariantCaption: vi.fn().mockResolvedValue({}),
-  rewriteSourceCaptions: vi.fn().mockResolvedValue({}),
+  approveLookEncode: vi.fn().mockResolvedValue({}),
 }));
 
 import { GalleryContent } from "@/app/gallery/page";
@@ -78,15 +78,29 @@ describe("Gallery variant sheet open", () => {
     searchParams.delete("v");
   });
 
-  it("opens the sheet with history.pushState so Gallery does not remount", () => {
+  it("opens the review pane in the grid so packs stay on screen", () => {
     const pushState = vi.spyOn(window.history, "pushState").mockImplementation(() => {});
     render(<GalleryContent />);
     fireEvent.click(screen.getByText("v03"));
     expect(pushState).toHaveBeenCalledWith(null, "", "/gallery?v=6bc8f627184a:3");
     expect(routerPush).not.toHaveBeenCalled();
     expect(routerReplace).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /variant review/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /back to grid/i })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: /packs/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/v03/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/DRAG THE DIVIDER TO WIPE/i)).toBeInTheDocument();
     pushState.mockRestore();
+  });
+
+  it("puts pack Insights directly under the pack tiles", () => {
+    render(<GalleryContent />);
+    const packs = screen.getByRole("complementary", { name: /packs/i });
+    const strip = screen.getByRole("region", { name: /pack insights/i });
+    expect(packs.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText(/sample insights/i)).toBeInTheDocument();
+    expect(strip.parentElement).toHaveClass("gallery-main");
   });
 
   it("offers Select all and Save to phone without a variant count on Select all", () => {
@@ -104,5 +118,15 @@ describe("Gallery variant sheet open", () => {
     fireEvent.click(screen.getByLabelText(/select v03/i));
     expect(within(toolbar).getByRole("button", { name: /save to phone/i })).toBeEnabled();
     expect(within(toolbar).queryByText("Select clips first")).not.toBeInTheDocument();
+  });
+
+  it("shows the floating toolbar only once a clip is selected", () => {
+    render(<GalleryContent />);
+    expect(screen.queryByRole("toolbar", { name: /selected variants/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/select v03/i));
+
+    const floating = screen.getByRole("toolbar", { name: /selected variants/i });
+    expect(within(floating).getByText("1 variant selected")).toBeInTheDocument();
   });
 });

@@ -41,28 +41,21 @@ afterEach(() => {
 });
 
 describe("VariantActions customer actions", () => {
-  it("keeps duplicate rejected and download, without pass/flag/manifest", () => {
+  it("keeps Pass and Flag, without duplicate / manifest chrome", () => {
     render(<VariantActions sourceId="s1" variant={variant()} onRegenerate={() => {}} />);
-    expect(screen.getByRole("button", { name: /Duplicate rejected/ })).toBeInTheDocument();
+    expect(screen.getByText("Pass")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Flag$/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Download/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Duplicate rejected/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Passed upload/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Flagged/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /View manifest/ })).not.toBeInTheDocument();
     expect(screen.getByText(/unlabeled = pass/i)).toBeInTheDocument();
+    expect(screen.getByText(/stuck|views aren.t moving/i)).toBeInTheDocument();
     expect(screen.queryByTestId("platform-result-badge")).not.toBeInTheDocument();
   });
 
-  it("does not show Flagged or Passed badges", () => {
+  it("does not show Flagged or Passed badges on an unlabeled copy", () => {
     const { rerender } = render(
-      <VariantActions
-        sourceId="s1"
-        variant={variant({ platform_result: "flagged" })}
-        onRegenerate={() => {}}
-      />,
-    );
-    expect(screen.queryByTestId("platform-result-badge")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Flagged/)).not.toBeInTheDocument();
-    rerender(
       <VariantActions
         sourceId="s1"
         variant={variant({ platform_result: "passed" })}
@@ -71,14 +64,22 @@ describe("VariantActions customer actions", () => {
     );
     expect(screen.queryByTestId("platform-result-badge")).not.toBeInTheDocument();
     expect(screen.queryByText(/Passed upload/)).not.toBeInTheDocument();
+    rerender(
+      <VariantActions
+        sourceId="s1"
+        variant={variant({ platform_result: "flagged" })}
+        onRegenerate={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("platform-result-badge")).toHaveTextContent(/stuck/i);
   });
 
-  it("saves duplicate_reject on the variant", async () => {
+  it("saves flagged when the operator marks a stuck post", async () => {
     const onRegenerate = vi.fn();
     render(<VariantActions sourceId="s1" variant={variant()} onRegenerate={onRegenerate} />);
-    fireEvent.click(screen.getByRole("button", { name: /Duplicate rejected/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Flag$/ }));
     await waitFor(() => {
-      expect(setPlatformResult).toHaveBeenCalledWith("s1", 1, "duplicate_reject");
+      expect(setPlatformResult).toHaveBeenCalledWith("s1", 1, "flagged");
     });
     await waitFor(() => {
       expect(onRegenerate).toHaveBeenCalled();

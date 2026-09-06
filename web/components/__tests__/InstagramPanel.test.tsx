@@ -13,15 +13,18 @@ vi.mock("@/lib/api", () => ({
   pasteInstagramToken: (t: string) => mockPasteInstagramToken(t),
 }));
 
+const me: { data: { auth_required: boolean; email: string; role?: string; is_admin?: boolean } } = {
+  data: { auth_required: false, email: "ops@example.com" },
+};
+
 vi.mock("@/lib/useAuthMe", () => ({
-  useAuthMe: () => ({
-    data: { auth_required: false, email: "ops@example.com" },
-  }),
+  useAuthMe: () => me,
 }));
 
 describe("InstagramPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    me.data = { auth_required: false, email: "ops@example.com" };
     mockGetInstagramStatus.mockResolvedValue({
       accounts: [],
       connected: false,
@@ -95,5 +98,17 @@ describe("InstagramPanel", () => {
     expect(screen.queryByLabelText(/long-lived token/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /paste a token instead/i }));
     expect(screen.getByLabelText(/long-lived token/i)).toBeTruthy();
+  });
+
+  it("does not fetch Instagram status for a workspace VA", () => {
+    me.data = {
+      auth_required: true,
+      email: "va@example.com",
+      role: "member",
+      is_admin: false,
+    };
+    render(<InstagramPanel />);
+    expect(mockGetInstagramStatus).not.toHaveBeenCalled();
+    expect(screen.queryByText(/instagram testers/i)).toBeNull();
   });
 });

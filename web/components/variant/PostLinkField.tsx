@@ -42,37 +42,38 @@ export function PostLinkField({ sourceId, variant, onSaved }: PostLinkFieldProps
   }
 
   return (
-    <div
-      style={{
-        marginBottom: 12,
-        padding: "12px 12px 10px",
-        background: "#12121a",
-        border: "1px solid var(--color-line)",
-        borderRadius: 10,
-      }}
-    >
+    <div>
       <div
         style={{
-          fontSize: 11,
-          textTransform: "uppercase",
-          letterSpacing: "0.7px",
-          color: "var(--color-muted2)",
-          fontWeight: 700,
-          marginBottom: 6,
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          marginBottom: 9,
         }}
       >
-        {postLinkLabel()}
+        <div
+          style={{
+            fontFamily: "var(--font-space-grotesk), monospace",
+            fontSize: 10.5,
+            fontWeight: 600,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: "var(--color-violet)",
+          }}
+        >
+          {postLinkLabel()}
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--font-space-grotesk), monospace",
+            fontSize: 10,
+            color: "var(--color-muted2)",
+          }}
+        >
+          Optional
+        </div>
       </div>
-      <p
-        style={{
-          margin: "0 0 10px",
-          fontSize: 11.5,
-          lineHeight: 1.45,
-          color: "var(--color-muted)",
-        }}
-      >
-        {postLinkHint()}
-      </p>
+
       {saved && (
         <a
           href={saved}
@@ -83,19 +84,20 @@ export function PostLinkField({ sourceId, variant, onSaved }: PostLinkFieldProps
             marginBottom: 8,
             fontSize: 12.5,
             fontWeight: 700,
-            color: "var(--color-cyan)",
+            color: "var(--color-violet)",
             wordBreak: "break-all",
           }}
         >
           {postLinkOpenLabel()} · {hostFromPostUrl(saved)}
         </a>
       )}
+
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input
           type="url"
           inputMode="url"
           autoComplete="url"
-          placeholder="https://www.instagram.com/reel/…"
+          placeholder="instagram.com/reel/…"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           disabled={busy}
@@ -103,12 +105,13 @@ export function PostLinkField({ sourceId, variant, onSaved }: PostLinkFieldProps
           style={{
             flex: "1 1 160px",
             minWidth: 0,
-            background: "#f3f8f9",
+            height: 44,
+            background: "#fff",
             color: "var(--color-text)",
             border: "1px solid var(--color-line)",
-            borderRadius: 8,
-            padding: "10px 10px",
-            fontSize: 16,
+            borderRadius: 11,
+            padding: "0 13px",
+            fontSize: 13.5,
           }}
         />
         <button
@@ -116,13 +119,14 @@ export function PostLinkField({ sourceId, variant, onSaved }: PostLinkFieldProps
           onClick={() => save(draft)}
           disabled={busy}
           style={{
-            fontSize: 12.5,
-            fontWeight: 700,
-            padding: "10px 12px",
-            borderRadius: 8,
-            background: "#f3f8f9",
-            border: "1px solid var(--color-line)",
-            color: busy ? "var(--color-muted)" : "var(--color-text)",
+            fontSize: 13,
+            fontWeight: 600,
+            height: 44,
+            padding: "0 16px",
+            borderRadius: 11,
+            background: "var(--ink)",
+            border: "none",
+            color: busy ? "var(--color-muted2)" : "#f6fbfb",
             cursor: busy ? "not-allowed" : "pointer",
           }}
         >
@@ -137,10 +141,11 @@ export function PostLinkField({ sourceId, variant, onSaved }: PostLinkFieldProps
             }}
             disabled={busy}
             style={{
-              fontSize: 12.5,
-              fontWeight: 700,
-              padding: "10px 12px",
-              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              height: 44,
+              padding: "0 14px",
+              borderRadius: 11,
               background: "transparent",
               border: "1px solid var(--color-line)",
               color: "var(--color-muted)",
@@ -151,6 +156,20 @@ export function PostLinkField({ sourceId, variant, onSaved }: PostLinkFieldProps
           </button>
         )}
       </div>
+
+      <div
+        style={{
+          marginTop: 9,
+          fontFamily: "var(--font-space-grotesk), monospace",
+          fontSize: 10,
+          lineHeight: 1.5,
+          letterSpacing: "0.02em",
+          color: "var(--color-muted2)",
+        }}
+      >
+        {postLinkHint()}
+      </div>
+
       {error && (
         <div style={{ marginTop: 8, fontSize: 12, color: "var(--color-red)" }}>{error}</div>
       )}

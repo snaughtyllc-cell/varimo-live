@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import type { QueueSnapshot } from "@/lib/types";
 import {
+  jobIsLive,
+  jobCanCancel,
   jobsAhead,
   queueHeadline,
+  queueOccupiesHq,
   queueRowLabel,
   queueStripLabel,
   queueWaitCopy,
@@ -56,26 +59,56 @@ describe("live Studio queue copy", () => {
     expect(jobsAhead(q, "bbb")).toBe(1);
   });
 
-  it("Fast still starts now — does not wait in a single-file line", () => {
+  it("treats queued and cancel-requested as live packs", () => {
+    expect(jobIsLive("queued")).toBe(true);
+    expect(jobIsLive("reserved")).toBe(true);
+    expect(jobIsLive("cancel_requested")).toBe(true);
+    expect(jobIsLive("done")).toBe(false);
+    expect(jobCanCancel("queued")).toBe(true);
+    expect(jobCanCancel("starting")).toBe(true);
+    expect(jobCanCancel("running")).toBe(true);
+    expect(jobCanCancel("cancel_requested")).toBe(false);
+    expect(jobCanCancel("done")).toBe(false);
+    expect(queueRowLabel({ ...fastJob, state: "queued" })).toBe(
+      "1. Fast · IMG_0683.mp4 · waiting",
+    );
+  });
+
+  it("same studio waits; a second studio can still take the other Fast worker", () => {
     const twoFast = snap({
       running: 2,
       fast: 2,
       jobs: [fastJob, { ...fastJob, job_id: "ccc", position: 2, filenames: ["va.mp4"] }],
     });
     expect(queueHeadline(twoFast)).toBe("2 packs generating");
-    expect(queueWaitCopy(twoFast, "fast")).toMatch(/starts now/i);
-    expect(queueWaitCopy(twoFast, "fast")).toMatch(/does not wait/i);
+    expect(queueWaitCopy(twoFast, "fast", "ccc")).toMatch(/waits/i);
+    expect(queueWaitCopy(twoFast, "fast", "aaa")).toMatch(/waits in line/i);
     expect(queueRowLabel(fastJob)).toBe("1. Fast · IMG_0683.mp4 · 3/8");
   });
 
-  it("HQ waits on the one GPU when another HQ is already going", () => {
+  it("HQ waits on the one GPU; this studio does not start a second pack", () => {
     const q = snap({ running: 1, hq: 1, jobs: [{ ...hqJob, position: 1 }] });
     expect(queueWaitCopy(q, "hq")).toMatch(/GPU/i);
     expect(queueWaitCopy(q, "hq")).toMatch(/waits/i);
-    expect(queueWaitCopy(q, "fast")).toMatch(/does not wait behind HQ/i);
+    expect(queueWaitCopy(q, "fast", "bbb")).toMatch(/waits in line|generating/i);
   });
 
-  it("idle copy says packs do not overwrite each other", () => {
+  it("idle copy says one pack per studio and packs do not overwrite", () => {
+    expect(queueWaitCopy(snap(), "fast")).toMatch(/one pack/i);
     expect(queueWaitCopy(snap(), "fast")).toMatch(/do not overwrite/i);
+  });
+
+  it("counts reconstruct-first as HQ occupancy until prep is done", () => {
+    const reconstructing = {
+      ...fastJob,
+      prep_mode: "hq" as const,
+      prep_status: "running" as const,
+    };
+    expect(queueOccupiesHq(reconstructing)).toBe(true);
+    expect(queueRowLabel(reconstructing)).toBe("1. HQ · IMG_0683.mp4 · 3/8");
+    expect(queueOccupiesHq({ ...reconstructing, prep_status: "done" })).toBe(false);
+    expect(queueRowLabel({ ...reconstructing, prep_status: "done" })).toBe(
+      "1. Fast · IMG_0683.mp4 · 3/8",
+    );
   });
 });

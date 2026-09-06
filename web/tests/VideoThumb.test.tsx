@@ -37,6 +37,22 @@ describe("VideoThumb", () => {
     expect((container.firstElementChild as HTMLElement).style.aspectRatio).toBe("9 / 16");
   });
 
+  it("mounts the video immediately when eager is set", () => {
+    const { container } = render(<VideoThumb src="/live.mp4" eager />);
+    expect(container.querySelector("video")).toBeTruthy();
+  });
+
+  it("fills a parent frame without applying its own aspect when fill is set", () => {
+    const { container } = render(<VideoThumb src="/v.mp4" fill />);
+    const box = container.firstElementChild as HTMLElement;
+    expect(box.getAttribute("data-fill")).toBe("true");
+    expect(box.style.aspectRatio).toBe("");
+    expect(box.style.width).toBe("100%");
+    expect(box.style.height).toBe("100%");
+    const video = container.querySelector("video") as HTMLVideoElement;
+    expect(video.style.objectFit).toBe("cover");
+  });
+
   it("plays on hover and pauses on leave", () => {
     const play = vi.fn().mockResolvedValue(undefined);
     const pause = vi.fn();

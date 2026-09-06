@@ -32,27 +32,14 @@ export function PasswordPanel() {
   }
 
   return (
-    <div
-      style={{
-        background: "var(--color-panel)",
-        border: "1px solid var(--color-line)",
-        borderRadius: 14,
-        padding: 16,
-        marginBottom: 22,
-      }}
-    >
-      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)" }}>
-        Studio password
-      </div>
-      <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 4, lineHeight: 1.45 }}>
+    <div className="drive-card">
+      <div className="drive-card__title">Studio password</div>
+      <div className="drive-card__copy">
         {hasPassword
           ? "Replace the password for email sign-in. Google still works."
           : "Add a password so you can sign in with email instead of Google. Drive Connect stays separate."}
       </div>
-      <form
-        onSubmit={onSubmit}
-        style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12, alignItems: "center" }}
-      >
+      <form onSubmit={onSubmit} className="drive-step2-form drive-password-form">
         <input
           type="password"
           required
@@ -62,33 +49,24 @@ export function PasswordPanel() {
           placeholder="At least 8 characters"
           aria-label="New studio password"
           autoComplete="new-password"
-          style={{
-            background: "var(--color-panel2)",
-            border: "1px solid var(--color-line)",
-            borderRadius: 9,
-            padding: "8px 12px",
-            fontSize: 13,
-            color: "var(--color-text)",
-            minWidth: 220,
-            flex: 1,
-          }}
+          className="drive-input drive-input--url"
         />
         <button
           type="submit"
           disabled={busy}
-          className="vf-primary-button"
+          className="drive-btn drive-btn--dark"
           style={{ cursor: busy ? "wait" : "pointer" }}
         >
           {busy ? "Saving…" : hasPassword ? "Change password" : "Add password"}
         </button>
       </form>
       {error && (
-        <div role="alert" className="vf-alert" style={{ marginTop: 10, marginBottom: 0, fontSize: 12.5 }}>
+        <div role="alert" className="vf-alert drive-password-alert">
           {error}
         </div>
       )}
       {saved && (
-        <div className="vf-alert vf-alert--ok" style={{ marginTop: 10, marginBottom: 0, fontSize: 12.5 }}>
+        <div className="vf-alert vf-alert--ok drive-password-alert">
           Password saved.
         </div>
       )}

@@ -5,6 +5,7 @@ import { packLiveStripModel } from "@/lib/instagram";
 
 export function PackLiveStrip({ source }: { source: SourceOut }) {
   const model = packLiveStripModel(source);
+  if (!model) return null;
   return (
     <section
       className="gallery-pack-live"

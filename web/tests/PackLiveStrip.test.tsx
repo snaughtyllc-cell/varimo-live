@@ -1,7 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { PackLiveStrip } from "@/components/gallery/PackLiveStrip";
-import { GALLERY_LIVE_STRIP_PREVIEW_HINT } from "@/lib/instagram";
 import type { SourceOut, VariantOut } from "@/lib/types";
 
 const quality = {
@@ -41,14 +40,10 @@ function source(over: Partial<SourceOut> = {}): SourceOut {
 }
 
 describe("PackLiveStrip", () => {
-  it("shows a sample Insights layout when nothing is linked", () => {
-    render(<PackLiveStrip source={source()} />);
-    const strip = screen.getByRole("region", { name: /pack insights/i });
-    expect(strip).toHaveAttribute("data-preview", "true");
-    expect(screen.getByText(/sample insights/i)).toBeInTheDocument();
-    expect(screen.getByText("25k")).toBeInTheDocument();
-    expect(screen.getByText("views")).toBeInTheDocument();
-    expect(screen.getByText(GALLERY_LIVE_STRIP_PREVIEW_HINT)).toBeInTheDocument();
+  it("renders nothing when no Reels are linked", () => {
+    const { container } = render(<PackLiveStrip source={source()} />);
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText(/sample insights/i)).not.toBeInTheDocument();
   });
 
   it("uses live totals when Reels are linked", () => {

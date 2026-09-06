@@ -10,7 +10,6 @@ import {
   handleLabel,
   igOauthErrorMessage,
   insightSnapshotCopy,
-  GALLERY_LIVE_STRIP_PREVIEW_HINT,
   moveCopyLabel,
   packConversionCopy,
   packLiveStripModel,
@@ -162,18 +161,8 @@ describe("packConversionCopy", () => {
 });
 
 describe("packLiveStripModel", () => {
-  it("uses a sample layout when nothing is linked so Gallery can show the Insights strip", () => {
-    const model = packLiveStripModel({ variants: [1, 2], insights_linked: 0 });
-    expect(model.preview).toBe(true);
-    expect(model.hint).toBe(GALLERY_LIVE_STRIP_PREVIEW_HINT);
-    expect(model.metrics.map((row) => `${row.value} ${row.label}`)).toEqual([
-      "25k views",
-      "20k reach",
-      "1.8k likes",
-      "94 comments",
-      "210 shares",
-    ]);
-    expect(model.linkedCopy).toBe("3 of 10 linked");
+  it("returns null when nothing is linked so Gallery does not fake Insights", () => {
+    expect(packLiveStripModel({ variants: [1, 2], insights_linked: 0 })).toBeNull();
   });
 
   it("uses live totals when Reels are linked", () => {

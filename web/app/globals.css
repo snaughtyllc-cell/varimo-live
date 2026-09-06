@@ -1340,7 +1340,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 
 @media (max-width: 639px) {
   :root { --nav-h: 58px; --tab-h: calc(68px + env(safe-area-inset-bottom, 0px)); --generate-dock-h: 120px; }
-  .vf-topbar { min-height: var(--nav-h); padding: max(10px, env(safe-area-inset-top, 0px)) 12px 10px; }
+  .vf-topbar { min-height: var(--nav-h); padding: env(safe-area-inset-top, 0px) 12px 10px; }
+  /* Center the wordmark in the 58px content row, not in the notch padding. */
+  .vf-brand { top: calc(env(safe-area-inset-top, 0px) + 29px); transform: translate(-50%, -50%); }
   .vf-brand-wordmark { display: inline-block; font-size: 22px; }
   .vf-brand-mark { display: none; }
   .vf-topbar-actions { gap: 6px; }
@@ -1439,7 +1441,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   .gallery-pack-row { flex-direction: column; flex-shrink: 0; gap: 4px; padding: 6px; width: auto; }
   .gallery-pack-row__thumb { height: 62px; width: 44px; }
   .gallery-pack-row__main { display: none; }
-  .gallery-pack-header, .gallery-summary-row { display: none; }
+  .gallery-summary-row { display: none; }
+  .gallery-pack-header { display: flex; margin-bottom: 0; padding: 0 12px 8px; }
+  .gallery-pack-header__name, .gallery-pack-header__pill, .gallery-pack-header__meta { display: none; }
+  .gallery-pack-header__actions { margin-left: 0; width: 100%; }
   .gallery-pack-live {
     display: flex;
     flex-shrink: 0;

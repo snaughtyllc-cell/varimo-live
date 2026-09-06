@@ -48,6 +48,8 @@ describe("mobile Studio + Gallery CSS contract", () => {
     expect(mobile).toMatch(/\.gallery-packs__search\s*\{[^}]*display:\s*none/s);
     expect(mobile).toMatch(/\.gallery-grid\s*\{[^}]*minmax\(\s*80px/s);
     expect(mobile).toMatch(/\.gallery-tile\s*\{[^}]*max-width:\s*none/s);
+    expect(mobile).toMatch(/\.gallery-pack-header\s*\{[^}]*display:\s*flex/s);
+    expect(mobile).not.toMatch(/\.gallery-pack-header,\s*\.gallery-summary-row\s*\{[^}]*display:\s*none/s);
   });
 
   it("keeps a single green status chip on the phone top bar", () => {
@@ -103,9 +105,10 @@ describe("mobile Studio + Gallery CSS contract", () => {
     expect(mobile).not.toMatch(/\.gallery-review \.compare-slider--stage\s*\{[^}]*100cqh/s);
   });
 
-  it("keeps the full varimo wordmark in the phone top bar", () => {
+  it("keeps the full varimo wordmark in the phone top bar below the notch", () => {
     expect(mobile).toMatch(/\.vf-brand-wordmark\s*\{[^}]*display:\s*inline-block/s);
     expect(mobile).toMatch(/\.vf-brand-mark\s*\{[^}]*display:\s*none/s);
+    expect(mobile).toMatch(/\.vf-brand\s*\{[^}]*env\(safe-area-inset-top/s);
     expect(mobile).toMatch(/\.vf-more-trigger\s*\{[^}]*font-size:\s*0/s);
   });
 });

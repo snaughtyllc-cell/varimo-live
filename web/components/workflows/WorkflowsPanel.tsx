@@ -29,6 +29,7 @@ import {
   workflowFilenameCaptionLabel,
 } from "@/lib/workflowCopy";
 import { hqPrepToggleLabel } from "@/lib/prepareCopy";
+import { useLabLane } from "@/lib/useLabLane";
 
 const DEFAULT_POLL_MINUTES = 2;
 const MAX_POLL_MINUTES = 60;
@@ -94,6 +95,7 @@ function Switch({
 }
 
 export function WorkflowsPanel() {
+  const labLane = useLabLane();
   const [status, setStatus] = useState<DriveStatus | null>(null);
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
@@ -178,7 +180,7 @@ export function WorkflowsPanel() {
         output_destination_id: outputId,
         count,
         quality_mode: "fast",
-        prep_mode: prepMode,
+        prep_mode: labLane ? prepMode : "none",
         enabled,
         poll_seconds: Math.round(pollMinutes * 60),
         auto_caption: autoCaption,
@@ -455,12 +457,14 @@ export function WorkflowsPanel() {
                             onChange={() => handleToggleEnabled(wf)}
                             label="Watch"
                           />
+                          {labLane && (
                           <Switch
                             checked={wf.prep_mode === "hq"}
                             disabled={busy}
                             onChange={() => handleTogglePrep(wf)}
                             label={hqPrepToggleLabel()}
                           />
+                          )}
                           <Switch
                             checked={!!wf.auto_caption}
                             disabled={busy}
@@ -656,6 +660,7 @@ export function WorkflowsPanel() {
             </div>
 
             <div className="workflow-toggles">
+              {labLane && (
               <div className="workflow-toggle-row" title={workflowReconstructHint()}>
                 <div>
                   <div className="workflow-toggle-row__title">{hqPrepToggleLabel()}</div>
@@ -669,6 +674,7 @@ export function WorkflowsPanel() {
                   visibleLabel={false}
                 />
               </div>
+              )}
               <div className="workflow-toggle-row">
                 <div className="workflow-toggle-row__title">Auto-poll the inbox</div>
                 <Switch

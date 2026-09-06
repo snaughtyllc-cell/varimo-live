@@ -167,8 +167,9 @@ export function GalleryContent() {
   ];
   const splitJobId = selectedJobIds.length === 1 ? selectedJobIds[0] : undefined;
   const disabledReason = sendDisabledReason(driveStatus, destinations, okRefs);
-  const visibleOkCount = okVariantKeys(sorted).length;
-  const allVisibleSelected = selectionHasAllOk(selected, sorted);
+  const packForSelect = activePack ? [activePack] : [];
+  const visibleOkCount = okVariantKeys(packForSelect).length;
+  const allVisibleSelected = selectionHasAllOk(selected, packForSelect);
   const selectedVariants = selectedShareableVariants(allSources, selected);
 
   useEffect(() => {
@@ -179,7 +180,8 @@ export function GalleryContent() {
   }, [selected.size]);
 
   function handleSelectAllVisible() {
-    setSelected((prev) => withOkSelection(prev, sorted, !allVisibleSelected));
+    if (!activePack) return;
+    setSelected((prev) => withOkSelection(prev, [activePack], !allVisibleSelected));
   }
 
   function handleToggleSelectSource(source: SourceOut, select: boolean) {

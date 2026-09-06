@@ -59,20 +59,6 @@ export function packViewsCopy(
   return packConversionCopy(views, null, null, linked, copies);
 }
 
-/** Sample Insights used on Gallery phone when a pack has no linked Reels yet. */
-export const GALLERY_LIVE_STRIP_PREVIEW = {
-  views: 25400,
-  reach: 19800,
-  likes: 1820,
-  comments: 94,
-  shares: 210,
-  linked: 3,
-  copies: 10,
-} as const;
-
-export const GALLERY_LIVE_STRIP_PREVIEW_HINT =
-  "Sample layout — a live drop with views would look like this. Connect Instagram on Analytics for real numbers.";
-
 export type PackLiveMetric = { label: string; value: string };
 
 export type PackLiveStripModel = {
@@ -110,19 +96,10 @@ export function packLiveStripModel(source: {
   variants: { length: number };
   suggestion_kind?: string | null;
   suggestion_copy?: string | null;
-}): PackLiveStripModel {
+}): PackLiveStripModel | null {
   const copies = source.variants.length;
   const linked = source.insights_linked ?? 0;
-  if (linked <= 0) {
-    const sample = GALLERY_LIVE_STRIP_PREVIEW;
-    return {
-      preview: true,
-      metrics: liveStripMetrics(sample.views, sample),
-      linkedCopy: `${sample.linked} of ${sample.copies} linked`,
-      hint: GALLERY_LIVE_STRIP_PREVIEW_HINT,
-      hintKind: "winner",
-    };
-  }
+  if (linked <= 0) return null;
   return {
     preview: false,
     metrics: liveStripMetrics(source.insights_views, {

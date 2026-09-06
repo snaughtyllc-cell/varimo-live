@@ -20,6 +20,7 @@ import { hqPrepToggleHint, hqPrepToggleLabel, isPreparingJob, preparingSubcopy, 
 import { uploadBusyTitle, uploadProgressCopy } from "@/lib/jobUpload";
 import { runHasStarted } from "@/lib/progress";
 import { useElapsedSeconds } from "@/lib/useElapsedSeconds";
+import { useLabLane } from "@/lib/useLabLane";
 
 function formatSize(bytes: number): string {
   if (bytes <= 0) return "";
@@ -32,6 +33,7 @@ function formatSize(bytes: number): string {
 export default function StudioPage() {
   const { start, beginPrepare, clear, jobId, complete, setUpload, upload, waitStartedAt, progress } = useRun();
   const { data: me } = useAuthMe();
+  const labLane = useLabLane();
   const agency = isAgencyExperience(me);
   const [files, setFiles] = useState<File[]>([]);
   const [durations, setDurations] = useState<number[]>([]);
@@ -64,7 +66,7 @@ export default function StudioPage() {
       ? `${sourceCount} clip${sourceCount !== 1 ? "s" : ""}${sizeLabel ? ` · ${sizeLabel}` : ""}`
       : "No clips yet";
 
-  const prepMode = hqPrep ? "hq" : "none";
+  const prepMode = labLane && hqPrep ? "hq" : "none";
   const captionSources: CaptionSource[] = studioCaptionSources(files, drivePicks);
   const captionPrompts = [...fileCaptions, ...driveCaptions];
 
@@ -339,6 +341,7 @@ export default function StudioPage() {
                   onPromptChange={handleCaptionChange}
                 />
 
+                {labLane && (
                 <label
                   className="studio-option-row studio-caption-toggle"
                   data-testid="hq-prep-toggle"
@@ -356,6 +359,7 @@ export default function StudioPage() {
                     <span className="studio-switch__thumb" />
                   </span>
                 </label>
+                )}
 
                 <div className="studio-option-row studio-option-row--static">
                   <span className="studio-option-row__label">Output size</span>

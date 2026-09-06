@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { Destination, DriveStatus, Workflow } from "@/lib/types";
 
+const health = { lab: true };
+
 vi.mock("@/lib/api", () => ({
   getDriveStatus: vi.fn(),
   listDestinations: vi.fn(),
@@ -12,6 +14,10 @@ vi.mock("@/lib/api", () => ({
   runWorkflow: vi.fn(),
   updateWorkflow: vi.fn(),
   cancelWorkflow: vi.fn(),
+}));
+
+vi.mock("@/lib/useLabLane", () => ({
+  useLabLane: () => health.lab,
 }));
 
 import {
@@ -61,6 +67,7 @@ const live: Workflow = {
 };
 
 beforeEach(() => {
+  health.lab = true;
   vi.mocked(getDriveStatus).mockResolvedValue(status);
   vi.mocked(listDestinations).mockResolvedValue(destinations);
   vi.mocked(listWorkflows).mockResolvedValue([live]);
@@ -75,6 +82,13 @@ describe("WorkflowsPanel reconstruct-first", () => {
     expect(screen.getByRole("checkbox", { name: /reconstruct first \(hq\)/i })).toBeInTheDocument();
     expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /hq/i })).not.toBeInTheDocument();
+  });
+
+  it("hides Reconstruct first on Live", async () => {
+    health.lab = false;
+    render(<WorkflowsPanel />);
+    await screen.findByRole("button", { name: /create flow/i });
+    expect(screen.queryByRole("checkbox", { name: /reconstruct first \(hq\)/i })).not.toBeInTheDocument();
   });
 
   it("sends prep_mode hq and quality_mode fast when reconstruct first is on", async () => {

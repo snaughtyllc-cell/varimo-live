@@ -6,13 +6,15 @@ const routerPush = vi.fn();
 const routerReplace = vi.fn();
 const searchParams = new URLSearchParams();
 
+const galleryHold = vi.hoisted(() => ({ sources: [] as SourceOut[] }));
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPush, replace: routerReplace }),
   useSearchParams: () => searchParams,
 }));
 
 vi.mock("@/lib/useGallery", () => ({
-  useGallery: () => ({ data: [source()], mutate: vi.fn(), isLoading: false }),
+  useGallery: () => ({ data: galleryHold.sources, mutate: vi.fn(), isLoading: false }),
 }));
 
 vi.mock("@/lib/runStore", () => ({
@@ -76,6 +78,7 @@ describe("Gallery variant sheet open", () => {
     routerPush.mockReset();
     routerReplace.mockReset();
     searchParams.delete("v");
+    galleryHold.sources = [source()];
   });
 
   it("opens the review pane in the grid so packs stay on screen", () => {
@@ -94,12 +97,25 @@ describe("Gallery variant sheet open", () => {
     pushState.mockRestore();
   });
 
-  it("puts pack Insights directly under the pack tiles", () => {
+  it("hides pack Insights until a Reel is linked", () => {
+    render(<GalleryContent />);
+    expect(screen.queryByRole("region", { name: /pack insights/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/sample insights/i)).not.toBeInTheDocument();
+  });
+
+  it("puts live pack Insights directly under the pack tiles", () => {
+    galleryHold.sources = [
+      source({
+        insights_linked: 1,
+        insights_views: 1234,
+      }),
+    ];
     render(<GalleryContent />);
     const packs = screen.getByRole("complementary", { name: /packs/i });
     const strip = screen.getByRole("region", { name: /pack insights/i });
     expect(packs.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText(/sample insights/i)).toBeInTheDocument();
+    expect(screen.getByText("Live Insights")).toBeInTheDocument();
+    expect(screen.queryByText(/sample insights/i)).not.toBeInTheDocument();
     expect(strip.parentElement).toHaveClass("gallery-main");
   });
 
@@ -110,6 +126,26 @@ describe("Gallery variant sheet open", () => {
     expect(within(toolbar).getByRole("button", { name: /save to phone/i })).toBeDisabled();
     expect(within(toolbar).getByText("Select clips first")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /select all \(/i })).not.toBeInTheDocument();
+  });
+
+  it("Select all on the toolbar only selects the active source pack", () => {
+    galleryHold.sources = [
+      source(),
+      source({
+        source_id: "aaaaaaaaaaaa",
+        filename: "other.mp4",
+        variants: [variant({ index: 1, filename: "other_v01.mp4" })],
+      }),
+    ];
+    render(<GalleryContent />);
+    const toolbar = screen.getByRole("region", { name: /gallery controls/i });
+    fireEvent.click(within(toolbar).getByRole("button", { name: "Select all" }));
+    expect(screen.getByLabelText(/select v03/i)).toBeChecked();
+    expect(screen.queryByLabelText(/select v01/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /other\.mp4/i }));
+    expect(screen.getByLabelText(/select v01/i)).not.toBeChecked();
+    fireEvent.click(within(toolbar).getByRole("button", { name: "Select all" }));
+    expect(screen.getByLabelText(/select v01/i)).toBeChecked();
   });
 
   it("enables Save to phone after a clip is selected", () => {

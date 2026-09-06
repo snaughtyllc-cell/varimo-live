@@ -7,11 +7,16 @@ const createJobFromDrive = vi.fn();
 const start = vi.fn();
 const beginPrepare = vi.fn();
 const clear = vi.fn();
+const health = { lab: false };
 
 vi.mock("@/lib/api", () => ({
-  getHealth: async () => ({ status: "ok", lab: false }),
+  getHealth: async () => ({ status: "ok", lab: health.lab }),
   createJob: (...args: unknown[]) => createJob(...args),
   createJobFromDrive: (...args: unknown[]) => createJobFromDrive(...args),
+}));
+
+vi.mock("@/lib/useLabLane", () => ({
+  useLabLane: () => health.lab,
 }));
 
 vi.mock("@/lib/runStore", () => ({
@@ -52,6 +57,7 @@ const SOLO: AuthMe = {
 
 beforeEach(() => {
   me.data = SOLO;
+  health.lab = false;
   createJob.mockReset();
   createJobFromDrive.mockReset();
   start.mockReset();
@@ -67,7 +73,14 @@ function addClip(container: HTMLElement) {
 }
 
 describe("Studio HQ reconstruct toggle", () => {
-  it("shows the reconstruct switch off by default", () => {
+  it("hides the reconstruct switch on Live", () => {
+    render(<StudioPage />);
+    expect(screen.queryByTestId("hq-prep-toggle")).not.toBeInTheDocument();
+    expect(screen.queryByText(/reconstruct first/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the reconstruct switch off by default on Lab", () => {
+    health.lab = true;
     render(<StudioPage />);
     const toggle = screen.getByTestId("hq-prep-toggle");
     const box = toggle.querySelector("input[type='checkbox']") as HTMLInputElement;
@@ -89,6 +102,7 @@ describe("Studio HQ reconstruct toggle", () => {
   });
 
   it("Generate with the switch on sends prep_mode hq and Fast quality", async () => {
+    health.lab = true;
     const { container } = render(<StudioPage />);
     const toggle = screen.getByTestId("hq-prep-toggle");
     fireEvent.click(toggle.querySelector("input[type='checkbox']") as HTMLInputElement);

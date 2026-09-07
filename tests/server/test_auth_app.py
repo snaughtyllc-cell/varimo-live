@@ -239,6 +239,7 @@ def test_new_workspace_invite_isolates_galleries(tmp_path):
     assert ops_me["experience"] == "solo"
     assert jeff_me["plan"] == "internal"
     assert ops_me["usage"]["meter_line"] == "Creator · 0 of 12 packs this month"
+    assert ops_me["usage"]["remaining_pct"] == 100
     assert jeff_me["usage"] is None
     assert ops.get("/api/gallery").json() == []
     assert ops.get(f"/api/variants/{source_id}/{filename}").status_code == 404

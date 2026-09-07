@@ -30,3 +30,37 @@ export function monthMeterCopy(usage: {
   if (!usage || usage.uncapped) return null;
   return usage.meter_line ?? null;
 }
+
+export function remainingPct(
+  usedVariants: number,
+  includedVariants: number | null | undefined,
+): number {
+  const included = includedVariants ?? 0;
+  if (included <= 0) return 0;
+  const left = Math.max(0, included - Math.max(0, usedVariants));
+  return Math.round((100 * left) / included);
+}
+
+export function sidebarUsage(
+  usage:
+    | {
+        uncapped?: boolean;
+        used_variants?: number;
+        included_variants?: number | null;
+        included_packs?: number | null;
+        remaining_pct?: number | null;
+      }
+    | null
+    | undefined,
+): { pct: number; label: string } | null {
+  if (!usage || usage.uncapped) return null;
+  const includedPacks = usage.included_packs ?? 0;
+  const includedVariants = usage.included_variants ?? includedPacks * 8;
+  if (includedVariants <= 0) return null;
+  const pct =
+    usage.remaining_pct ?? remainingPct(usage.used_variants ?? 0, includedVariants);
+  const leftPacks = Math.max(0, includedVariants - (usage.used_variants ?? 0)) / 8;
+  const shown =
+    leftPacks === Math.floor(leftPacks) ? String(leftPacks) : leftPacks.toFixed(1);
+  return { pct, label: `${shown} of ${includedPacks} left` };
+}

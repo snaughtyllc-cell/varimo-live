@@ -192,7 +192,7 @@ from .models import (
     WorkspaceInviteIn,
 )
 from .passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
-from .plans import UsageLimitError, enforce_quota, get_plan, meter_line, parse_plan
+from .plans import UsageLimitError, enforce_quota, get_plan, meter_line, parse_plan, remaining_pct
 from .post_url import normalize_post_url
 from .runner import LocalRunner
 from .sessions import (
@@ -218,7 +218,7 @@ from .tenants import (
 from .tenants import (
     auth_required as tenant_auth_required,
 )
-from .usage import count_ok_this_month, month_key
+from .usage import count_ok_union, month_key
 from .workflow_runner import cancel_workflow_jobs, tick_workflow
 from .workflows import Workflow, WorkflowError, WorkflowStore
 from .workspace import Workspace
@@ -556,10 +556,11 @@ def create_app(
         tenants = TenantStore(os.path.join(auth_dir, "tenants.json"))
 
         def quota_factory(workspace_id: str, ws: Workspace):
-            def check(requested: int) -> None:
+            def check(requested: int, extra: list[tuple[str, int]] | tuple = ()) -> None:
                 info = tenants.get_workspace(workspace_id) if tenants else None
                 plan = get_plan(getattr(info, "plan", None) if info else None)
-                enforce_quota(plan, count_ok_this_month(ws.usage_path()), requested)
+                used = count_ok_union(ws.usage_path(), list(extra))
+                enforce_quota(plan, used, requested)
             return check
 
         hub = TenantHub(
@@ -1289,7 +1290,11 @@ def create_app(
         plan = get_plan(getattr(ws, "plan", None) if ws else None)
         used = 0
         if hub is not None and viewing_id:
-            used = count_ok_this_month(hub.bundle(viewing_id).ws.usage_path())
+            bundle = hub.bundle(viewing_id)
+            used = count_ok_union(
+                bundle.ws.usage_path(),
+                bundle.store.ok_copies_this_month(),
+            )
         usage = None
         if not plan.uncapped:
             usage = UsageOut(
@@ -1301,6 +1306,7 @@ def create_app(
                 uncapped=False,
                 meter_line=meter_line(plan, used),
                 label=plan.label,
+                remaining_pct=remaining_pct(used, plan.included_variants),
             )
         return AuthMeOut(
             auth_required=True,

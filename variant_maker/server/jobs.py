@@ -23,7 +23,7 @@ from .caption_ai import (
 )
 from .events import VariantEvent, event_to_dict
 from .runner import Runner, normalize_quality_mode
-from .usage import record_ok_copies
+from .usage import month_key, record_ok_copies
 from .workspace import Workspace
 
 GALLERY_KEEP_JOBS_ENV = "VARIANT_GALLERY_KEEP_JOBS"
@@ -407,7 +407,7 @@ class JobStore:
     def __init__(self, workspace: Workspace, runner: Runner,
                  object_store=None, gallery_keep_jobs: int | None = None,
                  gallery_keep_hours: float | None = None,
-                 quota_check: Callable[[int], None] | None = None) -> None:
+                 quota_check: Callable[..., None] | None = None) -> None:
         self._ws = workspace
         self._runner = runner
         self._object_store = object_store
@@ -427,7 +427,21 @@ class JobStore:
 
     def _assert_quota(self, requested: int) -> None:
         if self._quota_check is not None:
-            self._quota_check(int(requested))
+            self._quota_check(int(requested), self.ok_copies_this_month())
+
+    def ok_copies_this_month(self, month: str | None = None) -> list[tuple[str, int]]:
+        """Ok variants still in this workspace (Gallery). Ledger covers pruned jobs."""
+        target = month or month_key()
+        out: list[tuple[str, int]] = []
+        for job in self._jobs.values():
+            created = str(job.created_utc or "")
+            if created[:7] != target:
+                continue
+            for source in job.sources:
+                for variant in source.variants:
+                    if variant.status == "ok":
+                        out.append((variant.source_id, variant.index))
+        return out
 
     def _record_ok_variants(self, variants: list[VariantInfo]) -> None:
         copies = [

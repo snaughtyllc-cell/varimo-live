@@ -39,6 +39,15 @@ def _row_key(row: dict) -> str:
 
 
 def count_ok_this_month(path: str, month: str | None = None) -> int:
+    return count_ok_union(path, extra=(), month=month)
+
+
+def count_ok_union(
+    path: str,
+    extra: list[tuple[str, int]] | tuple[tuple[str, int], ...] = (),
+    month: str | None = None,
+) -> int:
+    """Ledger plus live Gallery ok copies. Same source+index counts once."""
     target = month or month_key()
     seen: set[str] = set()
     total = 0
@@ -53,6 +62,12 @@ def count_ok_this_month(path: str, month: str | None = None) -> int:
             total += max(1, int(row.get("n") or 1))
         except (TypeError, ValueError):
             total += 1
+    for source_id, index in extra:
+        key = f"{source_id}:{index}"
+        if key in seen:
+            continue
+        seen.add(key)
+        total += 1
     return total
 
 

@@ -7,6 +7,7 @@ import { useAuthMe } from "@/lib/useAuthMe";
 import { experienceLabel, normalizeExperience } from "@/lib/experience";
 import { extraTabVisible, linkActive, visiblePrimaryTabs } from "@/lib/navAccess";
 import { EXTRA_TABS } from "@/lib/studioDestinations";
+import { sidebarUsage } from "@/lib/usage";
 import { VarimoWordmark } from "../brand/VarimoWordmark";
 
 /** Material Symbols Rounded ligature names, keyed by destination href. */
@@ -34,6 +35,7 @@ export function SideNav() {
   const primaryTabs = visiblePrimaryTabs(me);
   const allowedExtras = EXTRA_TABS.filter((tab) => extraTabVisible(tab.href, me));
   const initials = me?.email ? me.email.slice(0, 2).toUpperCase() : "";
+  const usageBar = sidebarUsage(me?.usage);
 
   async function handleLogout() {
     await logout();
@@ -86,6 +88,22 @@ export function SideNav() {
       )}
 
       <div className="vf-sidenav-spacer" />
+
+      {usageBar ? (
+        <div
+          className="vf-sidenav-usage"
+          role="progressbar"
+          aria-label="Monthly packs remaining"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={usageBar.pct}
+        >
+          <div className="vf-sidenav-usage-track">
+            <div className="vf-sidenav-usage-fill" style={{ width: `${usageBar.pct}%` }} />
+          </div>
+          <div className="vf-sidenav-usage-label">{usageBar.label}</div>
+        </div>
+      ) : null}
 
       {me?.email && (
         <div className="vf-sidenav-account">

@@ -467,6 +467,7 @@ class UsageOut(BaseModel):
     uncapped: bool = False
     meter_line: str | None = None
     label: str
+    remaining_pct: int | None = None
 
 
 class AuthMeOut(BaseModel):

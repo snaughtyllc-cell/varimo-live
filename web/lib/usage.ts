@@ -53,7 +53,10 @@ export function sidebarUsage(
     | null
     | undefined,
 ): { pct: number; label: string } | null {
-  if (!usage || usage.uncapped) return null;
+  if (!usage) return null;
+  if (usage.uncapped) {
+    return { pct: usage.remaining_pct ?? 100, label: "uncapped" };
+  }
   const includedPacks = usage.included_packs ?? 0;
   const includedVariants = usage.included_variants ?? includedPacks * 8;
   if (includedVariants <= 0) return null;

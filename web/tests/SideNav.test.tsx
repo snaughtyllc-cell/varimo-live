@@ -142,9 +142,47 @@ describe("SideNav", () => {
     expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument();
   });
 
-  it("hides the remaining bar for Internal and uncapped sessions", () => {
-    render(<SideNav />);
+  it("hides the remaining bar when usage is missing or Pay as you go", () => {
+    const { rerender } = render(<SideNav />);
     expect(screen.queryByRole("progressbar", { name: "Monthly packs remaining" })).toBeNull();
+    me.data = {
+      ...BASE,
+      plan: "payg",
+      usage: {
+        uncapped: false,
+        used_variants: 0,
+        included_packs: 0,
+        included_variants: 0,
+        meter_line: "Pay as you go · 0 packs this month · extra $5.00",
+        remaining_pct: 0,
+      },
+    };
+    rerender(<SideNav />);
+    expect(screen.queryByRole("progressbar", { name: "Monthly packs remaining" })).toBeNull();
+  });
+
+  it("shows a full Internal bar above email and logout", () => {
+    me.data = {
+      ...BASE,
+      email: "jeff@example.com",
+      is_admin: true,
+      plan: "internal",
+      usage: {
+        uncapped: true,
+        used_variants: 24,
+        included_packs: 0,
+        included_variants: 0,
+        meter_line: null,
+        remaining_pct: 100,
+      },
+    };
+    render(<SideNav />);
+    const bar = screen.getByRole("progressbar", { name: "Monthly packs remaining" });
+    expect(bar.getAttribute("aria-valuenow")).toBe("100");
+    expect(screen.getByText("uncapped")).toBeInTheDocument();
+    expect(bar.compareDocumentPosition(screen.getByTitle("jeff@example.com"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 
   it("shows remaining packs from 100 to 0 above email and logout", () => {

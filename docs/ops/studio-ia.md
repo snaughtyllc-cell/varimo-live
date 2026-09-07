@@ -27,8 +27,10 @@ describe v1 only. Do not treat them as the current product.
 | Unauthenticated | **Login** only |
 
 Missing/untagged `experience` is **agency** so Jeff Tingz and older
-operator studios keep Team. New-studio invites write **solo**. Flip a
-workspace to Agency in Admin when that studio should invite VAs.
+operator studios keep Team. New-studio invites write **solo** on
+**Creator** ($35 / 12 packs). Flip the workspace **Plan** in Admin
+(Pay as you go / Creator / Studio / Agency). Studio and Agency unlock
+Team so that studio can invite VAs. Internal stays uncapped for Jeff.
 
 Phone (`< 640px`) only has room for the primary tabs that audience
 can see. Team / Analytics / Admin / Diagnostics sit under **More**.

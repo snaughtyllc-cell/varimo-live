@@ -307,6 +307,19 @@ export interface Workflow {
 export type AuthRole = "owner" | "member";
 export type InviteKind = "join" | "new_workspace";
 
+export type WorkspacePlan = "payg" | "creator" | "studio" | "agency" | "internal";
+
+export interface UsageMeter {
+  month?: string;
+  used_variants: number;
+  included_packs?: number | null;
+  included_variants?: number | null;
+  extra_pack_price?: number | null;
+  uncapped: boolean;
+  meter_line: string | null;
+  label?: string;
+}
+
 export interface AuthMe {
   auth_required: boolean;
   email: string | null;
@@ -319,6 +332,8 @@ export interface AuthMe {
   is_admin: boolean;
   has_password: boolean;
   experience?: "solo" | "agency";
+  plan?: WorkspacePlan;
+  usage?: UsageMeter | null;
 }
 
 export interface Invite {
@@ -360,6 +375,7 @@ export interface AdminWorkspace {
   last_job_utc: string | null;
   last_error: string | null;
   experience?: "solo" | "agency";
+  plan?: WorkspacePlan;
 }
 
 export interface DropLedgerStatus {

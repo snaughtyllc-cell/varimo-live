@@ -79,6 +79,9 @@ class Workspace:
     def captions_path(self) -> str:
         return os.path.join(self.drive_dir(), "captions.json")
 
+    def usage_path(self) -> str:
+        return os.path.join(self.root, "usage.jsonl")
+
     def instagram_dir(self) -> str:
         d = os.path.join(self.root, "instagram")
         os.makedirs(d, exist_ok=True)

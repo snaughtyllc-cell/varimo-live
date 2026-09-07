@@ -202,6 +202,42 @@ def test_provision_new_workspace_invite(tmp_path):
     assert ops.workspace_id != jeff.workspace_id
 
 
+def test_new_studio_invite_is_creator_plan(tmp_path):
+    store = TenantStore(str(tmp_path / "t.json"))
+    store.add_invite(email="ops@x.com", kind="new_workspace", workspace_id=None)
+    ops = provision_login(
+        store, email="ops@x.com", name="Ops", admin_email="jeff@x.com",
+    )
+    assert ops is not None
+    ws = store.get_workspace(ops.workspace_id)
+    assert ws is not None
+    assert ws.experience == "solo"
+    assert ws.plan == "creator"
+
+
+def test_missing_plan_key_is_internal(tmp_path):
+    path = tmp_path / "t.json"
+    path.write_text(json.dumps({
+        "workspaces": {
+            "ws_1": {"id": "ws_1", "name": "Jeff", "created_utc": "2026-08-20T00:00:00Z"},
+        },
+        "users": {},
+        "invites": [],
+    }))
+    store = TenantStore(str(path))
+    ws = store.get_workspace("ws_1")
+    assert ws is not None and ws.plan == "internal"
+
+
+def test_set_workspace_plan_sets_experience(tmp_path):
+    store = TenantStore(str(tmp_path / "t.json"))
+    ws = store.create_workspace(name="Ops", experience="solo", plan="creator")
+    updated = store.set_workspace_plan(ws.id, "agency")
+    assert updated is not None
+    assert updated.plan == "agency"
+    assert updated.experience == "agency"
+
+
 def test_provision_join_solo_workspace_is_blocked(tmp_path):
     store = TenantStore(str(tmp_path / "t.json"))
     ws = store.create_workspace(name="Creator", experience="solo")

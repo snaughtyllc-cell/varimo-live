@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -41,12 +42,14 @@ class TenantHub:
 
     def __init__(self, data_dir: str, runner: Runner,
                  object_store=None, gallery_keep_jobs: int | None = None,
-                 gallery_keep_hours: float | None = None) -> None:
+                 gallery_keep_hours: float | None = None,
+                 quota_factory: Callable | None = None) -> None:
         self.data_dir = os.path.abspath(data_dir)
         self._runner = runner
         self._object_store = object_store
         self._gallery_keep_jobs = gallery_keep_jobs
         self._gallery_keep_hours = gallery_keep_hours
+        self._quota_factory = quota_factory
         self._lock = threading.Lock()
         self._bundles: dict[str, TenantBundle] = {}
 
@@ -57,11 +60,15 @@ class TenantHub:
                 return existing
             root = tenant_root(self.data_dir, workspace_id)
             ws = Workspace(root)
+            quota_check = None
+            if self._quota_factory is not None:
+                quota_check = self._quota_factory(workspace_id, ws)
             store = JobStore(
                 ws, self._runner,
                 object_store=self._object_store,
                 gallery_keep_jobs=self._gallery_keep_jobs,
                 gallery_keep_hours=self._gallery_keep_hours,
+                quota_check=quota_check,
             )
             store.hydrate_from_disk()
             built = TenantBundle(

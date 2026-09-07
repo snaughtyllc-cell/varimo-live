@@ -774,6 +774,17 @@ export async function deleteInvite(id: string): Promise<void> {
 export const listAdminWorkspaces = () =>
   fetch("/api/admin/workspaces").then(json<AdminWorkspace[]>);
 
+export function setWorkspacePlan(
+  id: string,
+  plan: "payg" | "creator" | "studio" | "agency" | "internal",
+): Promise<AdminWorkspace> {
+  return fetch(`/api/admin/workspaces/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ plan }),
+  }).then(json<AdminWorkspace>);
+}
+
 export function setWorkspaceExperience(
   id: string,
   experience: "solo" | "agency",

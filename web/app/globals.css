@@ -84,12 +84,23 @@ input, select, textarea { font-size: 16px; }
   display: none;
   flex: none;
   flex-direction: column;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
   padding: 20px 14px;
   position: sticky;
   top: 0;
   width: 264px;
 }
 .vf-sidenav-brand { align-items: baseline; color: #f6fbfb; display: flex; padding: 4px 8px 22px; text-decoration: none; }
+.vf-sidenav-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
 .vf-sidenav-primary, .vf-sidenav-extra { display: flex; flex-direction: column; gap: 2px; }
 .vf-sidenav-link {
   align-items: center;
@@ -119,12 +130,11 @@ input, select, textarea { font-size: 16px; }
   padding: 0 10px 8px;
   text-transform: uppercase;
 }
-.vf-sidenav-spacer { flex: 1; }
-.vf-sidenav-usage { padding: 4px 8px 10px; }
+.vf-sidenav-usage { flex: none; padding: 4px 8px 10px; }
 .vf-sidenav-usage-track {
   background: #24393f;
   border-radius: 999px;
-  height: 4px;
+  height: 6px;
   overflow: hidden;
 }
 .vf-sidenav-usage-fill {

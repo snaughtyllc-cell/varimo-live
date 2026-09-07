@@ -61,7 +61,10 @@ describe("sidebarUsage", () => {
         remaining_pct: 0,
       }),
     ).toEqual({ pct: 0, label: "0 of 12 left" });
-    expect(sidebarUsage({ uncapped: true, used_variants: 8, included_packs: 0 })).toBeNull();
+    expect(sidebarUsage({ uncapped: true, used_variants: 8, included_packs: 0 })).toEqual({
+      pct: 100,
+      label: "uncapped",
+    });
     expect(
       sidebarUsage({
         uncapped: false,

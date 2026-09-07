@@ -1295,19 +1295,22 @@ def create_app(
                 bundle.ws.usage_path(),
                 bundle.store.ok_copies_this_month(),
             )
-        usage = None
-        if not plan.uncapped:
-            usage = UsageOut(
-                month=month_key(),
-                used_variants=used,
-                included_packs=plan.included_packs,
-                included_variants=plan.included_variants,
-                extra_pack_price=plan.extra_pack_price,
-                uncapped=False,
-                meter_line=meter_line(plan, used),
-                label=plan.label,
-                remaining_pct=remaining_pct(used, plan.included_variants),
-            )
+        remaining = (
+            100
+            if plan.uncapped
+            else remaining_pct(used, plan.included_variants)
+        )
+        usage = UsageOut(
+            month=month_key(),
+            used_variants=used,
+            included_packs=plan.included_packs,
+            included_variants=plan.included_variants,
+            extra_pack_price=plan.extra_pack_price,
+            uncapped=plan.uncapped,
+            meter_line=meter_line(plan, used),
+            label=plan.label,
+            remaining_pct=remaining,
+        )
         return AuthMeOut(
             auth_required=True,
             email=user.email,

@@ -48,46 +48,46 @@ export function SideNav() {
         <VarimoWordmark className="vf-brand-wordmark" />
       </Link>
 
-      <nav className="vf-sidenav-primary" aria-label="Primary navigation">
-        {primaryTabs.map(({ href, label }) => {
-          const active = linkActive(pathname, href);
-          return (
-            <Link key={href} href={href} className="vf-sidenav-link" data-active={active}>
-              <span className="material-symbols-rounded" aria-hidden="true">
-                {NAV_ICONS[href as keyof typeof NAV_ICONS]}
-              </span>
-              <span>{label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      <div className="vf-sidenav-scroll">
+        <nav className="vf-sidenav-primary" aria-label="Primary navigation">
+          {primaryTabs.map(({ href, label }) => {
+            const active = linkActive(pathname, href);
+            return (
+              <Link key={href} href={href} className="vf-sidenav-link" data-active={active}>
+                <span className="material-symbols-rounded" aria-hidden="true">
+                  {NAV_ICONS[href as keyof typeof NAV_ICONS]}
+                </span>
+                <span>{label}</span>
+              </Link>
+            );
+          })}
+        </nav>
 
-      {allowedExtras.length > 0 && (
-        <>
-          <div className="vf-sidenav-divider" />
-          <div className="vf-sidenav-section-label">Workspace</div>
-          <nav className="vf-sidenav-extra" aria-label="Workspace navigation">
-            {allowedExtras.map(({ href, label }) => {
-              const active = linkActive(pathname, href);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className="vf-sidenav-link vf-sidenav-link-extra"
-                  data-active={active}
-                >
-                  <span className="material-symbols-rounded" aria-hidden="true">
-                    {NAV_ICONS[href as keyof typeof NAV_ICONS]}
-                  </span>
-                  <span>{label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-        </>
-      )}
-
-      <div className="vf-sidenav-spacer" />
+        {allowedExtras.length > 0 && (
+          <>
+            <div className="vf-sidenav-divider" />
+            <div className="vf-sidenav-section-label">Workspace</div>
+            <nav className="vf-sidenav-extra" aria-label="Workspace navigation">
+              {allowedExtras.map(({ href, label }) => {
+                const active = linkActive(pathname, href);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    className="vf-sidenav-link vf-sidenav-link-extra"
+                    data-active={active}
+                  >
+                    <span className="material-symbols-rounded" aria-hidden="true">
+                      {NAV_ICONS[href as keyof typeof NAV_ICONS]}
+                    </span>
+                    <span>{label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </>
+        )}
+      </div>
 
       {usageBar ? (
         <div

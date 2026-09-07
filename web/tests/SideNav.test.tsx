@@ -141,4 +141,47 @@ describe("SideNav", () => {
     expect(screen.getByTitle("ops@example.com")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument();
   });
+
+  it("hides the remaining bar for Internal and uncapped sessions", () => {
+    render(<SideNav />);
+    expect(screen.queryByRole("progressbar", { name: "Monthly packs remaining" })).toBeNull();
+  });
+
+  it("shows remaining packs from 100 to 0 above email and logout", () => {
+    me.data = {
+      ...BASE,
+      experience: "solo",
+      plan: "creator",
+      usage: {
+        uncapped: false,
+        used_variants: 0,
+        included_packs: 12,
+        included_variants: 96,
+        meter_line: "Creator · 0 of 12 packs this month",
+        remaining_pct: 100,
+      },
+    };
+    const { rerender } = render(<SideNav />);
+    const bar = screen.getByRole("progressbar", { name: "Monthly packs remaining" });
+    expect(bar.getAttribute("aria-valuenow")).toBe("100");
+    expect(screen.getByText("12 of 12 left")).toBeInTheDocument();
+    expect(bar.compareDocumentPosition(screen.getByTitle("ops@example.com"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+
+    me.data = {
+      ...me.data,
+      usage: {
+        ...me.data.usage!,
+        used_variants: 96,
+        remaining_pct: 0,
+        meter_line: "Creator · 12 of 12 packs this month",
+      },
+    };
+    rerender(<SideNav />);
+    expect(screen.getByRole("progressbar", { name: "Monthly packs remaining" }).getAttribute("aria-valuenow")).toBe(
+      "0",
+    );
+    expect(screen.getByText("0 of 12 left")).toBeInTheDocument();
+  });
 });

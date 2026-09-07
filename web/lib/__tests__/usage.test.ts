@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { memberWeekCopy, monthMeterCopy, PLAN_OPTIONS } from "@/lib/usage";
+import { memberWeekCopy, monthMeterCopy, PLAN_OPTIONS, remainingPct, sidebarUsage } from "@/lib/usage";
 
 describe("memberWeekCopy", () => {
   it("says no packs when the operator has not generated this week", () => {
@@ -35,6 +35,41 @@ describe("PLAN_OPTIONS", () => {
       "Agency",
       "Internal (uncapped)",
     ]);
+  });
+});
+
+describe("sidebarUsage", () => {
+  it("drains from 100 to 0 against included packs", () => {
+    expect(remainingPct(0, 96)).toBe(100);
+    expect(remainingPct(48, 96)).toBe(50);
+    expect(remainingPct(96, 96)).toBe(0);
+    expect(
+      sidebarUsage({
+        uncapped: false,
+        used_variants: 0,
+        included_variants: 96,
+        included_packs: 12,
+        remaining_pct: 100,
+      }),
+    ).toEqual({ pct: 100, label: "12 of 12 left" });
+    expect(
+      sidebarUsage({
+        uncapped: false,
+        used_variants: 96,
+        included_variants: 96,
+        included_packs: 12,
+        remaining_pct: 0,
+      }),
+    ).toEqual({ pct: 0, label: "0 of 12 left" });
+    expect(sidebarUsage({ uncapped: true, used_variants: 8, included_packs: 0 })).toBeNull();
+    expect(
+      sidebarUsage({
+        uncapped: false,
+        used_variants: 0,
+        included_variants: 0,
+        included_packs: 0,
+      }),
+    ).toBeNull();
   });
 });
 

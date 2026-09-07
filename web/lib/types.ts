@@ -318,6 +318,7 @@ export interface UsageMeter {
   uncapped: boolean;
   meter_line: string | null;
   label?: string;
+  remaining_pct?: number | null;
 }
 
 export interface AuthMe {

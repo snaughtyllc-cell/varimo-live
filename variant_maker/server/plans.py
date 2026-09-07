@@ -121,7 +121,7 @@ def remaining_pct(used_variants: int, included_variants: int) -> int:
     if included <= 0:
         return 0
     left = max(0, included - max(0, int(used_variants)))
-    return int(round(100 * left / included))
+    return round(100 * left / included)
 
 
 def enforce_quota(plan: Plan, used_variants: int, requested: int) -> None:

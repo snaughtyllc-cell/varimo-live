@@ -27,6 +27,7 @@ vi.mock("@/lib/api", () => ({
   setAdminView: vi.fn(),
   removeAdminUser: vi.fn(),
   setWorkspaceExperience: vi.fn(),
+  setWorkspacePlan: vi.fn(),
 }));
 
 import {
@@ -34,7 +35,7 @@ import {
   listInvites,
   removeAdminUser,
   setAdminView,
-  setWorkspaceExperience,
+  setWorkspacePlan,
 } from "@/lib/api";
 import AdminPage from "@/app/admin/page";
 
@@ -69,6 +70,7 @@ const workspaces: AdminWorkspace[] = [
     last_job_utc: "2026-08-20T00:00:00Z",
     last_error: null,
     experience: "agency",
+    plan: "agency",
   },
 ];
 
@@ -85,8 +87,9 @@ beforeEach(() => {
   vi.mocked(listInvites).mockResolvedValue(invites);
   vi.mocked(setAdminView).mockResolvedValue(undefined);
   vi.mocked(removeAdminUser).mockResolvedValue(undefined);
-  vi.mocked(setWorkspaceExperience).mockResolvedValue({
+  vi.mocked(setWorkspacePlan).mockResolvedValue({
     ...workspaces[0],
+    plan: "creator",
     experience: "solo",
   });
 });
@@ -95,6 +98,7 @@ describe("Admin page", () => {
   it("lists workspaces and Open switches view then goes home", async () => {
     render(<AdminPage />);
     expect(await screen.findByText("Maya")).toBeInTheDocument();
+    expect(screen.getByText("Plan")).toBeInTheDocument();
     expect(screen.getByText("Week Fast")).toBeInTheDocument();
     expect(screen.getByText("Week HQ")).toBeInTheDocument();
     expect(screen.getByText("12")).toBeInTheDocument();
@@ -137,12 +141,12 @@ describe("Admin page", () => {
     });
   });
 
-  it("lets the admin switch a workspace to solo", async () => {
+  it("lets the admin switch a workspace to Creator", async () => {
     render(<AdminPage />);
-    const select = await screen.findByLabelText("Experience for Maya");
-    fireEvent.change(select, { target: { value: "solo" } });
+    const select = await screen.findByLabelText("Plan for Maya");
+    fireEvent.change(select, { target: { value: "creator" } });
     await waitFor(() => {
-      expect(setWorkspaceExperience).toHaveBeenCalledWith("ws_va", "solo");
+      expect(setWorkspacePlan).toHaveBeenCalledWith("ws_va", "creator");
     });
   });
 });

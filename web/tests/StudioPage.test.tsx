@@ -53,6 +53,13 @@ const SOLO: AuthMe = {
   is_admin: true,
   has_password: true,
   experience: "solo",
+  plan: "creator",
+  usage: {
+    uncapped: false,
+    meter_line: "Creator · 0 of 12 packs this month",
+    used_variants: 0,
+    included_packs: 12,
+  },
 };
 
 beforeAll(() => {
@@ -70,6 +77,11 @@ beforeEach(() => {
 });
 
 describe("Studio page captions", () => {
+  it("shows this month pack usage on the plan", () => {
+    render(<StudioPage />);
+    expect(screen.getByText("Creator · 0 of 12 packs this month")).toBeInTheDocument();
+  });
+
   it("shows Write captions for these copies and not the old caption bank", () => {
     render(<StudioPage />);
 

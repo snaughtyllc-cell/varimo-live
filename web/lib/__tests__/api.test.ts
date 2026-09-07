@@ -706,6 +706,22 @@ describe("admin API", () => {
     expect((init as RequestInit).method).toBe("DELETE");
   });
 
+  it("setWorkspacePlan PATCHes /api/admin/workspaces/:id with plan", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        id: "ws_va", name: "Maya", owner_email: "maya@example.com",
+        member_count: 1, members: [], running: 0, fast: 0, hq: 0,
+        last_job_utc: null, last_error: null, experience: "solo", plan: "creator",
+      }), { status: 200 }),
+    );
+    const out = await api.setWorkspacePlan("ws_va", "creator");
+    expect(out.plan).toBe("creator");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/admin/workspaces/ws_va");
+    expect((init as RequestInit).method).toBe("PATCH");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ plan: "creator" });
+  });
+
   it("setWorkspaceExperience PATCHes /api/admin/workspaces/:id", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({

@@ -18,6 +18,7 @@ from dataclasses import asdict, dataclass
 from typing import Literal
 
 from variant_maker.server.experience import Experience, normalize_experience
+from variant_maker.server.plans import PlanId, experience_for_plan, normalize_plan, parse_plan
 
 InviteKind = Literal["join", "new_workspace"]
 MemberRole = Literal["owner", "member"]
@@ -85,6 +86,7 @@ class WorkspaceInfo:
     name: str
     created_utc: str
     experience: Experience = "agency"
+    plan: PlanId = "internal"
 
 
 @dataclass
@@ -143,6 +145,7 @@ def _parse_workspace(raw: object, workspace_id: str) -> WorkspaceInfo | None:
         name=str(raw.get("name") or workspace_id),
         created_utc=str(raw.get("created_utc") or ""),
         experience=normalize_experience(raw.get("experience")),
+        plan=normalize_plan(raw.get("plan")),
     )
 
 
@@ -233,12 +236,19 @@ class TenantStore:
         name: str,
         workspace_id: str | None = None,
         experience: Experience | None = None,
+        plan: PlanId | str | None = None,
     ) -> WorkspaceInfo:
+        exp = normalize_experience(experience)
+        if plan is None:
+            plan_id: PlanId = "creator" if exp == "solo" else "internal"
+        else:
+            plan_id = parse_plan(plan) or "internal"
         ws = WorkspaceInfo(
             id=workspace_id or _new_id("ws"),
             name=name.strip() or "Workspace",
             created_utc=_now(),
-            experience=normalize_experience(experience),
+            experience=exp,
+            plan=plan_id,
         )
         with self._lock:
             data = self._load()
@@ -388,6 +398,21 @@ class TenantStore:
             if not isinstance(raw, dict):
                 return None
             raw["experience"] = kind
+            data["workspaces"][workspace_id] = raw
+            self._save(data)
+        return _parse_workspace(raw, workspace_id)
+
+    def set_workspace_plan(self, workspace_id: str, plan: PlanId | str) -> WorkspaceInfo | None:
+        plan_id = parse_plan(plan)
+        if plan_id is None:
+            return None
+        with self._lock:
+            data = self._load()
+            raw = data["workspaces"].get(workspace_id)
+            if not isinstance(raw, dict):
+                return None
+            raw["plan"] = plan_id
+            raw["experience"] = experience_for_plan(plan_id)
             data["workspaces"][workspace_id] = raw
             self._save(data)
         return _parse_workspace(raw, workspace_id)

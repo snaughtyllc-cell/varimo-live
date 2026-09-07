@@ -16,6 +16,7 @@ import { useAuthMe } from "@/lib/useAuthMe";
 import { isAgencyExperience } from "@/lib/experience";
 import { studioShellClass } from "@/lib/studioLayout";
 import { studioCaptionSources } from "@/lib/studioCaptionSources";
+import { monthMeterCopy } from "@/lib/usage";
 import { hqPrepToggleHint, hqPrepToggleLabel, isPreparingJob, preparingSubcopy, wakingSubcopy } from "@/lib/prepareCopy";
 import { uploadBusyTitle, uploadProgressCopy } from "@/lib/jobUpload";
 import { runHasStarted } from "@/lib/progress";
@@ -35,6 +36,7 @@ export default function StudioPage() {
   const { data: me } = useAuthMe();
   const labLane = useLabLane();
   const agency = isAgencyExperience(me);
+  const meter = monthMeterCopy(me?.usage);
   const [files, setFiles] = useState<File[]>([]);
   const [durations, setDurations] = useState<number[]>([]);
   const [drivePicks, setDrivePicks] = useState<DrivePick[]>([]);
@@ -259,6 +261,7 @@ export default function StudioPage() {
               <p>Studio</p>
               <h1>Build a pack</h1>
               <span>Pick clips, set variants, then Generate. Live Queue sits at the bottom.</span>
+              {meter ? <span className="studio-usage">{meter}</span> : null}
             </header>
 
             <section className="studio-section">

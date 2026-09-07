@@ -83,31 +83,41 @@ from .instagram_insights import (
     gallery_analytics,
     lanes_from_sources,
     latest_insights_fetched_at,
-    list_media as list_ig_media,
     match_media,
     merge_insight_snapshots,
     now_utc,
     pack_analytics,
     pack_look_totals,
-    match_media,
-    merge_insight_snapshots,
-    now_utc,
-    pack_analytics,
     pack_suggestions,
     stamp_tracked_accounts,
     unmatched_payload,
     video_duration_s,
+)
+from .instagram_insights import (
+    list_media as list_ig_media,
 )
 from .instagram_oauth import (
     ENV_APP_ID,
     ENV_APP_SECRET,
     InstagramAccountStore,
     InstagramOAuthPendingStore,
+)
+from .instagram_oauth import (
     build_authorization_url as build_ig_authorization_url,
+)
+from .instagram_oauth import (
     exchange_code_for_token as exchange_ig_code_for_token,
+)
+from .instagram_oauth import (
     fetch_profile as fetch_ig_profile,
+)
+from .instagram_oauth import (
     oauth_client_configured as ig_oauth_configured,
+)
+from .instagram_oauth import (
     resolve_redirect_uri as resolve_ig_redirect_uri,
+)
+from .instagram_oauth import (
     status_payload as ig_status_payload,
 )
 from .jobs import (
@@ -172,6 +182,7 @@ from .models import (
     SourceOut,
     SplitExportOut,
     TeamOut,
+    UsageOut,
     VariantOut,
     WorkflowCreateIn,
     WorkflowOut,
@@ -181,6 +192,7 @@ from .models import (
     WorkspaceInviteIn,
 )
 from .passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
+from .plans import UsageLimitError, enforce_quota, get_plan, meter_line, parse_plan
 from .post_url import normalize_post_url
 from .runner import LocalRunner
 from .sessions import (
@@ -206,6 +218,7 @@ from .tenants import (
 from .tenants import (
     auth_required as tenant_auth_required,
 )
+from .usage import count_ok_this_month, month_key
 from .workflow_runner import cancel_workflow_jobs, tick_workflow
 from .workflows import Workflow, WorkflowError, WorkflowStore
 from .workspace import Workspace
@@ -528,6 +541,11 @@ def create_app(
     data_dir = fallback_store._ws.root
 
     app = FastAPI(title="variant-maker control plane")
+
+    @app.exception_handler(UsageLimitError)
+    async def usage_limit_handler(_request: Request, exc: UsageLimitError) -> JSONResponse:
+        return JSONResponse({"detail": str(exc)}, status_code=403)
+
     tenants: TenantStore | None = None
     hub: TenantHub | None = None
     auth_secret = ""
@@ -536,11 +554,20 @@ def create_app(
         auth_dir = os.path.join(data_dir, "auth")
         os.makedirs(auth_dir, exist_ok=True)
         tenants = TenantStore(os.path.join(auth_dir, "tenants.json"))
+
+        def quota_factory(workspace_id: str, ws: Workspace):
+            def check(requested: int) -> None:
+                info = tenants.get_workspace(workspace_id) if tenants else None
+                plan = get_plan(getattr(info, "plan", None) if info else None)
+                enforce_quota(plan, count_ok_this_month(ws.usage_path()), requested)
+            return check
+
         hub = TenantHub(
             data_dir, fallback_store._runner,
             object_store=getattr(fallback_store, "_object_store", None),
             gallery_keep_jobs=getattr(fallback_store, "_keep", None),
             gallery_keep_hours=getattr(fallback_store, "_keep_hours", None),
+            quota_factory=quota_factory,
         )
         auth_secret = load_or_create_secret(
             os.path.join(auth_dir, "secret"),
@@ -924,6 +951,7 @@ def create_app(
             last_job_utc=last_job_utc,
             last_error=last_error,
             experience=getattr(ws, "experience", None) or "agency",
+            plan=get_plan(getattr(ws, "plan", None)).id,
         )
 
     def _default_login_exchange(
@@ -1258,6 +1286,22 @@ def create_app(
         viewing_id = viewing_id or user.workspace_id
         ws = tenants.get_workspace(viewing_id) or tenants.get_workspace(user.workspace_id)
         fresh = tenants.get_user(user.email) or user
+        plan = get_plan(getattr(ws, "plan", None) if ws else None)
+        used = 0
+        if hub is not None and viewing_id:
+            used = count_ok_this_month(hub.bundle(viewing_id).ws.usage_path())
+        usage = None
+        if not plan.uncapped:
+            usage = UsageOut(
+                month=month_key(),
+                used_variants=used,
+                included_packs=plan.included_packs,
+                included_variants=plan.included_variants,
+                extra_pack_price=plan.extra_pack_price,
+                uncapped=False,
+                meter_line=meter_line(plan, used),
+                label=plan.label,
+            )
         return AuthMeOut(
             auth_required=True,
             email=user.email,
@@ -1273,6 +1317,8 @@ def create_app(
                 workspace_experience=getattr(ws, "experience", None) if ws else None,
                 email=user.email,
             ),
+            plan=plan.id,
+            usage=usage,
         )
 
     def _set_session_cookie(response: Response, request: Request, user) -> None:
@@ -1464,7 +1510,14 @@ def create_app(
     ) -> AdminWorkspaceOut:
         _require_admin(request)
         assert tenants is not None
-        ws = tenants.set_workspace_experience(workspace_id, body.experience)
+        if body.plan is not None:
+            if parse_plan(body.plan) is None:
+                raise HTTPException(status_code=400, detail="unknown plan")
+            ws = tenants.set_workspace_plan(workspace_id, body.plan)
+        elif body.experience is not None:
+            ws = tenants.set_workspace_experience(workspace_id, body.experience)
+        else:
+            raise HTTPException(status_code=400, detail="plan or experience required")
         if ws is None:
             raise HTTPException(status_code=404, detail="workspace not found")
         return _admin_workspace_out(ws)

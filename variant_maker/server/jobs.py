@@ -8,7 +8,7 @@ import shutil
 import threading
 import uuid
 import zipfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -23,6 +23,7 @@ from .caption_ai import (
 )
 from .events import VariantEvent, event_to_dict
 from .runner import Runner, normalize_quality_mode
+from .usage import record_ok_copies
 from .workspace import Workspace
 
 GALLERY_KEEP_JOBS_ENV = "VARIANT_GALLERY_KEEP_JOBS"
@@ -405,10 +406,12 @@ def _source_finished(source: JobSource, *, ws: Workspace | None = None,
 class JobStore:
     def __init__(self, workspace: Workspace, runner: Runner,
                  object_store=None, gallery_keep_jobs: int | None = None,
-                 gallery_keep_hours: float | None = None) -> None:
+                 gallery_keep_hours: float | None = None,
+                 quota_check: Callable[[int], None] | None = None) -> None:
         self._ws = workspace
         self._runner = runner
         self._object_store = object_store
+        self._quota_check = quota_check
         keep_n = gallery_keep_jobs
         self._keep = _keep_from_env() if keep_n is None else max(0, int(keep_n))
         hours = gallery_keep_hours
@@ -422,12 +425,24 @@ class JobStore:
         self._source_index: dict[str, tuple[str, JobSource]] = {}
         self._cancel: dict[str, CancelToken] = {}
 
+    def _assert_quota(self, requested: int) -> None:
+        if self._quota_check is not None:
+            self._quota_check(int(requested))
+
+    def _record_ok_variants(self, variants: list[VariantInfo]) -> None:
+        copies = [
+            (v.source_id, v.index) for v in variants if v.status == "ok"
+        ]
+        if copies:
+            record_ok_copies(self._ws.usage_path(), copies)
+
     def create_job(self, uploads: list[tuple[str, bytes]], count: int,
                     allow_creative_escalate: bool = True,
                     quality_mode: str = "fast",
                     generate_captions: bool = False,
                     caption_prompt: str = "",
                     caption_prompts: list[str] | None = None) -> Job:
+        self._assert_quota(len(uploads) * int(count))
         job_id = uuid.uuid4().hex[:12]
         sources = []
         for filename, data in uploads:
@@ -449,6 +464,7 @@ class JobStore:
                                caption_prompt: str = "",
                                caption_prompts: list[str] | None = None) -> Job:
         """Create a job from already-staged files: [(filename, abs_path), ...]."""
+        self._assert_quota(len(paths) * int(count))
         job_id = uuid.uuid4().hex[:12]
         sources = []
         for filename, abs_path in paths:
@@ -684,6 +700,7 @@ class JobStore:
                             look_src=e.look_src, look_var=e.look_var,
                             caption=_caption_for(source, e.index),
                         ))
+                        self._record_ok_variants([source.variants[-1]])
                         break
                 if e.state == "looking":
                     names = [n for n in (e.look_src, e.look_var) if n]
@@ -759,6 +776,7 @@ class JobStore:
                 ]
                 if new_variants:
                     source.variants = new_variants
+                    self._record_ok_variants(new_variants)
                 elif source.variants:
                     # RunPod /stream often drops the final result chunk. Progress
                     # already recorded the ok rows — wiping them made Retry copy
@@ -1046,6 +1064,7 @@ class JobStore:
         loc = self._locate(source_id)
         if loc is None:
             return None
+        self._assert_quota(int(n))
         job_id, source = loc
         out_dir = self._ws.source_out_dir(job_id, source_id)
         # NOTE — manifest gap (latent, no fix needed yet):
@@ -1063,6 +1082,7 @@ class JobStore:
             allow_creative_escalate=allow_creative_escalate,
             quality_mode=quality_mode,
         )
+        before = len(source.variants)
         for v in result.variants:
             source.variants.append(VariantInfo(
                 source_id=source_id, index=start + v.index, filename=v.filename,
@@ -1077,6 +1097,7 @@ class JobStore:
                 look_var=getattr(v, "look_var", None),
                 caption=_caption_for(source, start + v.index),
             ))
+        self._record_ok_variants(source.variants[before:])
         return source
 
     def set_platform_result(self, source_id: str, index: int, result: str) -> VariantInfo | None:

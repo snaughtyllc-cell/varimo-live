@@ -235,6 +235,11 @@ def test_new_workspace_invite_isolates_galleries(tmp_path):
     jeff_me = jeff.get("/api/auth/me").json()
     assert ops_me["workspace_id"] != jeff_me["workspace_id"]
     assert ops_me["role"] == "owner"
+    assert ops_me["plan"] == "creator"
+    assert ops_me["experience"] == "solo"
+    assert jeff_me["plan"] == "internal"
+    assert ops_me["usage"]["meter_line"] == "Creator · 0 of 12 packs this month"
+    assert jeff_me["usage"] is None
     assert ops.get("/api/gallery").json() == []
     assert ops.get(f"/api/variants/{source_id}/{filename}").status_code == 404
     assert ops.get(f"/api/sources/{source_id}/source").status_code == 404
@@ -602,4 +607,79 @@ def test_password_set_requires_login(tmp_path):
     app, _ = _auth_app(tmp_path)
     anon = TestClient(app)
     assert anon.post("/api/auth/password/set", json={"password": "secret12"}).status_code == 401
+
+
+def test_admin_sets_workspace_plan_and_derive_experience(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    ops = TestClient(app)
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
+    _login(ops, "ops")
+    ops_id = ops.get("/api/auth/me").json()["workspace_id"]
+    patched = jeff.patch(f"/api/admin/workspaces/{ops_id}", json={"plan": "studio"})
+    assert patched.status_code == 200
+    assert patched.json()["plan"] == "studio"
+    assert patched.json()["experience"] == "agency"
+    me = ops.get("/api/auth/me").json()
+    assert me["plan"] == "studio"
+    assert me["experience"] == "agency"
+    assert "32 packs" in me["usage"]["meter_line"]
+
+
+def test_payg_generate_returns_human_403(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    ops = TestClient(app)
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
+    _login(ops, "ops")
+    ops_id = ops.get("/api/auth/me").json()["workspace_id"]
+    jeff.patch(f"/api/admin/workspaces/{ops_id}", json={"plan": "payg"})
+    blocked = ops.post(
+        "/api/jobs",
+        files=[("files", ("clip.mp4", b"x", "video/mp4"))],
+        data={"count": "8"},
+    )
+    assert blocked.status_code == 403
+    assert "Pay as you go has no included packs" in blocked.json()["detail"]
+    assert "$5.00" in blocked.json()["detail"]
+
+
+def test_creator_generate_blocks_after_included_packs(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    ops = TestClient(app)
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
+    _login(ops, "ops")
+    ops_id = ops.get("/api/auth/me").json()["workspace_id"]
+    bundle = app.state.tenant_hub.bundle(ops_id)
+    from variant_maker.server.usage import record_ok_copies
+    record_ok_copies(
+        bundle.ws.usage_path(),
+        copies=[("src", i) for i in range(96)],
+        month=None,
+    )
+    blocked = ops.post(
+        "/api/jobs",
+        files=[("files", ("clip.mp4", b"x", "video/mp4"))],
+        data={"count": "8"},
+    )
+    assert blocked.status_code == 403
+    assert blocked.json()["detail"] == (
+        "Creator includes 12 packs. Extra packs are $3.50, or Studio is $79 for 32."
+    )
+
+
+def test_internal_workspace_stays_uncapped(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    _login(jeff, "jeff")
+    created = jeff.post(
+        "/api/jobs",
+        files=[("files", ("clip.mp4", b"x", "video/mp4"))],
+        data={"count": "8"},
+    )
+    assert created.status_code == 201
 

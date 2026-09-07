@@ -458,6 +458,17 @@ class CaptionPreviewOut(BaseModel):
     captions: list[str] = []
 
 
+class UsageOut(BaseModel):
+    month: str
+    used_variants: int = 0
+    included_packs: int | None = None
+    included_variants: int | None = None
+    extra_pack_price: float | None = None
+    uncapped: bool = False
+    meter_line: str | None = None
+    label: str
+
+
 class AuthMeOut(BaseModel):
     auth_required: bool
     email: str | None = None
@@ -470,6 +481,8 @@ class AuthMeOut(BaseModel):
     is_admin: bool = False
     has_password: bool = False
     experience: Literal["solo", "agency"] = "agency"
+    plan: Literal["payg", "creator", "studio", "agency", "internal"] = "internal"
+    usage: UsageOut | None = None
 
 
 class PasswordLoginIn(BaseModel):
@@ -512,6 +525,7 @@ class AdminWorkspaceOut(BaseModel):
     last_job_utc: str | None = None
     last_error: str | None = None
     experience: Literal["solo", "agency"] = "agency"
+    plan: Literal["payg", "creator", "studio", "agency", "internal"] = "internal"
 
 
 class WorkspaceInviteIn(BaseModel):
@@ -530,4 +544,5 @@ class AdminViewIn(BaseModel):
 
 
 class WorkspaceExperienceIn(BaseModel):
-    experience: Literal["solo", "agency"]
+    experience: Literal["solo", "agency"] | None = None
+    plan: Literal["payg", "creator", "studio", "agency", "internal"] | None = None

@@ -8,12 +8,12 @@ import {
   listInvites,
   removeAdminUser,
   setAdminView,
-  setWorkspaceExperience,
+  setWorkspacePlan,
 } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
 import type { AdminWorkspace, Invite, InviteKind } from "@/lib/types";
 import { ShieldCheck } from "lucide-react";
-import { memberWeekCopy } from "@/lib/usage";
+import { memberWeekCopy, PLAN_OPTIONS } from "@/lib/usage";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -73,15 +73,18 @@ export default function AdminPage() {
     }
   }
 
-  async function handleExperience(workspaceId: string, experience: "solo" | "agency") {
+  async function handlePlan(
+    workspaceId: string,
+    plan: NonNullable<AdminWorkspace["plan"]>,
+  ) {
     setFormError(null);
     try {
-      await setWorkspaceExperience(workspaceId, experience);
+      const updated = await setWorkspacePlan(workspaceId, plan);
       setWorkspaces((prev) =>
-        prev.map((ws) => (ws.id === workspaceId ? { ...ws, experience } : ws)),
+        prev.map((ws) => (ws.id === workspaceId ? { ...ws, ...updated } : ws)),
       );
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Failed to update experience");
+      setFormError(err instanceof Error ? err.message : "Failed to update plan");
     }
   }
 
@@ -177,7 +180,7 @@ export default function AdminPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead>
               <tr style={{ color: "var(--color-muted)", textAlign: "left" }}>
-                {["Name", "Owner", "Members", "Experience", "Running", "Fast", "HQ", "Week Fast", "Week HQ", "Last job", "Last error", ""].map((h) => (
+                {["Name", "Owner", "Members", "Plan", "Running", "Fast", "HQ", "Week Fast", "Week HQ", "Last job", "Last error", ""].map((h) => (
                   <th key={h || "open"} style={{ padding: "10px 12px", fontWeight: 600 }}>
                     {h}
                   </th>
@@ -249,10 +252,13 @@ export default function AdminPage() {
                     </td>
                     <td style={{ padding: "10px 12px" }}>
                       <select
-                        aria-label={`Experience for ${ws.name}`}
-                        value={ws.experience ?? "agency"}
+                        aria-label={`Plan for ${ws.name}`}
+                        value={ws.plan ?? "internal"}
                         onChange={(e) =>
-                          handleExperience(ws.id, e.target.value as "solo" | "agency")
+                          handlePlan(
+                            ws.id,
+                            e.target.value as NonNullable<AdminWorkspace["plan"]>,
+                          )
                         }
                         style={{
                           background: "var(--color-panel2)",
@@ -263,8 +269,11 @@ export default function AdminPage() {
                           color: "var(--color-text)",
                         }}
                       >
-                        <option value="solo">Solo</option>
-                        <option value="agency">Agency</option>
+                        {PLAN_OPTIONS.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
                       </select>
                     </td>
                     <td style={{ padding: "10px 12px" }}>{ws.running}</td>

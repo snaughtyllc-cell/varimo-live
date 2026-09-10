@@ -107,6 +107,24 @@ class Invite:
     created_utc: str
 
 
+BillingStatus = Literal["active", "canceled", "unpaid", "past_due"]
+
+
+@dataclass
+class BillingRecord:
+    """One paid seat, keyed by the checkout email. Workspace fills in on first sign-in."""
+    email: str
+    plan: str
+    status: BillingStatus
+    stripe_customer_id: str | None = None
+    stripe_subscription_id: str | None = None
+    stripe_checkout_session_id: str | None = None
+    workspace_id: str | None = None
+    paid_utc: str | None = None
+    period_start_utc: str | None = None
+    period_end_utc: str | None = None
+
+
 def _parse_user(raw: object, key: str = "") -> UserInfo | None:
     if not isinstance(raw, dict):
         return None
@@ -153,6 +171,32 @@ def _now() -> str:
     return _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _parse_billing(raw: object, key: str = "") -> BillingRecord | None:
+    if not isinstance(raw, dict):
+        return None
+    email = normalize_email(str(raw.get("email") or key or ""))
+    if not email:
+        return None
+    status = raw.get("status") if raw.get("status") in ("active", "canceled", "unpaid", "past_due") else "active"
+    plan = str(raw.get("plan") or "agency").strip().lower() or "agency"
+    return BillingRecord(
+        email=email,
+        plan=plan,
+        status=status,
+        stripe_customer_id=str(raw.get("stripe_customer_id") or "") or None,
+        stripe_subscription_id=str(raw.get("stripe_subscription_id") or "") or None,
+        stripe_checkout_session_id=str(raw.get("stripe_checkout_session_id") or "") or None,
+        workspace_id=str(raw.get("workspace_id") or "") or None,
+        paid_utc=str(raw.get("paid_utc") or "") or None,
+        period_start_utc=str(raw.get("period_start_utc") or "") or None,
+        period_end_utc=str(raw.get("period_end_utc") or "") or None,
+    )
+
+
+def _billing_payload(rec: BillingRecord) -> dict:
+    return asdict(rec)
+
+
 def _new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:10]}"
 
@@ -165,7 +209,7 @@ class TenantStore:
         self._lock = threading.Lock()
 
     def _empty(self) -> dict:
-        return {"workspaces": {}, "users": {}, "invites": []}
+        return {"workspaces": {}, "users": {}, "invites": [], "billing": {}}
 
     def _load(self) -> dict:
         if not os.path.isfile(self._path):
@@ -180,7 +224,8 @@ class TenantStore:
         workspaces = raw.get("workspaces") if isinstance(raw.get("workspaces"), dict) else {}
         users = raw.get("users") if isinstance(raw.get("users"), dict) else {}
         invites = raw.get("invites") if isinstance(raw.get("invites"), list) else []
-        return {"workspaces": workspaces, "users": users, "invites": invites}
+        billing = raw.get("billing") if isinstance(raw.get("billing"), dict) else {}
+        return {"workspaces": workspaces, "users": users, "invites": invites, "billing": billing}
 
     def _save(self, data: dict) -> None:
         os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
@@ -402,6 +447,57 @@ class TenantStore:
             self._save(data)
         return _parse_workspace(raw, workspace_id)
 
+    def get_billing(self, email: str) -> BillingRecord | None:
+        key = normalize_email(email)
+        with self._lock:
+            raw = self._load()["billing"].get(key)
+        return _parse_billing(raw, key)
+
+    def get_billing_by_subscription(self, subscription_id: str | None) -> BillingRecord | None:
+        sub = (subscription_id or "").strip()
+        if not sub:
+            return None
+        with self._lock:
+            items = list(self._load()["billing"].values())
+        for raw in items:
+            rec = _parse_billing(raw)
+            if rec is not None and rec.stripe_subscription_id == sub:
+                return rec
+        return None
+
+    def get_billing_for_workspace(self, workspace_id: str | None) -> BillingRecord | None:
+        ws_id = (workspace_id or "").strip()
+        if not ws_id:
+            return None
+        with self._lock:
+            items = list(self._load()["billing"].values())
+        for raw in items:
+            rec = _parse_billing(raw)
+            if rec is not None and rec.workspace_id == ws_id:
+                return rec
+        return None
+
+    def upsert_billing(self, rec: BillingRecord) -> BillingRecord:
+        key = normalize_email(rec.email)
+        stored = BillingRecord(
+            email=key,
+            plan=rec.plan,
+            status=rec.status,
+            stripe_customer_id=rec.stripe_customer_id,
+            stripe_subscription_id=rec.stripe_subscription_id,
+            stripe_checkout_session_id=rec.stripe_checkout_session_id,
+            workspace_id=rec.workspace_id,
+            paid_utc=rec.paid_utc,
+            period_start_utc=rec.period_start_utc,
+            period_end_utc=rec.period_end_utc,
+        )
+        with self._lock:
+            data = self._load()
+            data.setdefault("billing", {})
+            data["billing"][key] = _billing_payload(stored)
+            self._save(data)
+        return stored
+
     def set_workspace_plan(self, workspace_id: str, plan: PlanId | str) -> WorkspaceInfo | None:
         plan_id = parse_plan(plan)
         if plan_id is None:
@@ -458,6 +554,7 @@ def provision_login(
     addr = normalize_email(email)
     existing = store.get_user(addr)
     if existing is not None and existing.workspace_id:
+        _bind_billing_workspace(store, addr, existing.workspace_id)
         if name and name != existing.name:
             return store.upsert_user(UserInfo(
                 email=existing.email, name=name,
@@ -469,9 +566,11 @@ def provision_login(
         ws = store.create_workspace(name=name or addr.split("@")[0] or "Studio")
         if data_dir:
             migrate_legacy_data(data_dir, ws.id)
-        return store.upsert_user(UserInfo(
+        user = store.upsert_user(UserInfo(
             email=addr, name=name or addr, workspace_id=ws.id, role="owner",
         ))
+        _bind_billing_workspace(store, addr, user.workspace_id)
+        return user
 
     pending = next((i for i in store.list_invites() if i.email == addr), None)
     if pending is None:
@@ -489,15 +588,46 @@ def provision_login(
         ws_id = invite.workspace_id
         if not ws_id or store.get_workspace(ws_id) is None:
             return None
-        return store.upsert_user(UserInfo(
+        user = store.upsert_user(UserInfo(
             email=addr, name=name or addr, workspace_id=ws_id, role="member",
         ))
-    # A new studio invite is a creator account: Studio / Gallery / Drive only.
-    # Site admin flips the workspace to agency in Admin when they need Team.
-    ws = store.create_workspace(
-        name=name or addr.split("@")[0] or "Studio",
-        experience="solo",
-    )
-    return store.upsert_user(UserInfo(
+        _bind_billing_workspace(store, addr, user.workspace_id)
+        return user
+    rec = store.get_billing(addr)
+    paid_agency = rec is not None and rec.status in ("active", "trialing") and rec.plan == "agency"
+    if paid_agency:
+        ws = store.create_workspace(
+            name=name or addr.split("@")[0] or "Studio",
+            experience="agency",
+            plan="agency",
+        )
+    else:
+        # A new studio invite is a creator account: Studio / Gallery / Drive only.
+        # Site admin flips the workspace to agency in Admin when they need Team.
+        ws = store.create_workspace(
+            name=name or addr.split("@")[0] or "Studio",
+            experience="solo",
+        )
+    user = store.upsert_user(UserInfo(
         email=addr, name=name or addr, workspace_id=ws.id, role="owner",
+    ))
+    _bind_billing_workspace(store, addr, user.workspace_id)
+    return user
+
+
+def _bind_billing_workspace(store: TenantStore, email: str, workspace_id: str) -> None:
+    rec = store.get_billing(email)
+    if rec is None or rec.workspace_id == workspace_id:
+        return
+    store.upsert_billing(BillingRecord(
+        email=rec.email,
+        plan=rec.plan,
+        status=rec.status,
+        stripe_customer_id=rec.stripe_customer_id,
+        stripe_subscription_id=rec.stripe_subscription_id,
+        stripe_checkout_session_id=rec.stripe_checkout_session_id,
+        workspace_id=workspace_id,
+        paid_utc=rec.paid_utc,
+        period_start_utc=rec.period_start_utc,
+        period_end_utc=rec.period_end_utc,
     ))

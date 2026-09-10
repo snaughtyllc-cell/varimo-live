@@ -1349,6 +1349,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 /* Login intentionally has its own restrained dark media-state. */
 .login-page { align-items: center; background: #172124; display: flex; justify-content: center; min-height: 100dvh; padding: 24px; }
 .login-card { background: #fbfdfd; border: 1px solid #d2e4e7; border-radius: 18px; box-shadow: 0 28px 70px rgba(0, 0, 0, 0.24); max-width: 410px; padding: 32px 28px; width: 100%; }
+.pricing-card { max-width: 460px; }
 .login-brand { align-items: center; color: var(--ink); display: flex; font-size: 26px; margin-bottom: 22px; }
 .login-card h1 { color: var(--ink); font-size: 24px; letter-spacing: -0.04em; margin: 0 0 8px; }
 .login-card p, .login-card label { color: var(--color-muted); }

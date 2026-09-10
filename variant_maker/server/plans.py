@@ -19,7 +19,7 @@ PLAN_IDS: tuple[PlanId, ...] = ("payg", "creator", "studio", "agency", "internal
 _UPGRADE: dict[str, tuple[str, int, int]] = {
     "payg": ("Creator", 35, 12),
     "creator": ("Studio", 79, 32),
-    "studio": ("Agency", 199, 100),
+    "studio": ("Agency", 200, 0),
 }
 
 
@@ -46,7 +46,7 @@ PLANS: dict[str, Plan] = {
     "payg": Plan("payg", "Pay as you go", 0, 0, 5.0, "solo"),
     "creator": Plan("creator", "Creator", 35, 12, 3.5, "solo"),
     "studio": Plan("studio", "Studio", 79, 32, 3.0, "agency"),
-    "agency": Plan("agency", "Agency", 199, 100, 2.5, "agency"),
+    "agency": Plan("agency", "Agency", 200, 0, 0.75, "agency", uncapped=True),
     "internal": Plan("internal", "Internal", 0, 0, 0.0, "agency", uncapped=True),
 }
 
@@ -99,16 +99,26 @@ def limit_message(plan: Plan) -> str:
     if plan.included_packs == 0:
         if nxt:
             name, price, packs = nxt
+            if packs:
+                return (
+                    f"{plan.label} has no included packs. Extra packs are {extra}, "
+                    f"or {name} is ${price} for {packs}."
+                )
             return (
                 f"{plan.label} has no included packs. Extra packs are {extra}, "
-                f"or {name} is ${price} for {packs}."
+                f"or {name} is ${price}/month."
             )
         return f"{plan.label} has no included packs. Extra packs are {extra}."
     if nxt:
         name, price, packs = nxt
+        if packs:
+            return (
+                f"{plan.label} includes {plan.included_packs} packs. Extra packs are {extra}, "
+                f"or {name} is ${price} for {packs}."
+            )
         return (
             f"{plan.label} includes {plan.included_packs} packs. Extra packs are {extra}, "
-            f"or {name} is ${price} for {packs}."
+            f"or {name} is ${price}/month."
         )
     return (
         f"{plan.label} includes {plan.included_packs} packs. Extra packs are {extra}."

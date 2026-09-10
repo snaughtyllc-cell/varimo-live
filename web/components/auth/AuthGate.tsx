@@ -10,31 +10,31 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { data, isLoading } = useAuthMe();
-  const isLogin = pathname === "/login";
+  const isPublic = pathname === "/login" || pathname === "/pricing";
   const needsLogin = Boolean(data?.auth_required && !data.email);
   const loggedIn = Boolean(data?.email);
 
   useEffect(() => {
     if (!data) return;
-    if (needsLogin && !isLogin) {
+    if (needsLogin && !isPublic) {
       router.replace("/login");
-    } else if (loggedIn && isLogin) {
+    } else if (loggedIn && pathname === "/login") {
       router.replace("/");
     }
-  }, [data, needsLogin, isLogin, loggedIn, router]);
+  }, [data, needsLogin, isPublic, loggedIn, pathname, router]);
 
   if (isLoading && !data) {
     return <div className="vf-boot" />;
   }
 
-  if (needsLogin && !isLogin) {
+  if (needsLogin && !isPublic) {
     return <div className="vf-boot" />;
   }
 
   return (
     <>
       <LabBanner />
-      {isLogin ? (
+      {isPublic ? (
         children
       ) : (
         <div className="vf-shell">

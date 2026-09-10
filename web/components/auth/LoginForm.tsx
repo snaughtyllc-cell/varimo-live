@@ -15,15 +15,25 @@ const fieldStyle: CSSProperties = {
   outline: "none",
 };
 
-export function LoginForm({ oauthError }: { oauthError?: string | null }) {
-  const [email, setEmail] = useState("");
+export function LoginForm({
+  oauthError,
+  paid = false,
+  emailPrefill = "",
+}: {
+  oauthError?: string | null;
+  paid?: boolean;
+  emailPrefill?: string;
+}) {
+  const [email, setEmail] = useState(emailPrefill);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const oauthMessage =
     oauthError === "not_invited"
-      ? "This email isn't invited. Ask the operator to add you."
+      ? paid
+        ? "Payment is still landing. Wait a few seconds and sign in with the email you paid with."
+        : "This email isn't on the platform yet. Subscribe on the pricing page, or ask the operator to add you."
       : oauthError === "oauth"
         ? "Google sign-in didn't complete. Try again."
         : null;
@@ -46,8 +56,12 @@ export function LoginForm({ oauthError }: { oauthError?: string | null }) {
   return (
     <>
       <p style={{ fontSize: 13, color: "var(--color-muted)", lineHeight: 1.5, margin: "0 0 22px" }}>
-        Studio is invite-only. Use the invited email and a password, or continue with
-        Google. First password sign-in sets that password.
+        {paid
+          ? "Payment received. Sign in with the email you used at checkout. First password sign-in creates your studio."
+          : "Use the email from checkout or an invite. First password sign-in sets that password."}{" "}
+        <Link href="/pricing" style={{ color: "var(--color-text)", fontWeight: 600 }}>
+          Agency pricing
+        </Link>
       </p>
       {message && (
         <div

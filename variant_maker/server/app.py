@@ -23,6 +23,7 @@ from variant_maker.farm.drive import DriveClient, is_video_file
 from variant_maker.farm.ledger import Ledger
 
 from .auth_app import PUBLIC_API_PATHS, AttrProxy, JobStoreProxy, current_bundle, tenant_cv
+from .billing_api import register_billing_routes
 from .caption_ai import parse_caption_prompts_field
 from .captions import CaptionError, CaptionStore, split_caption_bank, strip_internal_index_lines
 from .destinations import Destination, DestinationError, DestinationStore, probe_folder_writable
@@ -206,6 +207,7 @@ from .sessions import (
     sign_view,
 )
 from .sheets import GoogleSheets, SheetsClient
+from .stripe_billing import gateway_from_env
 from .tenant_runtime import TenantHub
 from .tenants import (
     TenantStore,
@@ -530,6 +532,8 @@ def create_app(
     instagram_fetch_profile: Callable[[str], dict[str, Any]] | None = None,
     instagram_list_media: Callable[..., list] | None = None,
     instagram_fetch_insights: Callable[..., dict] | None = None,
+    stripe_gateway: Any = None,
+    billing_environ: Mapping[str, str] | None = None,
 ) -> FastAPI:
     if store is None:
         store = JobStore(Workspace("./.vmdata"), LocalRunner())
@@ -1381,7 +1385,7 @@ def create_app(
             if user is None:
                 raise HTTPException(
                     status_code=401,
-                    detail="This email isn't invited. Ask the operator to add you.",
+                    detail="This email isn't invited. Subscribe at /pricing or ask the operator to add you.",
                 )
             tenants.set_password(user.email, hash_password(password))
             user = tenants.get_user(user.email) or user
@@ -2538,5 +2542,19 @@ def create_app(
                     print(f"workflow poller: {type(exc).__name__}: {exc}", flush=True)
 
         threading.Thread(target=_poll_loop, name="workflow-poller", daemon=True).start()
+
+    billing_env: Mapping[str, str] = billing_environ if billing_environ is not None else auth_env
+    register_billing_routes(
+        app,
+        tenants=tenants,
+        auth_on=auth_on,
+        store=store,
+        billing_env=billing_env,
+        gateway=gateway_from_env(billing_env, injected=stripe_gateway),
+        studio_origin=_login_origin,
+        require_user=_require_user,
+        admin_email=admin_email,
+        is_admin=is_admin_email,
+    )
 
     return app

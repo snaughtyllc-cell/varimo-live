@@ -307,6 +307,42 @@ export interface Workflow {
 export type AuthRole = "owner" | "member";
 export type InviteKind = "join" | "new_workspace";
 
+export interface BillingPlan {
+  id: string;
+  name: string;
+  price_usd: number;
+  included_fast_hours: number;
+  overage_usd_per_hour: number;
+  cogs_fast_usd_per_hour: number;
+  typical_fast20_minutes?: number;
+  typical_fast20_packs?: number;
+  typical_fast20_copies?: number;
+}
+
+export interface BillingPlans {
+  configured: boolean;
+  plans: BillingPlan[];
+}
+
+export interface BillingCheckout {
+  url: string;
+  session_id: string;
+}
+
+export interface BillingStatus {
+  plan: BillingPlan | null;
+  status: string;
+  unlimited: boolean;
+  fast_seconds: number;
+  included_fast_seconds: number | null;
+  overage_fast_seconds: number;
+  overage_usd: number;
+  remaining_fast_seconds: number | null;
+  period_start_utc: string | null;
+  period_end_utc: string | null;
+  collects_overage: boolean;
+}
+
 export type WorkspacePlan = "payg" | "creator" | "studio" | "agency" | "internal";
 
 export interface UsageMeter {

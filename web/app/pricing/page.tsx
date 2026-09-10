@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PricingCard } from "@/components/auth/PricingCard";
 import { VarimoWordmark } from "@/components/brand/VarimoWordmark";
 
@@ -16,9 +17,10 @@ export default async function PricingPage({
   return (
     <main className="login-page">
       <div className="login-card pricing-card">
-        <div className="login-brand"><VarimoWordmark /></div>
+        <Link href="/landing" className="login-brand" aria-label="varimo — for agencies"><VarimoWordmark /></Link>
         <h1>Agency</h1>
         <PricingCard emailPrefill={email} />
+        <Link href="/landing" style={{display:"inline-block",marginTop:24,fontSize:13}}>← Explore varimo for agencies</Link>
       </div>
     </main>
   );

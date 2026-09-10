@@ -74,6 +74,19 @@ beforeEach(() => {
 });
 
 describe("AuthGate", () => {
+  it.each(["/landing", "/pricing"])("renders %s while auth is unresolved", (pathname) => {
+    nav.pathname = pathname;
+    render(<AuthGate><div>Public content</div></AuthGate>);
+    expect(screen.getByText("Public content")).toBeInTheDocument();
+    expect(screen.queryByText("TopNav")).not.toBeInTheDocument();
+    expect(nav.replace).not.toHaveBeenCalled();
+  });
+  it("keeps the landing page public with auth enabled", () => {
+    nav.pathname = "/landing"; me.data = NEED_LOGIN; me.isLoading = false;
+    render(<AuthGate><div>Agency landing</div></AuthGate>);
+    expect(screen.getByText("Agency landing")).toBeInTheDocument();
+    expect(nav.replace).not.toHaveBeenCalled();
+  });
   it("uses the light boot screen while auth is loading", () => {
     const { container } = render(
       <AuthGate>

@@ -20,6 +20,7 @@ export type StudioDestination = {
 };
 
 export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
+  { href: "/landing", label: "For agencies", audience: "everyone", tab: "none", summary: "Public Agency landing page, product proof, and live pricing." },
   {
     href: "/",
     label: "Studio",

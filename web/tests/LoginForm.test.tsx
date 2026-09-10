@@ -34,7 +34,8 @@ describe("LoginForm", () => {
       "href",
       "/api/auth/google/start",
     );
-    expect(screen.getByText(/invite-only/i)).toBeInTheDocument();
+    expect(screen.getByText(/checkout or an invite/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Agency pricing" })).toHaveAttribute("href", "/pricing");
   });
 
   it("posts email and password then goes home", async () => {
@@ -55,6 +56,12 @@ describe("LoginForm", () => {
 
   it("shows a Google oauth error from the URL", () => {
     render(<LoginForm oauthError="not_invited" />);
-    expect(screen.getByRole("alert")).toHaveTextContent(/isn't invited/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/isn't on the platform yet/i);
+  });
+
+  it("prefills email and explains first sign-in after payment", () => {
+    render(<LoginForm paid emailPrefill="buyer@x.com" />);
+    expect(screen.getByLabelText("Email")).toHaveValue("buyer@x.com");
+    expect(screen.getByText(/Payment received/i)).toBeInTheDocument();
   });
 });

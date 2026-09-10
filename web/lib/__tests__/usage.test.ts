@@ -51,7 +51,7 @@ describe("sidebarUsage", () => {
         included_packs: 12,
         remaining_pct: 100,
       }),
-    ).toEqual({ pct: 100, label: "12 of 12 left" });
+    ).toEqual({ pct: 100, label: "12 of 12 left", tone: "included" });
     expect(
       sidebarUsage({
         uncapped: false,
@@ -60,10 +60,11 @@ describe("sidebarUsage", () => {
         included_packs: 12,
         remaining_pct: 0,
       }),
-    ).toEqual({ pct: 0, label: "0 of 12 left" });
+    ).toEqual({ pct: 0, label: "0 of 12 left", tone: "included" });
     expect(sidebarUsage({ uncapped: true, used_variants: 8, included_packs: 0 })).toEqual({
       pct: 100,
       label: "uncapped",
+      tone: "included",
     });
     expect(
       sidebarUsage({
@@ -73,6 +74,36 @@ describe("sidebarUsage", () => {
         included_packs: 0,
       }),
     ).toBeNull();
+  });
+
+  it("drains Agency Fast hours and flips to Usage after the included block", () => {
+    expect(
+      sidebarUsage({
+        uncapped: false,
+        tone: "included",
+        remaining_pct: 100,
+        meter_line: "90 of 90h left",
+        included_fast_hours: 90,
+      }),
+    ).toEqual({ pct: 100, label: "90 of 90h left", tone: "included" });
+    expect(
+      sidebarUsage({
+        uncapped: false,
+        tone: "included",
+        remaining_pct: 0,
+        meter_line: "0 of 90h left",
+        included_fast_hours: 90,
+      }),
+    ).toEqual({ pct: 0, label: "0 of 90h left", tone: "included" });
+    expect(
+      sidebarUsage({
+        uncapped: false,
+        tone: "usage",
+        remaining_pct: 0,
+        meter_line: "Usage",
+        included_fast_hours: 90,
+      }),
+    ).toEqual({ pct: 0, label: "Usage", tone: "usage" });
   });
 });
 

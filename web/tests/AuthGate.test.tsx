@@ -129,6 +129,33 @@ describe("AuthGate", () => {
     expect(nav.replace).not.toHaveBeenCalled();
   });
 
+  it("keeps /pricing public without the studio shell", () => {
+    nav.pathname = "/pricing";
+    me.isLoading = false;
+    me.data = NEED_LOGIN;
+    render(
+      <AuthGate>
+        <div>Pricing</div>
+      </AuthGate>,
+    );
+    expect(screen.getByText("Pricing")).toBeInTheDocument();
+    expect(screen.queryByText("TopNav")).not.toBeInTheDocument();
+    expect(nav.replace).not.toHaveBeenCalled();
+  });
+
+  it("does not send a logged-in user away from /pricing", () => {
+    nav.pathname = "/pricing";
+    me.isLoading = false;
+    me.data = LOGGED_IN;
+    render(
+      <AuthGate>
+        <div>Pricing</div>
+      </AuthGate>,
+    );
+    expect(screen.getByText("Pricing")).toBeInTheDocument();
+    expect(nav.replace).not.toHaveBeenCalled();
+  });
+
   it("shows the studio when logged in", () => {
     me.isLoading = false;
     me.data = LOGGED_IN;

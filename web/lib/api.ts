@@ -17,6 +17,9 @@ import {
   ExportVariantRef,
   Invite,
   InviteKind,
+  BillingCheckout,
+  BillingPlans,
+  BillingStatus,
   SplitExportDest,
   SplitExportResult,
   InstagramAnalytics,
@@ -746,6 +749,18 @@ export function passwordLogin(email: string, password: string): Promise<AuthMe> 
     body: JSON.stringify({ email, password }),
   }).then(json<AuthMe>);
 }
+
+export const listBillingPlans = () => fetch("/api/billing/plans").then(json<BillingPlans>);
+
+export function startBillingCheckout(email: string, plan = "agency"): Promise<BillingCheckout> {
+  return fetch("/api/billing/checkout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, plan }),
+  }).then(json<BillingCheckout>);
+}
+
+export const getBillingStatus = () => fetch("/api/billing/status").then(json<BillingStatus>);
 
 export async function setStudioPassword(password: string): Promise<void> {
   const res = await fetch("/api/auth/password/set", {

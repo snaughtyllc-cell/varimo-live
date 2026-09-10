@@ -1,8 +1,9 @@
 """Varimo subscription plans: packs of 8, billed monthly.
 
 Pay as you go / Creator / Studio / Agency are the sell ladder. Internal is
-Jeff's uncapped operator studio. Missing/unknown plan ids stay internal so
-existing live workspaces are not capped on deploy.
+Jeff's uncapped operator studio. Agency is $200 / 90 Fast hours, no hard
+stop — the meter drains to 0, then Usage. Missing/unknown plan ids stay
+internal so existing live workspaces are not capped on deploy.
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ PLAN_IDS: tuple[PlanId, ...] = ("payg", "creator", "studio", "agency", "internal
 _UPGRADE: dict[str, tuple[str, int, int]] = {
     "payg": ("Creator", 35, 12),
     "creator": ("Studio", 79, 32),
-    "studio": ("Agency", 199, 100),
+    "studio": ("Agency", 200, 0),
 }
 
 
@@ -36,6 +37,7 @@ class Plan:
     extra_pack_price: float
     experience: Experience
     uncapped: bool = False
+    hard_stop: bool = True
 
     @property
     def included_variants(self) -> int:
@@ -46,8 +48,8 @@ PLANS: dict[str, Plan] = {
     "payg": Plan("payg", "Pay as you go", 0, 0, 5.0, "solo"),
     "creator": Plan("creator", "Creator", 35, 12, 3.5, "solo"),
     "studio": Plan("studio", "Studio", 79, 32, 3.0, "agency"),
-    "agency": Plan("agency", "Agency", 199, 100, 2.5, "agency"),
-    "internal": Plan("internal", "Internal", 0, 0, 0.0, "agency", uncapped=True),
+    "agency": Plan("agency", "Agency", 200, 0, 0.75, "agency", uncapped=False, hard_stop=False),
+    "internal": Plan("internal", "Internal", 0, 0, 0.0, "agency", uncapped=True, hard_stop=False),
 }
 
 
@@ -99,16 +101,26 @@ def limit_message(plan: Plan) -> str:
     if plan.included_packs == 0:
         if nxt:
             name, price, packs = nxt
+            if packs:
+                return (
+                    f"{plan.label} has no included packs. Extra packs are {extra}, "
+                    f"or {name} is ${price} for {packs}."
+                )
             return (
                 f"{plan.label} has no included packs. Extra packs are {extra}, "
-                f"or {name} is ${price} for {packs}."
+                f"or {name} is ${price}/month."
             )
         return f"{plan.label} has no included packs. Extra packs are {extra}."
     if nxt:
         name, price, packs = nxt
+        if packs:
+            return (
+                f"{plan.label} includes {plan.included_packs} packs. Extra packs are {extra}, "
+                f"or {name} is ${price} for {packs}."
+            )
         return (
             f"{plan.label} includes {plan.included_packs} packs. Extra packs are {extra}, "
-            f"or {name} is ${price} for {packs}."
+            f"or {name} is ${price}/month."
         )
     return (
         f"{plan.label} includes {plan.included_packs} packs. Extra packs are {extra}."
@@ -125,7 +137,7 @@ def remaining_pct(used_variants: int, included_variants: int) -> int:
 
 
 def enforce_quota(plan: Plan, used_variants: int, requested: int) -> None:
-    if plan.uncapped:
+    if plan.uncapped or not plan.hard_stop:
         return
     if used_variants + max(0, int(requested)) > plan.included_variants:
         raise UsageLimitError(limit_message(plan))

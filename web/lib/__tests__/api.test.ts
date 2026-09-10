@@ -646,6 +646,27 @@ describe("auth API", () => {
     });
   });
 
+  it("listBillingPlans GETs /api/billing/plans", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ configured: true, plans: [] }), { status: 200 }),
+    );
+    await api.listBillingPlans();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/billing/plans");
+  });
+
+  it("startBillingCheckout POSTs email and plan", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ url: "https://checkout.stripe.com/c/pay/cs_1", session_id: "cs_1" }), { status: 200 }),
+    );
+    await api.startBillingCheckout("buyer@x.com", "agency");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/billing/checkout");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      email: "buyer@x.com",
+      plan: "agency",
+    });
+  });
+
   it("setStudioPassword POSTs /api/auth/password/set", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
     await api.setStudioPassword("secret12");

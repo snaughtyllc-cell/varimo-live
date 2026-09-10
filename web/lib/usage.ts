@@ -41,21 +41,46 @@ export function remainingPct(
   return Math.round((100 * left) / included);
 }
 
+export type UsageTone = "included" | "usage";
+
+export type SidebarUsage = { pct: number; label: string; tone: UsageTone };
+
 export function sidebarUsage(
   usage:
     | {
         uncapped?: boolean;
+        tone?: UsageTone | string | null;
         used_variants?: number;
         included_variants?: number | null;
         included_packs?: number | null;
+        included_fast_hours?: number | null;
         remaining_pct?: number | null;
+        meter_line?: string | null;
+        label?: string | null;
       }
     | null
     | undefined,
-): { pct: number; label: string } | null {
+): SidebarUsage | null {
   if (!usage) return null;
+  const meter = (usage.meter_line || "").trim();
+  const isFastHours =
+    !usage.uncapped &&
+    (usage.tone === "usage" ||
+      usage.tone === "included" ||
+      usage.included_fast_hours != null ||
+      meter === "Usage" ||
+      /h left$/.test(meter));
+  if (isFastHours) {
+    const tone: UsageTone = usage.tone === "usage" ? "usage" : "included";
+    const label = (meter || usage.label || "").trim();
+    const pct = Math.max(
+      0,
+      Math.min(100, Math.round(usage.remaining_pct ?? (tone === "usage" ? 0 : 100))),
+    );
+    return { pct, label: label || (tone === "usage" ? "Usage" : "0h left"), tone };
+  }
   if (usage.uncapped) {
-    return { pct: usage.remaining_pct ?? 100, label: "uncapped" };
+    return { pct: usage.remaining_pct ?? 100, label: "uncapped", tone: "included" };
   }
   const includedPacks = usage.included_packs ?? 0;
   const includedVariants = usage.included_variants ?? includedPacks * 8;
@@ -65,5 +90,5 @@ export function sidebarUsage(
   const leftPacks = Math.max(0, includedVariants - (usage.used_variants ?? 0)) / 8;
   const shown =
     leftPacks === Math.floor(leftPacks) ? String(leftPacks) : leftPacks.toFixed(1);
-  return { pct, label: `${shown} of ${includedPacks} left` };
+  return { pct, label: `${shown} of ${includedPacks} left`, tone: "included" };
 }

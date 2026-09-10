@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { listBillingPlans } from "@/lib/api";
+import { listBillingPlans, startBillingCheckout } from "@/lib/api";
 import { LandingClient } from "@/app/landing/LandingClient";
-vi.mock("@/lib/api", () => ({ listBillingPlans: vi.fn() }));
+vi.mock("@/lib/api", () => ({ listBillingPlans: vi.fn(), startBillingCheckout: vi.fn() }));
 const play = vi.fn().mockResolvedValue(undefined);
 const pause = vi.fn();
 beforeEach(() => {
@@ -14,8 +14,8 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 it("uses API amounts in every purchase CTA instead of the mockup price", async () => {
   render(<LandingClient />);
-  await waitFor(() => expect(screen.getAllByRole("link",{name:"Start Agency — $225/month"})).toHaveLength(4));
-  for (const link of screen.getAllByRole("link",{name:/Start Agency/})) expect(link).toHaveAttribute("href","/pricing");
+  await waitFor(() => expect(screen.getAllByRole("button",{name:"Start Agency — $225/month"})).toHaveLength(4));
+  for (const button of screen.getAllByRole("button",{name:/Start Agency/})) expect(button).toBeEnabled();
   expect(screen.getByText("95 Fast hours, then $0.80/hr")).toBeInTheDocument();
   expect(screen.queryByText(/\$200/)).not.toBeInTheDocument();
 });
@@ -31,7 +31,26 @@ it("keeps videos paused for reduced motion and lets users play both", async () =
 it("shows pricing failure without inventing prices or signup confirmations", async () => {
   vi.mocked(listBillingPlans).mockRejectedValue(new Error("offline"));
   const {container} = render(<LandingClient />);
-  expect(await screen.findByRole("status")).toHaveTextContent("Live pricing is temporarily unavailable");
+  expect(await screen.findByRole("status")).toHaveTextContent("Checkout is temporarily unavailable");
   expect(container.querySelector("form")).toBeNull();
   expect(screen.queryByText(/\$200/)).not.toBeInTheDocument();
+});
+
+it("starts Stripe checkout directly and prevents duplicate clicks", async () => {
+  vi.mocked(startBillingCheckout).mockReturnValue(new Promise(() => {}));
+  render(<LandingClient />);
+  // All four plan CTAs share the same checkout operation.
+  const buttons = await screen.findAllByRole("button", {name:"Start Agency — $225/month"});
+  fireEvent.click(buttons[0]);
+  fireEvent.click(buttons[1]);
+  expect(startBillingCheckout).toHaveBeenCalledExactlyOnceWith(undefined, "agency");
+  expect(screen.getAllByRole("button", {name:"Opening Stripe…"})).toHaveLength(5);
+});
+it("recovers from checkout failure so visitors can retry", async () => {
+  vi.mocked(startBillingCheckout).mockRejectedValue(new Error("gateway unavailable"));
+  render(<LandingClient />);
+  const buttons = await screen.findAllByRole("button", {name:"Start Agency — $225/month"});
+  fireEvent.click(buttons[0]);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Please try again");
+  expect(screen.getAllByRole("button", {name:"Start Agency — $225/month"})[0]).toBeEnabled();
 });

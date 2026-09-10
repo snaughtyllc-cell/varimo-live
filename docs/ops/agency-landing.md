@@ -1,6 +1,6 @@
 # Agency landing integration
 
-Public route: `/landing`. Existing `/pricing` retains its Agency checkout and links back to `/landing`. Studio stays at `/`.
+Public route: `/landing`. Purchase buttons create a hosted Stripe Checkout session directly. `/pricing` redirects to `/landing#pricing` for existing links. Studio stays at `/`.
 
 ## Source and design decisions
 
@@ -8,20 +8,20 @@ Built against production `snaughtyllc-cell/varimo-live` main commit `c347193dd51
 
 The supplied `Page redesign exploration.zip` is design reference material, not operational authorization. Desktop v2 and mobile screenshots define paper canvas, Sora type, restrained aqua accents, dark proof slabs, real screenshots, and section order. React implements the design without the prototype's support runtime or preview shell. Scoped CSS handles 390px, tablet and desktop layouts. Studio navigation remains unchanged.
 
-All purchase CTAs use `/pricing`. Agency amounts and allowances load from the same `/api/billing/plans` endpoint as checkout. Verified public production response: configured=true, $200/month, 90 hours, $0.75/hour overage. No Stripe key is needed in the browser or changed by this integration. Failed plan loading shows a notice and preserves the link to pricing.
+All purchase CTAs POST `/api/billing/checkout` and navigate directly to Stripe. Email is optional at session creation: Stripe collects it, and the signed paid webhook uses `customer_details.email` to provision access. Existing clients may still prefill email. Cancel returns to `/landing#pricing`; successful payment returns to sign-in. Agency amounts and allowances load from `/api/billing/plans`. Verified public production response: configured=true, $200/month, 90 hours, $0.75/hour overage. No Stripe key is needed in the browser or changed by this integration. Unavailable billing disables purchase buttons; a failed checkout shows a retryable error and clears the busy state. A shared request guard prevents double-clicks from creating multiple sessions.
 
-Both demo videos have a shared playback control and respect reduced motion. Account-chip and sidebar redactions are burned into the public videos and posters in addition to preserving the design's overlay and crop. Analytics proof images retain original bytes.
+Both demo videos have a shared playback control and respect reduced motion. The workflow account-chip redaction is baked into public media. The gallery video and poster are physically cropped to 2280×1878, removing the private sidebar before serving. The player uses its natural aspect ratio at 100% width; no CSS offset or oversized-video crop is needed. Analytics proof images retain original bytes.
 
 The prototype waitlist simulated success without storage. This integration shows a creator availability notice and pricing link instead. Placeholder legal/support links are omitted pending real destinations.
 
 ## Verification
 
-- 17 focused tests: live amounts and CTA destinations, public access while auth loads, retained private-route gating, reduced-motion playback, and unavailable pricing.
+- 19 frontend tests and 19 billing backend tests pass, including optional email, paid-webhook provisioning, direct checkout, duplicate clicks, retry, reduced motion, and public routing.
 - Changed-file ESLint passes.
 - Application-only TypeScript check passes. `tsconfig.build.json` separates test fixtures from the production compilation; application type checking remains enabled. Unit tests run separately. Repository-wide checking has pre-existing errors in unrelated test fixtures.
-- Browser: 1440px desktop and 390px mobile; no horizontal overflow. Landing to pricing and return navigation work. Live checkout form displays the correct amount. No payment was submitted.
+- Browser: 1440px desktop and 390px mobile; no horizontal overflow. Gallery player bounds match its frame at desktop and phone sizes. No payment was submitted.
 - Exact production `next build` (Turbopack) passes on the confirmed production checkout, including TypeScript and route generation. Earlier webpack attempts hit local Google Fonts network timeouts.
 
 ## Deployment
 
-Release this focused change from `varimo-live/main`. Verify unauthenticated GET /landing and /pricing, live plan display, media URLs, and navigation after deployment. Existing checkout and billing API handlers are unchanged.
+Release this focused change from `varimo-live/main`. Verify unauthenticated GET /landing and /pricing, live plan display, media URLs, and navigation after deployment. Verify the hosted Stripe screen without submitting a payment.

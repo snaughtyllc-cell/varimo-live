@@ -52,17 +52,22 @@ def checkout_session_params(
     """
     addr = normalize_email(email)
     suffix = _integration_suffix()
-    return {
+    metadata = {"plan": plan.id}
+    if addr:
+        metadata["email"] = addr
+    params: dict[str, Any] = {
         "mode": "subscription",
         "line_items": [{"price": price_id, "quantity": 1}],
         "success_url": success_url,
         "cancel_url": cancel_url,
-        "customer_email": addr,
-        "client_reference_id": addr,
-        "metadata": {"plan": plan.id, "email": addr},
-        "subscription_data": {"metadata": {"plan": plan.id, "email": addr}},
+        "metadata": metadata,
+        "subscription_data": {"metadata": dict(metadata)},
         "integration_identifier": f"varyforge_{plan.id}_{suffix}",
     }
+    # Without a prefill Stripe collects email; the paid webhook reads customer_details.email.
+    if addr:
+        params.update(customer_email=addr, client_reference_id=addr)
+    return params
 
 
 class LiveStripeGateway:

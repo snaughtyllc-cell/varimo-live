@@ -3,10 +3,14 @@
 /* Adapted from the supplied Agency v2 desktop and mobile handoff. */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { listBillingPlans } from "@/lib/api";
+import { listBillingPlans, startBillingCheckout } from "@/lib/api";
 import type { BillingPlan } from "@/lib/types";
 
 export function LandingClient() {
+ const checkoutLock = useRef(false);
+ const [checkoutBusy, setCheckoutBusy] = useState(false);
+ const [checkoutReady, setCheckoutReady] = useState(false);
+ const [checkoutError, setCheckoutError] = useState<string | null>(null);
  const workflowRef = useRef<HTMLVideoElement>(null);
  const galleryRef = useRef<HTMLVideoElement>(null);
  const [playing, setPlaying] = useState(false);
@@ -14,7 +18,7 @@ export function LandingClient() {
  const [plan, setPlan] = useState<BillingPlan | null>(null);
  useEffect(() => {
   let active = true;
-  listBillingPlans().then(out => { if (active) { const agency = out.plans.find(p => p.id === "agency"); setPlan(agency ?? null); setPricingError(!agency); } }).catch(() => { if (active) setPricingError(true); });
+  listBillingPlans().then(out => { if (active) { const agency = out.plans.find(p => p.id === "agency"); setPlan(agency ?? null); setCheckoutReady(out.configured && !!agency); setPricingError(!agency || !out.configured); } }).catch(() => { if (active) setPricingError(true); });
   const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const videos = [workflowRef.current, galleryRef.current];
   if (workflowRef.current) workflowRef.current.playbackRate = 5;
@@ -24,6 +28,20 @@ export function LandingClient() {
   motion.addEventListener("change", change);
   return () => { active = false; videos.forEach(v => v?.pause()); motion.removeEventListener("change", change); };
  }, []);
+ async function buySubscription() {
+  if (checkoutLock.current || !checkoutReady || !plan) return;
+  checkoutLock.current = true;
+  setCheckoutBusy(true);
+  setCheckoutError(null);
+  try {
+   const checkout = await startBillingCheckout(undefined, plan.id);
+   window.location.assign(checkout.url);
+  } catch {
+   setCheckoutError("Stripe checkout couldn’t open. Please try again.");
+   checkoutLock.current = false;
+   setCheckoutBusy(false);
+  }
+ }
  async function toggleVideo() {
   const videos = [workflowRef.current, galleryRef.current];
   if (playing) { videos.forEach(v => v?.pause()); setPlaying(false); }
@@ -36,7 +54,7 @@ export function LandingClient() {
    return ({ "$200": `$${plan.price_usd}`, "90": String(plan.included_fast_hours), "0.75": plan.overage_usd_per_hour.toFixed(2), "540": String(plan.typical_fast20_packs ?? "—"), "10,800": plan.typical_fast20_copies?.toLocaleString("en-US") ?? "—" })[token] ?? token;
   });
  }
- return <div className="varimo-landing">{pricingError && <p className="pricing-unavailable" role="status">Live pricing is temporarily unavailable. <Link href="/pricing">Check pricing and availability</Link>.</p>}<a className="landing-skip" href="#h-hero">Skip to content</a><header className="l0">
+ return <div className="varimo-landing">{checkoutError && <div className="checkout-error" role="alert"><span>{checkoutError}</span><button type="button" onClick={() => setCheckoutError(null)} aria-label="Dismiss checkout error">×</button></div>}{pricingError && <p className="pricing-unavailable" role="status">Checkout is temporarily unavailable. Please try again shortly.</p>}<a className="landing-skip" href="#h-hero">Skip to content</a><header className="l0">
 <nav className="l1" aria-label="Primary">
 <div className="l2" aria-label="varimo" role="img">
 <span >{"varimo"}</span>
@@ -50,10 +68,10 @@ export function LandingClient() {
 <a className="l12" href="#pricing">{"Pricing"}</a>
 </div>
 <div className="l14"></div>
-<Link className="l15" href="/pricing">
+<button className="l15" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>
 <span className="l17"></span>
 <span >{"Start Agency"}</span>
-</Link>
+</>}</button>
 </nav>
 </header><main >
 <section className="l18" aria-labelledby="h-hero">
@@ -61,7 +79,7 @@ export function LandingClient() {
 <h1 className="l20" id="h-hero" data-anim="">{"Many originals"}<br />{"from one master"}</h1>
 <p className="l21" data-anim="">{"One source video in. A pack of real, original files out \u2014 ready for every account your team already posts from."}</p>
 <div className="l22" data-anim="">
-<Link className="l23" href="/pricing">{copy("Start Agency \u2014 $200/month")}</Link>
+<button className="l23" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start Agency \u2014 $200/month")}</>}</button>
 <a className="l25" href="#receipts">{"See the receipts"}</a>
 </div>
 <div className="l27">
@@ -165,7 +183,7 @@ export function LandingClient() {
 <p className="l127">{"Every copy carries its own originality score. Keep them, send them to Drive, or save straight to the phone your VAs post from."}</p>
 </div>
 <div className="l128">
-<video className="l129" ref={galleryRef} src="/landing/varimo-gallery.mp4" poster="/landing/varimo-gallery-poster.jpg" muted={true} loop={true} playsInline={true} aria-label="The finished pack sitting in the varimo gallery" preload="none"></video>
+<video className="l129" ref={galleryRef} src="/landing/varimo-gallery-cropped.mp4" poster="/landing/varimo-gallery-cropped-poster.jpg" muted={true} loop={true} playsInline={true} aria-label="The finished pack sitting in the varimo gallery" preload="none"></video>
 </div>
 </div>
 <div className="l130">
@@ -206,7 +224,7 @@ export function LandingClient() {
 </div>
 </section>
 <section className="l160">
-<Link className="l161" href="/pricing">{copy("Start Agency \u2014 $200/month")}</Link>
+<button className="l161" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start Agency \u2014 $200/month")}</>}</button>
 <span className="l163">{copy("$200/month \u00b7 90 Fast hours included \u00b7 no hard stop")}</span>
 </section>
 <section className="l164" aria-labelledby="h-spread">
@@ -349,7 +367,7 @@ export function LandingClient() {
 <span className="l264">{copy("A 20-pack takes ~10 min of Fast time. 90 hours \u2248 ")}<strong className="l265">{copy("540 packs (~10,800 copies)")}</strong>{" a month."}</span>
 <span className="l266">{"Typical, not a guarantee. Heavier clips take longer."}</span>
 </div>
-<Link className="l267" href="/pricing">{copy("Start Agency \u2014 $200/month")}</Link>
+<button className="l267" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start Agency \u2014 $200/month")}</>}</button>
 </div>
 <div className="l269">
 <span className="l270">{"What's included"}</span>
@@ -364,14 +382,14 @@ export function LandingClient() {
 </div>
 </div>
 </section>
-<section className="creator-notice"><h2>Working solo?</h2><p>Creator pricing and availability haven’t been announced. Explore the current Agency plan to see whether it fits your workflow.</p><Link href="/pricing">Explore Agency pricing →</Link></section>
+<section className="creator-notice"><h2>Working solo?</h2><p>Creator pricing and availability haven’t been announced. Explore the current Agency plan to see whether it fits your workflow.</p><Link href="#pricing">Explore Agency pricing →</Link></section>
 <section className="l290" id="access" aria-labelledby="h-close">
 <div className="l291">
 <h2 className="l292" id="h-close">{"Many originals"}<br /><span className="l293">{"from one master."}</span></h2>
 <p className="l294">{"One source video in. A pack of real, original files out \u2014 ready for every account your team already posts from."}</p>
-<Link className="l295" href="/pricing">{copy("Start Agency \u2014 $200/month")}</Link>
+<button className="l295" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start Agency \u2014 $200/month")}</>}</button>
 <span className="l297">{"varimo.io"}</span>
 </div>
 </section>
-</main><footer className="l298">{"varimo \u00b7 "}<Link href="/pricing">{"Pricing"}</Link>{" \u00b7 "}<a href="/login">{"Sign in"}</a></footer></div>;
+</main><footer className="l298">{"varimo \u00b7 "}<Link href="#pricing">{"Pricing"}</Link>{" \u00b7 "}<a href="/login">{"Sign in"}</a></footer></div>;
 }

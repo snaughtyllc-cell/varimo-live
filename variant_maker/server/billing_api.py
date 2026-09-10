@@ -28,7 +28,7 @@ from variant_maker.server.tenants import TenantStore, normalize_email
 
 
 class CheckoutIn(BaseModel):
-    email: str
+    email: str = ""
     plan: str = AGENCY_PLAN_ID
 
 
@@ -83,8 +83,8 @@ def register_billing_routes(
                 detail="Billing isn't connected. Set STRIPE_RESTRICTED_KEY (or STRIPE_SECRET_KEY) and STRIPE_PRICE_AGENCY.",
             )
         email = normalize_email(body.email)
-        if not _email_ok(email):
-            raise HTTPException(status_code=400, detail="email is required")
+        if email and not _email_ok(email):
+            raise HTTPException(status_code=400, detail="email is invalid")
         try:
             plan = get_plan(body.plan, billing_env)
         except ValueError as exc:
@@ -96,10 +96,9 @@ def register_billing_routes(
                 detail=f"Set {plan.stripe_price_env} to the Stripe Price id for {plan.name}.",
             )
         origin = studio_origin(request).rstrip("/")
-        success = (
-            f"{origin}/login?paid=1&email={quote(email, safe='')}&session_id={{CHECKOUT_SESSION_ID}}"
-        )
-        cancel = f"{origin}/pricing"
+        email_query = f"&email={quote(email, safe='')}" if email else ""
+        success = f"{origin}/login?paid=1{email_query}&session_id={{CHECKOUT_SESSION_ID}}"
+        cancel = f"{origin}/landing#pricing"
         params = checkout_session_params(
             email=email,
             plan=plan,

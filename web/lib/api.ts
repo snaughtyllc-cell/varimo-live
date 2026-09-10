@@ -752,7 +752,7 @@ export function passwordLogin(email: string, password: string): Promise<AuthMe> 
 
 export const listBillingPlans = () => fetch("/api/billing/plans").then(json<BillingPlans>);
 
-export function startBillingCheckout(email: string, plan = "agency"): Promise<BillingCheckout> {
+export function startBillingCheckout(email?: string, plan = "agency"): Promise<BillingCheckout> {
   return fetch("/api/billing/checkout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

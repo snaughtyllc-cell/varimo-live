@@ -165,3 +165,33 @@ def test_checkout_503_when_price_missing(tmp_path):
     client, _gw, _env = _billing_client(tmp_path, extra_env={"STRIPE_PRICE_AGENCY": ""})
     resp = client.post("/api/billing/checkout", json={"email": "buyer@x.com"})
     assert resp.status_code == 503
+
+
+def test_checkout_without_email_lets_stripe_collect_it(tmp_path):
+    client, gw, _env = _billing_client(tmp_path)
+    resp = client.post("/api/billing/checkout", json={"plan": "agency"})
+    assert resp.status_code == 200
+    params = gw.sessions[0]
+    assert "customer_email" not in params
+    assert "client_reference_id" not in params
+    assert params["metadata"] == {"plan": "agency"}
+    assert params["subscription_data"]["metadata"] == {"plan": "agency"}
+    assert params["cancel_url"].endswith("/landing#pricing")
+    assert "paid=1&session_id={CHECKOUT_SESSION_ID}" in params["success_url"]
+    # The signed webhook provides the email collected by Stripe; no prefilled metadata needed.
+    event = {"type": "checkout.session.completed", "data": {"object": {
+        "id": "cs_test_1", "payment_status": "paid", "customer": "cus_direct",
+        "subscription": "sub_direct", "customer_details": {"email": "direct@x.com"},
+        "metadata": params["metadata"],
+    }}}
+    webhook = client.post("/api/billing/webhook", content=json.dumps(event),
+                          headers={"stripe-signature": gw.valid_sig})
+    assert webhook.status_code == 200
+    assert _password_login(client, "direct@x.com", "secret12").status_code == 200
+
+
+def test_checkout_rejects_invalid_optional_email(tmp_path):
+    client, gw, _env = _billing_client(tmp_path)
+    resp = client.post("/api/billing/checkout", json={"email": "invalid"})
+    assert resp.status_code == 400
+    assert gw.sessions == []

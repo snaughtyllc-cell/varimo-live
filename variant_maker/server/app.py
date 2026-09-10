@@ -24,6 +24,7 @@ from variant_maker.farm.ledger import Ledger
 
 from .auth_app import PUBLIC_API_PATHS, AttrProxy, JobStoreProxy, current_bundle, tenant_cv
 from .billing import billing_status_payload
+from .creator_waitlist import register_creator_waitlist_routes
 from .billing_api import register_billing_routes
 from .caption_ai import parse_caption_prompts_field
 from .captions import CaptionError, CaptionStore, split_caption_bank, strip_internal_index_lines
@@ -1504,7 +1505,7 @@ def create_app(
         )
         if user is None:
             return fail("not_invited")
-        resp = RedirectResponse(url=f"{origin}/", status_code=302)
+        resp = RedirectResponse(url=f"{origin}/studio", status_code=302)
         _set_session_cookie(resp, request, user)
         return resp
 
@@ -2572,6 +2573,8 @@ def create_app(
                     print(f"workflow poller: {type(exc).__name__}: {exc}", flush=True)
 
         threading.Thread(target=_poll_loop, name="workflow-poller", daemon=True).start()
+
+    register_creator_waitlist_routes(app, data_dir=data_dir, require_admin=_require_admin)
 
     billing_env: Mapping[str, str] = billing_environ if billing_environ is not None else auth_env
     register_billing_routes(

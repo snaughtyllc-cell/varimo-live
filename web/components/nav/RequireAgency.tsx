@@ -24,7 +24,7 @@ export function RequireAgency({
 
   useEffect(() => {
     if (!isLoading && !allowed) {
-      router.replace("/");
+      router.replace("/studio");
     }
   }, [isLoading, allowed, router]);
 

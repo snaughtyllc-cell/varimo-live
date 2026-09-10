@@ -14,7 +14,7 @@ export default function AnalyticsPage() {
   useEffect(() => {
     if (meLoading) return;
     if (!allowed) {
-      router.replace("/");
+      router.replace("/studio");
     }
   }, [meLoading, allowed, router]);
 

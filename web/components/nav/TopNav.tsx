@@ -25,7 +25,7 @@ import { VarimoMark } from "../brand/VarimoMark";
 import { VarimoWordmark } from "../brand/VarimoWordmark";
 
 const ICONS = {
-  "/": GalleryHorizontalEnd,
+  "/studio": GalleryHorizontalEnd,
   "/gallery": FolderOpen,
   "/analytics": ChartColumn,
   "/drops": PackageCheck,
@@ -46,7 +46,7 @@ export function TopNav() {
   const phoneTabs = visiblePhoneBarTabs(me);
   const moreTabs = visiblePhoneMoreTabs(me);
   const section = SECTION_DESTINATIONS.find((d) => linkActive(pathname, d.href));
-  const isStudio = pathname === "/";
+  const isStudio = pathname === "/studio";
   // Phase C: Gallery, Drops, Flows and Drive each render their own 58px context
   // bar as the first element of their page. Suppress the shared desktop header on
   // those routes so there is a single bar, not two stacked ones.
@@ -68,7 +68,7 @@ export function TopNav() {
   return (
     <>
       {/* Desktop header (58px) — nav itself now lives in the SideNav rail.
-          Studio ("/") gets the mock breadcrumb + search + GPU chip; every other
+          Studio ("/studio") gets the mock breadcrumb + search + GPU chip; every other
           route keeps the section label + StatusStrip it had before. */}
       {!ownsOwnHeader && (
         <header className="vf-header">
@@ -102,7 +102,7 @@ export function TopNav() {
         <div className="vf-topbar-left">
           <StatusStrip />
         </div>
-        <Link className="vf-brand" href="/" aria-label="varimo Studio home">
+        <Link className="vf-brand" href="/studio" aria-label="varimo Studio home">
           <VarimoMark className="vf-brand-mark" size={22} />
           <VarimoWordmark className="vf-brand-wordmark" />
         </Link>

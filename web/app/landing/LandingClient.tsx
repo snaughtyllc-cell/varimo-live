@@ -3,6 +3,7 @@
 /* Adapted from the supplied Agency v2 desktop and mobile handoff. */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { CreatorWaitlistForm } from "./CreatorWaitlistForm";
 import { listBillingPlans, startBillingCheckout } from "@/lib/api";
 import type { BillingPlan } from "@/lib/types";
 
@@ -48,7 +49,7 @@ export function LandingClient() {
   else { try { await Promise.all(videos.map(v => v?.play())); setPlaying(true); } catch { videos.forEach(v => v?.pause()); setPlaying(false); } }
  }
  function copy(text: string) {
-  if (!plan && text.startsWith("Start Agency")) return "View Agency pricing";
+  if (!plan && text.startsWith("Start generating")) return "View pricing";
   return text.replace(/\$200|\b90\b|0\.75|540|10,800/g, token => {
    if (!plan) return "—";
    return ({ "$200": `$${plan.price_usd}`, "90": String(plan.included_fast_hours), "0.75": plan.overage_usd_per_hour.toFixed(2), "540": String(plan.typical_fast20_packs ?? "—"), "10,800": plan.typical_fast20_copies?.toLocaleString("en-US") ?? "—" })[token] ?? token;
@@ -67,19 +68,19 @@ export function LandingClient() {
 <a className="l10" href="#faq">{"FAQ"}</a>
 <a className="l12" href="#pricing">{"Pricing"}</a>
 </div>
-<div className="l14"></div>
+<div className="l14"></div><a className="landing-signin" href="/login">Sign in</a>
 <button className="l15" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>
 <span className="l17"></span>
-<span >{"Start Agency"}</span>
+<span >{"Start generating"}</span>
 </>}</button>
 </nav>
 </header><main >
 <section className="l18" aria-labelledby="h-hero">
-<span className="l19" data-anim="">{"For agencies"}</span>
+<span className="l19" data-anim="">{"Built for teams"}</span>
 <h1 className="l20" id="h-hero" data-anim="">{"Many originals"}<br />{"from one master"}</h1>
 <p className="l21" data-anim="">{"One source video in. A pack of real, original files out \u2014 ready for every account your team already posts from."}</p>
 <div className="l22" data-anim="">
-<button className="l23" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start Agency \u2014 $200/month")}</>}</button>
+<button className="l23" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start generating \u2014 $200/month")}</>}</button>
 <a className="l25" href="#receipts">{"See the receipts"}</a>
 </div>
 <div className="l27">
@@ -224,7 +225,7 @@ export function LandingClient() {
 </div>
 </section>
 <section className="l160">
-<button className="l161" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start Agency \u2014 $200/month")}</>}</button>
+<button className="l161" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start generating \u2014 $200/month")}</>}</button>
 <span className="l163">{copy("$200/month \u00b7 90 Fast hours included \u00b7 no hard stop")}</span>
 </section>
 <section className="l164" aria-labelledby="h-spread">
@@ -355,7 +356,7 @@ export function LandingClient() {
 <div className="l254">
 <div className="l255">
 <div className="l256">
-<span className="l257">{"Agency"}</span>
+<span className="l257">{"Monthly plan"}</span>
 </div>
 <div className="l258">
 <span className="l259">{copy("$200")}</span>
@@ -367,7 +368,7 @@ export function LandingClient() {
 <span className="l264">{copy("A 20-pack takes ~10 min of Fast time. 90 hours \u2248 ")}<strong className="l265">{copy("540 packs (~10,800 copies)")}</strong>{" a month."}</span>
 <span className="l266">{"Typical, not a guarantee. Heavier clips take longer."}</span>
 </div>
-<button className="l267" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start Agency \u2014 $200/month")}</>}</button>
+<button className="l267" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start generating \u2014 $200/month")}</>}</button>
 </div>
 <div className="l269">
 <span className="l270">{"What's included"}</span>
@@ -382,12 +383,12 @@ export function LandingClient() {
 </div>
 </div>
 </section>
-<section className="creator-notice"><h2>Working solo?</h2><p>Creator pricing and availability haven’t been announced. Explore the current Agency plan to see whether it fits your workflow.</p><Link href="#pricing">Explore Agency pricing →</Link></section>
+<CreatorWaitlistForm />
 <section className="l290" id="access" aria-labelledby="h-close">
 <div className="l291">
 <h2 className="l292" id="h-close">{"Many originals"}<br /><span className="l293">{"from one master."}</span></h2>
 <p className="l294">{"One source video in. A pack of real, original files out \u2014 ready for every account your team already posts from."}</p>
-<button className="l295" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start Agency \u2014 $200/month")}</>}</button>
+<button className="l295" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start generating \u2014 $200/month")}</>}</button>
 <span className="l297">{"varimo.io"}</span>
 </div>
 </section>

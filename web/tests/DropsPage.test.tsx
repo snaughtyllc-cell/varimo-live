@@ -53,7 +53,7 @@ describe("Drops page", () => {
     me.data = { ...AGENCY, experience: "solo", role: "owner" };
     render(<DropsPage />);
     await waitFor(() => {
-      expect(replace).toHaveBeenCalledWith("/");
+      expect(replace).toHaveBeenCalledWith("/studio");
     });
     expect(screen.queryByText("Drops board")).not.toBeInTheDocument();
   });

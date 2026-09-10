@@ -20,9 +20,10 @@ export type StudioDestination = {
 };
 
 export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
+  { href: "/", label: "Home", audience: "everyone", tab: "none", summary: "Public landing page, pricing, and creator waitlist." },
   { href: "/landing", label: "For agencies", audience: "everyone", tab: "none", summary: "Public Agency landing page, product proof, and live pricing." },
   {
-    href: "/",
+    href: "/studio",
     label: "Studio",
     audience: "everyone",
     tab: "primary",
@@ -127,12 +128,12 @@ export const STUDIO_NESTED_SURFACES = [
   },
   {
     name: "Drive picker",
-    opens_from: "/",
+    opens_from: "/studio",
     summary: "Import source files from a saved Drive destination.",
   },
   {
     name: "Watch progress",
-    opens_from: "/ and /workflows",
+    opens_from: "/studio and /workflows",
     summary: "Live job tiles, cancel, re-attach after reload.",
   },
   {

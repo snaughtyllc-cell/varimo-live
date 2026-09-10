@@ -98,7 +98,7 @@ def register_billing_routes(
         origin = studio_origin(request).rstrip("/")
         email_query = f"&email={quote(email, safe='')}" if email else ""
         success = f"{origin}/login?paid=1{email_query}&session_id={{CHECKOUT_SESSION_ID}}"
-        cancel = f"{origin}/landing#pricing"
+        cancel = f"{origin}/#pricing"
         params = checkout_session_params(
             email=email,
             plan=plan,

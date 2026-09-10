@@ -16,7 +16,7 @@ export default function DiagnosticsPage() {
 
   useEffect(() => {
     if (meLoading) return;
-    if (!allowed) router.replace("/");
+    if (!allowed) router.replace("/studio");
   }, [meLoading, allowed, router]);
 
   if (meLoading || !allowed) {

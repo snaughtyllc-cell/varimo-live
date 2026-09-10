@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import { useAuthMe } from "@/lib/useAuthMe";
 import type { AdminWorkspace, Invite, InviteKind } from "@/lib/types";
+import { CreatorWaitlistAdmin } from "@/components/admin/CreatorWaitlistAdmin";
 import { ShieldCheck } from "lucide-react";
 import { memberWeekCopy, PLAN_OPTIONS } from "@/lib/usage";
 
@@ -33,7 +34,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (meLoading) return;
     if (!isAdmin) {
-      router.replace("/");
+      router.replace("/studio");
     }
   }, [meLoading, isAdmin, router]);
 
@@ -66,7 +67,7 @@ export default function AdminPage() {
     try {
       await setAdminView(workspaceId);
       await mutate();
-      router.push("/");
+      router.push("/studio");
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to open workspace");
       setOpeningId(null);
@@ -158,6 +159,7 @@ export default function AdminPage() {
         </div>
       </div>
 
+      <CreatorWaitlistAdmin />
       <div>
         {formError && (
           <div className="vf-alert" role="alert">

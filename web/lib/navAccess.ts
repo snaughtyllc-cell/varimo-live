@@ -6,14 +6,14 @@ import {
   type StudioDestination,
 } from "./studioDestinations";
 
-const PHONE_BAR_HREFS = ["/", "/gallery", "/analytics", "/workflows"] as const;
+const PHONE_BAR_HREFS = ["/studio", "/gallery", "/analytics", "/workflows"] as const;
 const PHONE_OVERFLOW_HREFS = ["/drops", "/settings/drive"] as const;
 
 function destination(href: string): StudioDestination | undefined {
   return STUDIO_DESTINATIONS.find((tab) => tab.href === href);
 }
 
-const SOLO_PRIMARY_HREFS = new Set(["/", "/gallery", "/settings/drive"]);
+const SOLO_PRIMARY_HREFS = new Set(["/studio", "/gallery", "/settings/drive"]);
 
 /** Failed-encode leftovers. Operators never use Diagnostics — site admin only. */
 export function showDiagnosticsNav(me: {
@@ -134,7 +134,7 @@ export function extraTabVisible(
   return false;
 }
 
-/** Exact match for Studio ("/"), prefix match for every other destination. */
+/** Exact match for Studio ("/studio"), prefix match for every other destination. */
 export function linkActive(pathname: string, href: string): boolean {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+  return href === "/studio" ? pathname === "/studio" : pathname === href || pathname.startsWith(`${href}/`);
 }

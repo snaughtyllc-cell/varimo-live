@@ -108,7 +108,7 @@ describe("Admin page", () => {
     await waitFor(() => {
       expect(setAdminView).toHaveBeenCalledWith("ws_va");
     });
-    expect(push).toHaveBeenCalledWith("/");
+    expect(push).toHaveBeenCalledWith("/studio");
   });
 
   it("lists member emails and Remove revokes a VA", async () => {
@@ -137,7 +137,7 @@ describe("Admin page", () => {
     me.data = { ...ADMIN, is_admin: false };
     render(<AdminPage />);
     await waitFor(() => {
-      expect(replace).toHaveBeenCalledWith("/");
+      expect(replace).toHaveBeenCalledWith("/studio");
     });
   });
 

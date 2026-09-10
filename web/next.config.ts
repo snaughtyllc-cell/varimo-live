@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 /** @type {import('next').NextConfig} */
 const target = process.env.API_PROXY_TARGET || "http://localhost:8000";
 const nextConfig: NextConfig = {
+  // Unit-test fixtures are checked/run separately; compile the shipped app here.
+  typescript: { tsconfigPath: "tsconfig.build.json" },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${target}/api/:path*` }];
   },

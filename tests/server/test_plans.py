@@ -27,7 +27,8 @@ def test_ladder_matches_the_sell_sheet():
     assert (studio.included_packs, studio.extra_pack_price, studio.monthly) == (32, 3.0, 79)
     assert studio.included_variants == 256
     assert agency.monthly == 200
-    assert agency.uncapped is True
+    assert agency.uncapped is False
+    assert agency.hard_stop is False
     assert get_plan("internal").uncapped is True
 
 
@@ -57,7 +58,8 @@ def test_limit_copy_points_at_the_next_upgrade():
     assert limit_message(get_plan("studio")) == (
         "Studio includes 32 packs. Extra packs are $3.00, or Agency is $200/month."
     )
-    assert get_plan("agency").uncapped is True
+    assert get_plan("agency").uncapped is False
+    assert get_plan("agency").hard_stop is False
 
 
 def test_meter_line_hides_internal_and_counts_packs():
@@ -71,6 +73,7 @@ def test_meter_line_hides_internal_and_counts_packs():
 
 def test_enforce_quota_allows_internal_and_blocks_over_included():
     enforce_quota(get_plan("internal"), used_variants=10_000, requested=8)
+    enforce_quota(get_plan("agency"), used_variants=10_000, requested=8)
     enforce_quota(get_plan("creator"), used_variants=88, requested=8)
     with pytest.raises(UsageLimitError, match="Creator includes 12 packs"):
         enforce_quota(get_plan("creator"), used_variants=96, requested=8)

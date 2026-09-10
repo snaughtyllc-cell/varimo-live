@@ -23,7 +23,7 @@ from .caption_ai import (
 )
 from .events import VariantEvent, event_to_dict
 from .runner import Runner, normalize_quality_mode
-from .usage import month_key, record_ok_copies
+from .usage import month_key, record_fast_job, record_ok_copies
 from .workspace import Workspace
 
 GALLERY_KEEP_JOBS_ENV = "VARIANT_GALLERY_KEEP_JOBS"
@@ -450,6 +450,25 @@ class JobStore:
         if copies:
             record_ok_copies(self._ws.usage_path(), copies)
 
+    def _record_fast_hours(self, job: Job) -> None:
+        if str(job.quality_mode or "").strip().lower() != "fast":
+            return
+        finished = _now()
+        start = _parse_utc(job.created_utc)
+        end = _parse_utc(finished)
+        real = 0.0
+        if start is not None and end is not None:
+            real = max(0.0, (end - start).total_seconds())
+        record_fast_job(
+            self._ws.usage_path(),
+            job_id=job.job_id,
+            quality_mode=job.quality_mode,
+            real_work_s=real,
+            utc=finished,
+            submitted_utc=job.created_utc,
+            completed_utc=finished,
+        )
+
     def create_job(self, uploads: list[tuple[str, bytes]], count: int,
                     allow_creative_escalate: bool = True,
                     quality_mode: str = "fast",
@@ -827,6 +846,7 @@ class JobStore:
                 for source in job.sources:
                     self._pull_missing_outputs(source.source_id)
                 self._refresh_copy_error(job)
+            self._record_fast_hours(job)
             self._persist(job)
             self.prune_finished_jobs()
             ev = self._done.get(job.job_id)

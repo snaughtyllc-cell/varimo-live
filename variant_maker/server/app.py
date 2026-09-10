@@ -23,6 +23,7 @@ from variant_maker.farm.drive import DriveClient, is_video_file
 from variant_maker.farm.ledger import Ledger
 
 from .auth_app import PUBLIC_API_PATHS, AttrProxy, JobStoreProxy, current_bundle, tenant_cv
+from .billing import billing_status_payload
 from .billing_api import register_billing_routes
 from .caption_ai import parse_caption_prompts_field
 from .captions import CaptionError, CaptionStore, split_caption_bank, strip_internal_index_lines
@@ -1311,10 +1312,41 @@ def create_app(
             included_variants=plan.included_variants,
             extra_pack_price=plan.extra_pack_price,
             uncapped=plan.uncapped,
+            hard_stop=plan.hard_stop,
             meter_line=meter_line(plan, used),
             label=plan.label,
             remaining_pct=remaining,
         )
+        rec = tenants.get_billing(user.email) or tenants.get_billing_for_workspace(viewing_id)
+        jobs = None
+        ws_obj = None
+        if hub is not None and viewing_id:
+            bundle = hub.bundle(viewing_id)
+            ws_obj = bundle.ws
+            jobs = list(getattr(bundle.store, "_jobs", {}).values())
+        billed = billing_status_payload(
+            rec=rec,
+            workspace=ws_obj,
+            is_admin=is_admin_email(user.email, admin_email),
+            environ=billing_environ if billing_environ is not None else auth_env,
+            jobs=jobs,
+        )
+        fast = billed.get("usage")
+        if fast:
+            usage = UsageOut(
+                month=month_key(),
+                used_variants=used,
+                included_packs=None,
+                included_variants=None,
+                extra_pack_price=None,
+                uncapped=False,
+                hard_stop=False,
+                tone=fast.get("tone"),
+                meter_line=fast.get("meter_line"),
+                label=fast.get("label") or plan.label,
+                remaining_pct=fast.get("remaining_pct"),
+                included_fast_hours=fast.get("included_fast_hours"),
+            )
         return AuthMeOut(
             auth_required=True,
             email=user.email,

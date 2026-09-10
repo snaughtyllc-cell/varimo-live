@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -17,6 +17,7 @@ from variant_maker.server.tenants import (
     TenantStore,
     normalize_email,
 )
+from variant_maker.server.usage import in_flight_fast_seconds
 
 # Internal Fast COGS. Do not put this number on the marketing site.
 FAST_USD_PER_HOUR = 0.58
@@ -95,15 +96,26 @@ def stripe_price_id(plan: Plan, environ: Mapping[str, str] | None = None) -> str
     return (env.get(plan.stripe_price_env) or "").strip()
 
 
-def period_fast_seconds(workspace: Any, *, start: datetime | None = None, end: datetime | None = None) -> float:
+def period_fast_seconds(
+    workspace: Any,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    jobs: Iterable[Any] | None = None,
+    now: datetime | None = None,
+) -> float:
     """Fast worker-seconds in [start, end). Live copy-ledger rows without Fast
-    telemetry count as 0 — overage stays recorded, Generate is not blocked.
+    telemetry count as 0. In-flight Fast jobs add elapsed wall time so the
+    Agency meter runs down while generating.
     """
-    path = getattr(workspace, "usage_path", None)
+    live_now = now or datetime.now(UTC)
+    if live_now.tzinfo is None:
+        live_now = live_now.replace(tzinfo=UTC)
+    else:
+        live_now = live_now.astimezone(UTC)
+    path = getattr(workspace, "usage_path", None) if workspace is not None else None
     path = path() if callable(path) else path
-    if not path or not os.path.isfile(path):
-        return 0.0
-    when_end = end or datetime.now(UTC)
+    when_end = end or live_now
     if when_end.tzinfo is None:
         when_end = when_end.replace(tzinfo=UTC)
     when_end = when_end.astimezone(UTC)
@@ -114,38 +126,40 @@ def period_fast_seconds(workspace: Any, *, start: datetime | None = None, end: d
     else:
         when_start = start.astimezone(UTC)
     total = 0.0
-    try:
-        with open(path, encoding="utf-8") as f:
-            lines = f.readlines()
-    except OSError:
-        return 0.0
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
+    if path and os.path.isfile(path):
         try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(row, dict):
-            continue
-        if str(row.get("quality_mode") or "").strip().lower() != "fast":
-            continue
-        ts = _parse_utc(str(row.get("utc") or row.get("completed_utc") or ""))
-        if ts is None or ts < when_start or ts >= when_end:
-            continue
-        billed = row.get("billed")
-        if isinstance(billed, dict) and billed.get("real_work_s") is not None:
-            try:
-                total += max(0.0, float(billed["real_work_s"]))
+            with open(path, encoding="utf-8") as f:
+                lines = f.readlines()
+        except OSError:
+            lines = []
+        for line in lines:
+            line = line.strip()
+            if not line:
                 continue
-            except (TypeError, ValueError):
-                pass
-        submitted = _parse_utc(str(row.get("submitted_utc") or ""))
-        finished = _parse_utc(str(row.get("completed_utc") or row.get("utc") or ""))
-        if submitted is None or finished is None:
-            continue
-        total += max(0.0, (finished - submitted).total_seconds())
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            if str(row.get("quality_mode") or "").strip().lower() != "fast":
+                continue
+            ts = _parse_utc(str(row.get("utc") or row.get("completed_utc") or ""))
+            if ts is None or ts < when_start or ts >= when_end:
+                continue
+            billed = row.get("billed")
+            if isinstance(billed, dict) and billed.get("real_work_s") is not None:
+                try:
+                    total += max(0.0, float(billed["real_work_s"]))
+                    continue
+                except (TypeError, ValueError):
+                    pass
+            submitted = _parse_utc(str(row.get("submitted_utc") or ""))
+            finished = _parse_utc(str(row.get("completed_utc") or row.get("utc") or ""))
+            if submitted is None or finished is None:
+                continue
+            total += max(0.0, (finished - submitted).total_seconds())
+    total += in_flight_fast_seconds(jobs, now=live_now, start=when_start)
     return total
 
 
@@ -160,6 +174,45 @@ def typical_fast20_throughput(included_fast_hours: float) -> tuple[int, int]:
     raw_packs = (hours * 60.0) / TYPICAL_FAST20_MINUTES if TYPICAL_FAST20_MINUTES else 0.0
     packs = round(raw_packs) if raw_packs else 0
     return packs, packs * TYPICAL_FAST20_COPIES_PER_PACK
+
+
+def _hours_label(seconds: float) -> str:
+    hours = max(0.0, float(seconds or 0.0)) / 3600.0
+    if abs(hours - round(hours)) < 0.05:
+        return str(round(hours))
+    return f"{hours:.1f}"
+
+
+def fast_hour_meter(plan: Plan, snap: OverageSnapshot) -> dict[str, Any]:
+    included = snap.included_fast_seconds
+    remaining_pct = 0 if included <= 0 else round(100.0 * snap.remaining_fast_seconds / included)
+    remaining_pct = max(0, min(100, remaining_pct))
+    if snap.overage_fast_seconds > 0:
+        return {
+            "uncapped": False,
+            "hard_stop": False,
+            "tone": "usage",
+            "remaining_pct": 0,
+            "meter_line": "Usage",
+            "label": "Usage",
+            "included_fast_hours": plan.included_fast_hours,
+            "remaining_fast_seconds": snap.remaining_fast_seconds,
+            "overage_fast_seconds": snap.overage_fast_seconds,
+        }
+    total = _hours_label(plan.included_fast_hours * 3600.0)
+    left = _hours_label(snap.remaining_fast_seconds)
+    line = f"{left} of {total}h left"
+    return {
+        "uncapped": False,
+        "hard_stop": False,
+        "tone": "included",
+        "remaining_pct": remaining_pct,
+        "meter_line": line,
+        "label": line,
+        "included_fast_hours": plan.included_fast_hours,
+        "remaining_fast_seconds": snap.remaining_fast_seconds,
+        "overage_fast_seconds": snap.overage_fast_seconds,
+    }
 
 
 def overage_snapshot(plan: Plan, fast_seconds: float) -> OverageSnapshot:
@@ -398,6 +451,8 @@ def billing_status_payload(
     workspace: Any,
     is_admin: bool,
     environ: Mapping[str, str] | None = None,
+    jobs: Iterable[Any] | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """Usage readout. Never blocks Generate — overage is recorded, not a hard stop."""
     if is_admin and (rec is None or rec.status not in ACTIVE_STATUSES):
@@ -413,6 +468,7 @@ def billing_status_payload(
             "period_start_utc": None,
             "period_end_utc": None,
             "collects_overage": False,
+            "usage": None,
         }
     if rec is None or rec.status not in ACTIVE_STATUSES:
         return {
@@ -427,11 +483,14 @@ def billing_status_payload(
             "period_start_utc": rec.period_start_utc if rec is not None else None,
             "period_end_utc": rec.period_end_utc if rec is not None else None,
             "collects_overage": False,
+            "usage": None,
         }
     plan = get_plan(rec.plan, environ)
     start = _parse_utc(rec.period_start_utc)
     end = _parse_utc(rec.period_end_utc)
-    seconds = period_fast_seconds(workspace, start=start, end=end) if workspace is not None else 0.0
+    seconds = period_fast_seconds(
+        workspace, start=start, end=end, jobs=jobs, now=now,
+    )
     snap = overage_snapshot(plan, seconds)
     return {
         "plan": plan_public_dict(plan),
@@ -445,4 +504,5 @@ def billing_status_payload(
         "period_start_utc": rec.period_start_utc,
         "period_end_utc": rec.period_end_utc,
         "collects_overage": True,
+        "usage": fast_hour_meter(plan, snap),
     }

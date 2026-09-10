@@ -150,6 +150,14 @@ def test_paid_webhook_lets_them_set_a_password_without_jeff(tmp_path):
     assert payload["status"] == "active"
     assert payload["unlimited"] is False
     assert payload["plan"]["id"] == "agency"
+    assert payload["usage"]["tone"] == "included"
+    assert payload["usage"]["remaining_pct"] == 100
+    assert payload["usage"]["meter_line"] == "90 of 90h left"
+    me = client.get("/api/auth/me")
+    assert me.status_code == 200
+    assert me.json()["usage"]["meter_line"] == "90 of 90h left"
+    assert me.json()["usage"]["uncapped"] is False
+    assert me.json()["usage"]["tone"] == "included"
 
 
 def test_checkout_503_when_price_missing(tmp_path):

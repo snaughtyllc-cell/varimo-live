@@ -352,9 +352,12 @@ export interface UsageMeter {
   included_variants?: number | null;
   extra_pack_price?: number | null;
   uncapped: boolean;
+  hard_stop?: boolean;
+  tone?: "included" | "usage" | null;
   meter_line: string | null;
   label?: string;
   remaining_pct?: number | null;
+  included_fast_hours?: number | null;
 }
 
 export interface AuthMe {

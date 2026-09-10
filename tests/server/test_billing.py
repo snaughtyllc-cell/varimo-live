@@ -6,6 +6,7 @@ from variant_maker.server.billing import (
     AGENCY_OVERAGE_USD_PER_HOUR,
     FAST_USD_PER_HOUR,
     apply_stripe_event,
+    fast_hour_meter,
     get_plan,
     grant_paid_subscription,
     overage_snapshot,
@@ -49,6 +50,28 @@ def test_agency_hours_and_rate_are_env_overridable(monkeypatch):
     assert plan.overage_usd_per_hour == 0.80
     snap = overage_snapshot(plan, 11 * 3600)
     assert snap.overage_usd == 0.80
+
+
+def test_fast_hour_meter_drains_to_zero_then_usage():
+    plan = get_plan("agency", environ={})
+    full = fast_hour_meter(plan, overage_snapshot(plan, 0))
+    assert full["uncapped"] is False
+    assert full["hard_stop"] is False
+    assert full["tone"] == "included"
+    assert full["remaining_pct"] == 100
+    assert full["meter_line"] == "90 of 90h left"
+    half = fast_hour_meter(plan, overage_snapshot(plan, 45 * 3600))
+    assert half["remaining_pct"] == 50
+    assert half["meter_line"] == "45 of 90h left"
+    floor = fast_hour_meter(plan, overage_snapshot(plan, 90 * 3600))
+    assert floor["remaining_pct"] == 0
+    assert floor["tone"] == "included"
+    assert floor["meter_line"] == "0 of 90h left"
+    over = fast_hour_meter(plan, overage_snapshot(plan, 91 * 3600))
+    assert over["tone"] == "usage"
+    assert over["remaining_pct"] == 0
+    assert over["meter_line"] == "Usage"
+    assert over["hard_stop"] is False
 
 
 def test_under_included_fast_hours_has_no_overage():

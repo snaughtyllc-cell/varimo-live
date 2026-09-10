@@ -141,6 +141,7 @@ input, select, textarea { font-size: 16px; }
   background: var(--color-cyan);
   border-radius: inherit;
   height: 100%;
+  transition: width 240ms ease, background 240ms ease;
 }
 .vf-sidenav-usage-label {
   color: #6e888e;
@@ -148,6 +149,12 @@ input, select, textarea { font-size: 16px; }
   font-size: 11px;
   line-height: 1.3;
   margin-top: 6px;
+}
+.vf-sidenav-usage[data-tone="usage"] .vf-sidenav-usage-fill {
+  background: var(--color-amber2);
+}
+.vf-sidenav-usage[data-tone="usage"] .vf-sidenav-usage-label {
+  color: var(--color-amber2);
 }
 .vf-sidenav-account { align-items: center; display: flex; gap: 10px; padding: 14px 8px 0; }
 .vf-sidenav-avatar {

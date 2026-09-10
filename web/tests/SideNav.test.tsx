@@ -222,4 +222,40 @@ describe("SideNav", () => {
     );
     expect(screen.getByText("0 of 12 left")).toBeInTheDocument();
   });
+
+  it("drains Agency Fast hours and flips to Usage after the included block", () => {
+    me.data = {
+      ...BASE,
+      plan: "agency",
+      usage: {
+        uncapped: false,
+        hard_stop: false,
+        tone: "included",
+        used_variants: 0,
+        included_fast_hours: 90,
+        remaining_pct: 50,
+        meter_line: "45 of 90h left",
+      },
+    };
+    const { rerender } = render(<SideNav />);
+    const bar = screen.getByRole("progressbar", { name: "Fast hours remaining" });
+    expect(bar).toHaveAttribute("aria-valuenow", "50");
+    expect(bar).toHaveAttribute("data-tone", "included");
+    expect(screen.getByText("45 of 90h left")).toBeInTheDocument();
+    me.data = {
+      ...me.data,
+      usage: {
+        ...me.data.usage!,
+        tone: "usage",
+        remaining_pct: 0,
+        meter_line: "Usage",
+      },
+    };
+    rerender(<SideNav />);
+    expect(screen.getByRole("progressbar", { name: "Fast hour usage" })).toHaveAttribute(
+      "aria-valuenow",
+      "0",
+    );
+    expect(screen.getByText("Usage")).toBeInTheDocument();
+  });
 });

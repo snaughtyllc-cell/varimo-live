@@ -141,9 +141,11 @@ def register_billing_routes(
         if rec is None:
             rec = tenants.get_billing_for_workspace(user.workspace_id)
         ws = getattr(store, "_ws", None)
+        jobs = list(getattr(store, "_jobs", {}).values())
         return billing_status_payload(
             rec=rec,
             workspace=ws,
             is_admin=is_admin(user.email, admin_email),
             environ=billing_env,
+            jobs=jobs,
         )

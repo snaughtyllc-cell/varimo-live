@@ -465,9 +465,12 @@ class UsageOut(BaseModel):
     included_variants: int | None = None
     extra_pack_price: float | None = None
     uncapped: bool = False
+    hard_stop: bool = True
+    tone: Literal["included", "usage"] | None = None
     meter_line: str | None = None
     label: str
     remaining_pct: int | None = None
+    included_fast_hours: float | None = None
 
 
 class AuthMeOut(BaseModel):

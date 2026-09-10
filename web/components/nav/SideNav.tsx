@@ -92,8 +92,15 @@ export function SideNav() {
       {usageBar ? (
         <div
           className="vf-sidenav-usage"
+          data-tone={usageBar.tone}
           role="progressbar"
-          aria-label="Monthly packs remaining"
+          aria-label={
+            usageBar.tone === "usage"
+              ? "Fast hour usage"
+              : usageBar.label.endsWith("h left")
+                ? "Fast hours remaining"
+                : "Monthly packs remaining"
+          }
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={usageBar.pct}

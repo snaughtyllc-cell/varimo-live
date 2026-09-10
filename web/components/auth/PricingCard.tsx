@@ -72,7 +72,7 @@ export function PricingCard({ emailPrefill = "" }: { emailPrefill?: string }) {
         A typical talking-head Fast 20-pack uses about {packMinutes} minutes of Fast
         time. {hours} hours is on the order of {packs} packs — about {copiesLabel} copies —
         in a 30-day period. Heavier clips and a cold worker take longer. Typical, not a
-        promise.
+        promise. Analytics coming soon.
       </p>
       {!configured && (
         <div

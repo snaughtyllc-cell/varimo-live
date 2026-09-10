@@ -24,7 +24,6 @@ describe("PricingCard", () => {
         typical_fast20_packs: 540,
         typical_fast20_copies: 10800,
         overage_usd_per_hour: 0.75,
-        cogs_fast_usd_per_hour: 0.58,
       }],
     });
     vi.mocked(startBillingCheckout).mockResolvedValue({
@@ -44,6 +43,7 @@ describe("PricingCard", () => {
     expect(screen.getByText(/540 packs/i)).toBeInTheDocument();
     expect(screen.getByText(/10,800 copies/i)).toBeInTheDocument();
     expect(screen.queryByText(/we pay about/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Analytics coming soon/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Subscribe — \$200\/month/i })).toBeEnabled();
   });
 

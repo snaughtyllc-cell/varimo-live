@@ -161,28 +161,16 @@ describe("SideNav", () => {
     expect(screen.queryByRole("progressbar", { name: "Monthly packs remaining" })).toBeNull();
   });
 
-  it("shows a full Internal bar above email and logout", () => {
+  it("hides the remaining bar for Internal testers without Stripe", () => {
     me.data = {
       ...BASE,
       email: "jeff@example.com",
       is_admin: true,
       plan: "internal",
-      usage: {
-        uncapped: true,
-        used_variants: 24,
-        included_packs: 0,
-        included_variants: 0,
-        meter_line: null,
-        remaining_pct: 100,
-      },
+      usage: null,
     };
     render(<SideNav />);
-    const bar = screen.getByRole("progressbar", { name: "Monthly packs remaining" });
-    expect(bar.getAttribute("aria-valuenow")).toBe("100");
-    expect(screen.getByText("uncapped")).toBeInTheDocument();
-    expect(bar.compareDocumentPosition(screen.getByTitle("jeff@example.com"))).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
+    expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
   it("shows remaining packs from 100 to 0 above email and logout", () => {

@@ -438,7 +438,6 @@ def plan_public_dict(plan: Plan) -> dict[str, Any]:
         "price_usd": plan.price_usd,
         "included_fast_hours": plan.included_fast_hours,
         "overage_usd_per_hour": plan.overage_usd_per_hour,
-        "cogs_fast_usd_per_hour": plan.cogs_fast_usd_per_hour,
         "typical_fast20_minutes": TYPICAL_FAST20_MINUTES,
         "typical_fast20_packs": packs,
         "typical_fast20_copies": copies,

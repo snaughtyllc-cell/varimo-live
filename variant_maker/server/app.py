@@ -1300,23 +1300,21 @@ def create_app(
                 bundle.ws.usage_path(),
                 bundle.store.ok_copies_this_month(),
             )
-        remaining = (
-            100
-            if plan.uncapped
-            else remaining_pct(used, plan.included_variants)
-        )
-        usage = UsageOut(
-            month=month_key(),
-            used_variants=used,
-            included_packs=plan.included_packs,
-            included_variants=plan.included_variants,
-            extra_pack_price=plan.extra_pack_price,
-            uncapped=plan.uncapped,
-            hard_stop=plan.hard_stop,
-            meter_line=meter_line(plan, used),
-            label=plan.label,
-            remaining_pct=remaining,
-        )
+        remaining = remaining_pct(used, plan.included_variants)
+        usage = None
+        if not plan.uncapped:
+            usage = UsageOut(
+                month=month_key(),
+                used_variants=used,
+                included_packs=plan.included_packs,
+                included_variants=plan.included_variants,
+                extra_pack_price=plan.extra_pack_price,
+                uncapped=False,
+                hard_stop=plan.hard_stop,
+                meter_line=meter_line(plan, used),
+                label=plan.label,
+                remaining_pct=remaining,
+            )
         rec = tenants.get_billing(user.email) or tenants.get_billing_for_workspace(viewing_id)
         jobs = None
         ws_obj = None

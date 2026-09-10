@@ -46,7 +46,7 @@ export function LoginForm({
     setError(null);
     try {
       await passwordLogin(email, password);
-      window.location.assign("/");
+      window.location.assign("/studio");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed");
       setBusy(false);
@@ -60,7 +60,7 @@ export function LoginForm({
           ? "Payment received. Sign in with the email you used at checkout. First password sign-in creates your studio."
           : "Use the email from checkout or an invite. First password sign-in sets that password."}{" "}
         <Link href="/pricing" style={{ color: "var(--color-text)", fontWeight: 600 }}>
-          Agency pricing
+          View pricing
         </Link>
       </p>
       {message && (

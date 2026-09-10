@@ -5,7 +5,7 @@ import type { AuthMe } from "@/lib/types";
 const me: { data: AuthMe | undefined } = { data: undefined };
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/",
+  usePathname: () => "/studio",
 }));
 
 vi.mock("@/lib/useAuthMe", () => ({
@@ -100,7 +100,7 @@ describe("SideNav", () => {
     render(<SideNav />);
     expect(screen.queryByRole("link", { name: "Drops" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Workflows" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Studio" })[0]).toHaveAttribute("href", "/");
+    expect(screen.getAllByRole("link", { name: "Studio" })[0]).toHaveAttribute("href", "/studio");
     expect(screen.getAllByRole("link", { name: "Gallery" })[0]).toHaveAttribute("href", "/gallery");
     expect(screen.queryByRole("link", { name: "Analytics" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Drive" })[0]).toHaveAttribute(
@@ -114,7 +114,7 @@ describe("SideNav", () => {
     render(<SideNav />);
     expect(screen.queryByRole("link", { name: "Drops" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Studio" })[0]).toHaveAttribute("href", "/");
+    expect(screen.getAllByRole("link", { name: "Studio" })[0]).toHaveAttribute("href", "/studio");
     expect(screen.getAllByRole("link", { name: "Drive" })[0]).toHaveAttribute(
       "href",
       "/settings/drive",

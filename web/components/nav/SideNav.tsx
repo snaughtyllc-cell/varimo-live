@@ -12,7 +12,7 @@ import { VarimoWordmark } from "../brand/VarimoWordmark";
 
 /** Material Symbols Rounded ligature names, keyed by destination href. */
 const NAV_ICONS = {
-  "/": "movie_edit",
+  "/studio": "movie_edit",
   "/gallery": "photo_library",
   "/analytics": "monitoring",
   "/drops": "inventory_2",
@@ -44,7 +44,7 @@ export function SideNav() {
 
   return (
     <aside className="vf-sidenav" aria-label="Studio navigation">
-      <Link className="vf-sidenav-brand" href="/" aria-label="varimo Studio home">
+      <Link className="vf-sidenav-brand" href="/studio" aria-label="varimo Studio home">
         <VarimoWordmark className="vf-brand-wordmark" />
       </Link>
 

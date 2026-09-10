@@ -140,7 +140,7 @@ describe("Team page", () => {
     me.data = { ...OWNER, role: "member", is_admin: false };
     render(<TeamPage />);
     await waitFor(() => {
-      expect(replace).toHaveBeenCalledWith("/");
+      expect(replace).toHaveBeenCalledWith("/studio");
     });
   });
 

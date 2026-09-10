@@ -39,7 +39,7 @@ vi.mock("@/lib/api", () => ({
   cancelJob: vi.fn(),
 }));
 
-import StudioPage from "@/app/page";
+import StudioPage from "@/app/studio/page";
 
 const SOLO: AuthMe = {
   auth_required: true,

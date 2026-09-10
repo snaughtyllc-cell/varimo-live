@@ -14,8 +14,8 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 it("uses API amounts in every purchase CTA instead of the mockup price", async () => {
   render(<LandingClient />);
-  await waitFor(() => expect(screen.getAllByRole("button",{name:"Start Agency — $225/month"})).toHaveLength(4));
-  for (const button of screen.getAllByRole("button",{name:/Start Agency/})) expect(button).toBeEnabled();
+  await waitFor(() => expect(screen.getAllByRole("button",{name:"Start generating — $225/month"})).toHaveLength(4));
+  for (const button of screen.getAllByRole("button",{name:/Start generating/})) expect(button).toBeEnabled();
   expect(screen.getByText("95 Fast hours, then $0.80/hr")).toBeInTheDocument();
   expect(screen.queryByText(/\$200/)).not.toBeInTheDocument();
 });
@@ -32,7 +32,7 @@ it("shows pricing failure without inventing prices or signup confirmations", asy
   vi.mocked(listBillingPlans).mockRejectedValue(new Error("offline"));
   const {container} = render(<LandingClient />);
   expect(await screen.findByRole("status")).toHaveTextContent("Checkout is temporarily unavailable");
-  expect(container.querySelector("form")).toBeNull();
+  expect(container.querySelector("form")).toBeInTheDocument();
   expect(screen.queryByText(/\$200/)).not.toBeInTheDocument();
 });
 
@@ -40,7 +40,7 @@ it("starts Stripe checkout directly and prevents duplicate clicks", async () => 
   vi.mocked(startBillingCheckout).mockReturnValue(new Promise(() => {}));
   render(<LandingClient />);
   // All four plan CTAs share the same checkout operation.
-  const buttons = await screen.findAllByRole("button", {name:"Start Agency — $225/month"});
+  const buttons = await screen.findAllByRole("button", {name:"Start generating — $225/month"});
   fireEvent.click(buttons[0]);
   fireEvent.click(buttons[1]);
   expect(startBillingCheckout).toHaveBeenCalledExactlyOnceWith(undefined, "agency");
@@ -49,8 +49,8 @@ it("starts Stripe checkout directly and prevents duplicate clicks", async () => 
 it("recovers from checkout failure so visitors can retry", async () => {
   vi.mocked(startBillingCheckout).mockRejectedValue(new Error("gateway unavailable"));
   render(<LandingClient />);
-  const buttons = await screen.findAllByRole("button", {name:"Start Agency — $225/month"});
+  const buttons = await screen.findAllByRole("button", {name:"Start generating — $225/month"});
   fireEvent.click(buttons[0]);
   expect(await screen.findByRole("alert")).toHaveTextContent("Please try again");
-  expect(screen.getAllByRole("button", {name:"Start Agency — $225/month"})[0]).toBeEnabled();
+  expect(screen.getAllByRole("button", {name:"Start generating — $225/month"})[0]).toBeEnabled();
 });

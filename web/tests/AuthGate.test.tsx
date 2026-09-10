@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { AuthMe } from "@/lib/types";
 
 const nav = {
-  pathname: "/",
+  pathname: "/studio",
   replace: vi.fn(),
 };
 
@@ -67,14 +67,14 @@ const LOGGED_IN: AuthMe = {
 };
 
 beforeEach(() => {
-  nav.pathname = "/";
+  nav.pathname = "/studio";
   nav.replace.mockReset();
   me.data = undefined;
   me.isLoading = true;
 });
 
 describe("AuthGate", () => {
-  it.each(["/landing", "/pricing"])("renders %s while auth is unresolved", (pathname) => {
+  it.each(["/", "/landing", "/pricing"])("renders %s while auth is unresolved", (pathname) => {
     nav.pathname = pathname;
     render(<AuthGate><div>Public content</div></AuthGate>);
     expect(screen.getByText("Public content")).toBeInTheDocument();
@@ -193,7 +193,7 @@ describe("AuthGate", () => {
       </AuthGate>,
     );
     await waitFor(() => {
-      expect(nav.replace).toHaveBeenCalledWith("/");
+      expect(nav.replace).toHaveBeenCalledWith("/studio");
     });
   });
 });

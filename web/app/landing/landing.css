@@ -340,3 +340,24 @@
 .varimo-landing .checkout-error{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:50;width:min(540px,calc(100% - 32px));display:flex;align-items:center;gap:16px;background:#101112;color:white;padding:18px 20px;border-radius:14px;box-shadow:0 8px 30px #0003;font-size:14px;line-height:1.5}
 .varimo-landing .checkout-error button{margin-left:auto;min-width:44px;min-height:44px;background:transparent;color:white;border:0;font-size:24px}
 @media(max-width:600px){.varimo-landing main>section:first-child>div[data-anim]>button{width:100%;justify-content:center}.varimo-landing nav button{min-height:44px}}
+.varimo-landing .creator-notice{display:grid;grid-template-columns:1fr 1fr;gap:48px;scroll-margin-top:90px}
+.varimo-landing .creator-eyebrow{display:block;font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#6a6e70;margin-bottom:20px}
+.varimo-landing .creator-intro small{display:block;color:#6a6e70;font-size:12px;line-height:1.65}
+.varimo-landing .creator-form{display:flex;flex-direction:column;gap:16px}
+.varimo-landing .creator-form label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:600;line-height:1.6}
+.varimo-landing .creator-form label span{color:#6a6e70;font-weight:400;display:contents}
+.varimo-landing .creator-form input:not([type=checkbox]),.varimo-landing .creator-form select,.varimo-landing .creator-form textarea{width:100%;min-height:46px;padding:11px 14px;background:white;border:1px solid #c9c7c3;border-radius:10px;font:400 14px/1.5 var(--font-sora),sans-serif;color:#101112}
+.varimo-landing .creator-form input:focus-visible,.varimo-landing .creator-form select:focus-visible,.varimo-landing .creator-form textarea:focus-visible{outline:2px solid #087780;outline-offset:3px}
+.varimo-landing .creator-form .creator-consent{flex-direction:row;align-items:flex-start;font-size:12px;font-weight:400;color:#43494b}
+.varimo-landing .creator-consent input{width:18px;height:18px;margin-top:2px;accent-color:#087780;flex-shrink:0}
+.varimo-landing .creator-form button{min-height:48px;border:1px solid #101112;border-radius:999px;background:transparent;color:#101112;font-family:inherit;font-size:14px;font-weight:600}
+.varimo-landing .creator-form button:hover{background:#eeece7}
+.varimo-landing .creator-honeypot{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.varimo-landing .creator-form .creator-form-error{color:#a12923;font-size:13px;margin:0}
+.varimo-landing .creator-success{align-self:start;padding:28px;background:white;border:1px solid #a9d9d7;border-radius:16px}
+.varimo-landing .creator-success>span{display:inline-grid;place-items:center;width:36px;height:36px;background:#16c8d3;border-radius:50%;margin-bottom:20px}
+.varimo-landing .creator-success h3{font-size:22px;font-weight:600;letter-spacing:-.03em}
+@media(max-width:700px){.varimo-landing .creator-notice{grid-template-columns:minmax(0,1fr);gap:28px}}
+
+.varimo-landing .landing-signin { display: inline-flex; align-items: center; min-height: 44px; white-space: nowrap; font-size: 12px; margin-right: 16px; color: inherit; text-decoration: none; }
+@media(max-width:600px) { .varimo-landing .l1 { padding-inline: 16px; gap: 8px; } .varimo-landing .landing-signin { margin-right: 0; } .varimo-landing .l15 { padding-inline: 12px; } }

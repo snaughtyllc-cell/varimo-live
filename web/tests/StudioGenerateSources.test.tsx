@@ -34,7 +34,7 @@ vi.mock("@/components/studio/StudioLiveQueue", () => ({
   StudioLiveQueue: () => <div data-testid="live-queue" />,
 }));
 
-import StudioPage from "@/app/page";
+import StudioPage from "@/app/studio/page";
 
 const SOLO: AuthMe = {
   auth_required: true,

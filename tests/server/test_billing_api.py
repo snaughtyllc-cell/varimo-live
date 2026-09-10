@@ -176,7 +176,7 @@ def test_checkout_without_email_lets_stripe_collect_it(tmp_path):
     assert "client_reference_id" not in params
     assert params["metadata"] == {"plan": "agency"}
     assert params["subscription_data"]["metadata"] == {"plan": "agency"}
-    assert params["cancel_url"].endswith("/landing#pricing")
+    assert params["cancel_url"].endswith("/#pricing")
     assert "paid=1&session_id={CHECKOUT_SESSION_ID}" in params["success_url"]
     # The signed webhook provides the email collected by Stripe; no prefilled metadata needed.
     event = {"type": "checkout.session.completed", "data": {"object": {

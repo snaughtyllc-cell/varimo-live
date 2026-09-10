@@ -35,7 +35,7 @@ describe("LoginForm", () => {
       "/api/auth/google/start",
     );
     expect(screen.getByText(/checkout or an invite/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Agency pricing" })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("link", { name: "View pricing" })).toHaveAttribute("href", "/pricing");
   });
 
   it("posts email and password then goes home", async () => {
@@ -49,7 +49,7 @@ describe("LoginForm", () => {
       expect(passwordLogin).toHaveBeenCalledWith("va@x.com", "va-secret");
     });
     await waitFor(() => {
-      expect(assign).toHaveBeenCalledWith("/");
+      expect(assign).toHaveBeenCalledWith("/studio");
     });
     vi.unstubAllGlobals();
   });

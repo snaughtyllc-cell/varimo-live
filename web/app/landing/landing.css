@@ -361,3 +361,33 @@
 
 .varimo-landing .landing-signin { display: inline-flex; align-items: center; min-height: 44px; white-space: nowrap; font-size: 12px; margin-right: 16px; color: inherit; text-decoration: none; }
 @media(max-width:600px) { .varimo-landing .l1 { padding-inline: 16px; gap: 8px; } .varimo-landing .landing-signin { margin-right: 0; } .varimo-landing .l15 { padding-inline: 12px; } }
+
+.varimo-landing .time-calculator { max-width:1240px; margin:0 auto; padding:90px 32px 40px; scroll-margin-top:80px; }
+.varimo-landing .time-intro { max-width:780px; margin-bottom:40px; }
+.varimo-landing .time-intro h2 { font-size:clamp(32px,4vw,52px); line-height:1.12; letter-spacing:-.045em; margin:16px 0 22px; font-weight:600; text-wrap:balance; }
+.varimo-landing .time-intro p { color:#5B5F61; font-size:17px; line-height:1.7; }
+.varimo-landing .time-layout { display:grid; grid-template-columns:1fr 1fr; border:1px solid rgba(16,17,18,.14); border-radius:26px; overflow:hidden; }
+.varimo-landing .time-inputs { padding:36px; background:rgba(255,255,255,.55); }
+.varimo-landing .time-inputs h3 { margin:0 0 12px; font-size:21px; letter-spacing:-.025em; }
+.varimo-landing .time-inputs p { color:#5B5F61; font-size:13px; line-height:1.65; margin-bottom:24px; }
+.varimo-landing .time-inputs label { display:flex; align-items:center; justify-content:space-between; gap:20px; font-size:13px; line-height:1.5; margin:18px 0; }
+.varimo-landing .time-inputs input { width:112px; flex-shrink:0; min-height:48px; border:1px solid #C7C9C7; border-radius:12px; padding:10px 12px; background:#fff; color:#101112; font:inherit; font-size:16px; }
+.varimo-landing .time-inputs input:focus-visible { outline:2px solid #087F79; outline-offset:3px; }
+.varimo-landing .time-reset { min-height:44px; font-size:12px; text-decoration:underline; text-underline-offset:4px; }
+.varimo-landing .time-results { background:#101112; color:#F2F1EE; padding:36px; }
+.varimo-landing .time-results .creator-eyebrow { color:#BABFBE; }
+.varimo-landing .time-comparison { margin-top:28px; }
+.varimo-landing .time-comparison > div:first-child { display:flex; justify-content:space-between; gap:16px; font-size:13px; margin-bottom:10px; }
+.varimo-landing .time-track { height:10px; border-radius:20px; background:#303536; overflow:hidden; }
+.varimo-landing .time-track span { display:block; height:100%; background:#B9BEBC; border-radius:20px; }
+.varimo-landing .time-assisted .time-track span { background:#72DCD0; }
+.varimo-landing .time-total { margin:32px 0 16px; display:flex; flex-direction:column; gap:8px; }
+.varimo-landing .time-total strong { font-size:clamp(38px,4vw,56px); line-height:1.1; letter-spacing:-.04em; font-weight:600; }
+.varimo-landing .time-total span,.varimo-landing .time-value { font-size:14px; line-height:1.7; color:#D0D4D2; }
+.varimo-landing .time-breakeven { margin:24px 0 12px; padding-top:22px; border-top:1px solid #3A3E3D; font-size:14px; line-height:1.7; }
+.varimo-landing .time-plan-link { display:inline-flex; align-items:center; gap:24px; min-height:44px; color:#72DCD0; font-size:14px; }
+.varimo-landing .time-method { max-width:950px; margin:20px 0 0; font-size:12px; line-height:1.75; color:#5B5F61; }
+@media(max-width:700px) { .varimo-landing .time-calculator { padding:64px 20px 20px; } .varimo-landing .time-layout { grid-template-columns:1fr; } .varimo-landing .time-inputs,.varimo-landing .time-results { padding:26px 24px; } .varimo-landing .time-inputs label { gap:12px; } .varimo-landing .time-inputs input { width:90px; } }
+.varimo-landing .time-multiplier { display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:24px 0; margin:0 0 24px; border-top:1px solid #C7C9C7; border-bottom:1px solid #C7C9C7; font-size:17px; }
+.varimo-landing .time-multiplier strong { font-size:28px; letter-spacing:-.03em; }
+.varimo-landing .time-multiplier p { flex-basis:100%; margin:0; color:#5B5F61; font-size:13px; line-height:1.7; }

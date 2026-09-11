@@ -1,5 +1,5 @@
 export const CREATOR_BUDGETS = {
-  under_25: "Under $25 / month", "25_50": "$25–$50 / month",
+  "25_50": "$25–$50 / month",
   "50_100": "$50–$100 / month", "100_plus": "$100+ / month", unsure: "Not sure yet",
 } as const;
 export const CREATOR_VOLUMES = {

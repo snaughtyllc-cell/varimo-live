@@ -69,10 +69,7 @@ export function LandingClient() {
 <a className="l12" href="#pricing">{"Pricing"}</a>
 </div>
 <div className="l14"></div><a className="landing-signin" href="/login">Sign in</a>
-<button className="l15" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>
-<span className="l17"></span>
-<span >{"Start generating"}</span>
-</>}</button>
+<a className="l15" href="#pricing">Start generating</a>
 </nav>
 </header><main >
 <section className="l18" aria-labelledby="h-hero">
@@ -80,7 +77,7 @@ export function LandingClient() {
 <h1 className="l20" id="h-hero" data-anim="">{"Many originals"}<br />{"from one master"}</h1>
 <p className="l21" data-anim="">{"One source video in. A pack of real, original files out \u2014 ready for every account your team already posts from."}</p>
 <div className="l22" data-anim="">
-<button className="l23" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start generating \u2014 $200/month")}</>}</button>
+<a className="l23" href="#pricing">Start generating</a>
 <a className="l25" href="#receipts">{"See the receipts"}</a>
 </div>
 <div className="l27">
@@ -225,8 +222,8 @@ export function LandingClient() {
 </div>
 </section>
 <section className="l160">
-<button className="l161" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start generating \u2014 $200/month")}</>}</button>
-<span className="l163">{copy("$200/month \u00b7 90 Fast hours included \u00b7 no hard stop")}</span>
+<a className="l161" href="#pricing">Start generating</a>
+<span className="l163">One master. More originals. Ready for your team.</span>
 </section>
 <section className="l164" aria-labelledby="h-spread">
 <span className="l165">{"The spread"}</span>

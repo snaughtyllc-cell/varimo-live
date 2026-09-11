@@ -14,7 +14,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 it("uses API amounts in every purchase CTA instead of the mockup price", async () => {
   render(<LandingClient />);
-  await waitFor(() => expect(screen.getAllByRole("button",{name:"Start generating — $225/month"})).toHaveLength(4));
+  await waitFor(() => expect(screen.getAllByRole("button",{name:"Start generating — $225/month"})).toHaveLength(2));
   for (const button of screen.getAllByRole("button",{name:/Start generating/})) expect(button).toBeEnabled();
   expect(screen.getByText("95 Fast hours, then $0.80/hr")).toBeInTheDocument();
   expect(screen.queryByText(/\$200/)).not.toBeInTheDocument();
@@ -39,12 +39,12 @@ it("shows pricing failure without inventing prices or signup confirmations", asy
 it("starts Stripe checkout directly and prevents duplicate clicks", async () => {
   vi.mocked(startBillingCheckout).mockReturnValue(new Promise(() => {}));
   render(<LandingClient />);
-  // All four plan CTAs share the same checkout operation.
+  // Both purchase CTAs share the same checkout operation.
   const buttons = await screen.findAllByRole("button", {name:"Start generating — $225/month"});
   fireEvent.click(buttons[0]);
   fireEvent.click(buttons[1]);
   expect(startBillingCheckout).toHaveBeenCalledExactlyOnceWith(undefined, "agency");
-  expect(screen.getAllByRole("button", {name:"Opening Stripe…"})).toHaveLength(5);
+  expect(screen.getAllByRole("button", {name:"Opening Stripe…"})).toHaveLength(2);
 });
 it("recovers from checkout failure so visitors can retry", async () => {
   vi.mocked(startBillingCheckout).mockRejectedValue(new Error("gateway unavailable"));
@@ -53,4 +53,15 @@ it("recovers from checkout failure so visitors can retry", async () => {
   fireEvent.click(buttons[0]);
   expect(await screen.findByRole("alert")).toHaveTextContent("Please try again");
   expect(screen.getAllByRole("button", {name:"Start generating — $225/month"})[0]).toBeEnabled();
+});
+
+it("introduces the product before pricing and links early CTAs to the plan", async () => {
+ const {container}=render(<LandingClient />);
+ await screen.findAllByRole("button", {name:"Start generating — $225/month"});
+ expect(container.querySelector(".l18")).not.toHaveTextContent("$225");
+ const links=screen.getAllByRole("link",{name:"Start generating",exact:true});
+ expect(links).toHaveLength(3);
+ for(const link of links) expect(link).toHaveAttribute("href","#pricing");
+ expect(screen.queryByRole("option",{name:"Under $25 / month"})).not.toBeInTheDocument();
+ expect(screen.getByRole("option",{name:"$25–$50 / month"})).toBeInTheDocument();
 });

@@ -17,7 +17,7 @@ it("uses API amounts in every purchase CTA instead of the mockup price", async (
   await waitFor(() => expect(screen.getAllByRole("button",{name:"Start generating — $225/month"})).toHaveLength(2));
   for (const button of screen.getAllByRole("button",{name:/Start generating/})) expect(button).toBeEnabled();
   expect(screen.getByText("95 Fast hours, then $0.80/hr")).toBeInTheDocument();
-  expect(screen.queryByText(/\$200/)).not.toBeInTheDocument();
+  expect(screen.getByRole("region", {name:/One plan\./})).not.toHaveTextContent("$200");
 });
 it("keeps videos paused for reduced motion and lets users play both", async () => {
   render(<LandingClient />);
@@ -33,7 +33,7 @@ it("shows pricing failure without inventing prices or signup confirmations", asy
   const {container} = render(<LandingClient />);
   expect(await screen.findByRole("status")).toHaveTextContent("Checkout is temporarily unavailable");
   expect(container.querySelector("form")).toBeInTheDocument();
-  expect(screen.queryByText(/\$200/)).not.toBeInTheDocument();
+  expect(screen.getByRole("region", {name:/One plan\./})).not.toHaveTextContent("$200");
 });
 
 it("starts Stripe checkout directly and prevents duplicate clicks", async () => {

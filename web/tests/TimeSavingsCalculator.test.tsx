@@ -4,31 +4,33 @@ import { TimeSavingsCalculator } from '@/app/landing/TimeSavingsCalculator';
 import type { BillingPlan } from '@/lib/types';
 const plan = {price_usd:200} as BillingPlan;
 afterEach(cleanup);
-it('compares equal monthly output and values saved hands-on time', () => {
+it('separates human work from generation and values manual labor at three rates', () => {
  render(<TimeSavingsCalculator plan={plan} />);
- expect(screen.getByText('8.3 hours')).toBeInTheDocument();
+ expect(screen.getByLabelText('Manual minutes per additional output')).toHaveValue(4);
  expect(screen.getByText('1.7 hours')).toBeInTheDocument();
- expect(screen.getByText('6.7 hours')).toBeInTheDocument();
- expect(screen.getByText('$167/month')).toBeInTheDocument();
- expect(screen.getByText('8 hours saved')).toBeInTheDocument();
+ for(const cost of ['$133','$200','$333']) expect(screen.getByRole('cell',{name:cost,exact:true})).toBeInTheDocument();
+ expect(screen.queryByLabelText(/review/)).not.toBeInTheDocument();
+ expect(screen.queryByLabelText(/Value of your time/)).not.toBeInTheDocument();
 });
-it('rounds partial packs up and responds to volume and live pricing', () => {
+it('rounds partial generation packs up and uses live pricing', () => {
  render(<TimeSavingsCalculator plan={{...plan,price_usd:250}} />);
  fireEvent.change(screen.getByLabelText('Variants needed per month'),{target:{value:'21'}});
  expect(screen.getByText('0.3 hours')).toBeInTheDocument();
- expect(screen.getByText('10 hours saved')).toBeInTheDocument();
+ expect(screen.getByText('$250/month')).toBeInTheDocument();
 });
-it('shows unfavorable outcomes instead of manufacturing savings', () => {
+it('does not subtract background generation from human labor costs', () => {
  render(<TimeSavingsCalculator plan={plan} />);
- fireEvent.change(screen.getByLabelText('Varimo setup + review minutes per 20-pack'),{target:{value:'200'}});
- expect(screen.getByText('more hands-on time with these inputs')).toBeInTheDocument();
- expect(screen.queryByText(/That time is worth/)).not.toBeInTheDocument();
+ fireEvent.change(screen.getByLabelText('Generation minutes per 20-pack'),{target:{value:'200'}});
+ expect(screen.getByText('33.3 hours')).toBeInTheDocument();
+ expect(screen.getByRole('cell',{name:'$333',exact:true})).toBeInTheDocument();
 });
-it('handles blank inputs and missing pricing without invalid calculations', () => {
+it('handles blank inputs, zero generation time and unavailable pricing', () => {
  render(<TimeSavingsCalculator plan={null} />);
  expect(screen.getByText(/Live plan pricing is unavailable/)).toBeInTheDocument();
- fireEvent.change(screen.getByLabelText('Value of your time per hour (USD)'),{target:{value:''}});
+ fireEvent.change(screen.getByLabelText('Generation minutes per 20-pack'),{target:{value:''}});
+ expect(screen.getByText(/Enter positive values/)).toBeInTheDocument();
+ fireEvent.change(screen.getByLabelText('Generation minutes per 20-pack'),{target:{value:'0'}});
  expect(screen.getByText(/Enter positive values/)).toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:'Reset example'}));
- expect(screen.getByText('6.7 hours')).toBeInTheDocument();
+ expect(screen.getByText('1.7 hours')).toBeInTheDocument();
 });

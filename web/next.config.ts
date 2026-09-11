@@ -5,6 +5,8 @@ const target = process.env.API_PROXY_TARGET || "http://localhost:8000";
 const nextConfig: NextConfig = {
   // Unit-test fixtures are checked/run separately; compile the shipped app here.
   typescript: { tsconfigPath: "tsconfig.build.json" },
+  // Backstop: Next's rewrite proxy defaults to 30s and 499s Regenerates.
+  experimental: { proxyTimeout: 600_000 },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${target}/api/:path*` }];
   },

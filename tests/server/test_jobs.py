@@ -208,8 +208,71 @@ def test_regenerate_appends_variants(tmp_path):
     result = store.regenerate(src.source_id, 2)
     assert result is not None
     assert result is src
+    store.wait(job.job_id, timeout=5)
     assert len(src.variants) == 4
     assert [v.index for v in src.variants] == [1, 2, 3, 4]
+
+
+def test_regenerate_returns_before_runner_finishes(tmp_path):
+    runner = _PausingRunner()
+    store = JobStore(Workspace(str(tmp_path)), runner)
+    job = store.create_job([("a.mp4", b"x")], count=2)
+    runner.gate.set()
+    store.wait(job.job_id, timeout=5)
+    runner.gate.clear()
+    runner.v1_done.clear()
+    src = store.get(job.job_id).sources[0]
+    started = time.time()
+    result = store.regenerate(src.source_id, 2)
+    assert time.time() - started < 0.5
+    assert result is src
+    assert job.state == "running"
+    assert src.requested == 4
+    assert runner.v1_done.wait(timeout=5)
+    assert any(e.index == 3 for e in job.events)
+    runner.gate.set()
+    store.wait(job.job_id, timeout=5)
+    assert job.state == "done"
+    assert len(src.variants) == 4
+
+
+def test_hydrate_resumes_runpod_id_even_when_source_looks_finished(tmp_path):
+    class _ResumeRunner(FakeRunner):
+        def __init__(self) -> None:
+            super().__init__({})
+            self.resumed: list[str] = []
+
+        def resume_run(self, source_path, *, count, out_dir, source_id, on_event,
+                       allow_creative_escalate=True, quality_mode="fast",
+                       cancel_token=None, runpod_job_id: str = ""):
+            self.resumed.append(runpod_job_id)
+            return self.run(
+                source_path, count=count, out_dir=out_dir, source_id=source_id,
+                on_event=on_event, allow_creative_escalate=allow_creative_escalate,
+                quality_mode=quality_mode, cancel_token=cancel_token,
+            )
+
+    store = _store(tmp_path)
+    job = store.create_job([("clip.mp4", b"x")], count=2)
+    store.wait(job.job_id, timeout=5)
+    meta = os.path.join(str(tmp_path), "jobs", job.job_id, "job.json")
+    with open(meta, encoding="utf-8") as f:
+        data = json.load(f)
+    data["state"] = "running"
+    data["sources"][0]["runpod_job_id"] = "rp-extra"
+    data["sources"][0]["requested"] = 4
+    with open(meta, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+    runner = _ResumeRunner()
+    store2 = JobStore(Workspace(str(tmp_path)), runner)
+    assert store2.hydrate_from_disk() == 1
+    assert store2.wait(job.job_id, timeout=5)
+    restored = store2.get(job.job_id)
+    assert runner.resumed == ["rp-extra"]
+    assert restored is not None
+    assert len(restored.sources[0].variants) == 4
+    assert [v.index for v in restored.sources[0].variants] == [1, 2, 3, 4]
 
 
 def test_create_job_passes_quality_mode_hq_to_runner(tmp_path):
@@ -228,6 +291,7 @@ def test_regenerate_keeps_job_quality_mode(tmp_path):
     store.wait(job.job_id, timeout=5)
     src = store.get(job.job_id).sources[0]
     store.regenerate(src.source_id, 1)
+    store.wait(job.job_id, timeout=5)
     assert runner.last_quality_mode == "hq"
 
 

@@ -9,7 +9,7 @@ import threading
 import uuid
 import zipfile
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 from variant_maker.normalize import maybe_normalize_upload
@@ -747,7 +747,9 @@ class JobStore:
                     raise JobCancelled()
                 if skip_finished:
                     self._pull_missing_outputs(source.source_id)
-                if skip_finished and _source_finished(
+                resume = getattr(self._runner, "resume_run", None)
+                can_resume = skip_finished and callable(resume) and bool(source.runpod_job_id)
+                if skip_finished and not can_resume and _source_finished(
                     source, ws=self._ws, job_id=job.job_id,
                 ):
                     continue
@@ -759,8 +761,7 @@ class JobStore:
                     self._persist(job)
                 in_path = proxied
                 out_dir = self._ws.source_out_dir(job.job_id, source.source_id)
-                resume = getattr(self._runner, "resume_run", None)
-                if skip_finished and callable(resume) and source.runpod_job_id:
+                if can_resume:
                     try:
                         result = resume(
                             in_path, count=job.count, out_dir=out_dir,
@@ -808,7 +809,18 @@ class JobStore:
                     for v in result.variants
                 ]
                 if new_variants:
-                    source.variants = new_variants
+                    extra_batch = (
+                        skip_finished
+                        and source.variants
+                        and int(source.requested or 0) > int(job.count or 0)
+                    )
+                    if extra_batch:
+                        start = max((v.index for v in source.variants), default=0)
+                        for extra in new_variants:
+                            extra.index = start + extra.index
+                        source.variants.extend(new_variants)
+                    else:
+                        source.variants = new_variants
                     self._record_ok_variants(new_variants)
                 elif source.variants:
                     # RunPod /stream often drops the final result chunk. Progress
@@ -1098,41 +1110,98 @@ class JobStore:
         loc = self._locate(source_id)
         if loc is None:
             return None
-        self._assert_quota(int(n))
+        copies = int(n)
+        if copies < 1:
+            return loc[1]
+        self._assert_quota(copies)
         job_id, source = loc
-        out_dir = self._ws.source_out_dir(job_id, source_id)
+        job = self._jobs.get(job_id)
+        if job is None:
+            return None
+        start = max((v.index for v in source.variants), default=0)
+        source.requested = max(int(source.requested), start + copies)
+        token = CancelToken()
+        with self._lock:
+            self._cancel[job_id] = token
+            self._done[job_id] = threading.Event()
+        job.state = "running"
+        job.error = None
+        self._persist(job)
+        threading.Thread(
+            target=self._regenerate_source,
+            args=(job, source, copies, start, token),
+            name=f"regen-{job_id}-{source_id}",
+            daemon=True,
+        ).start()
+        return source
+
+    def _regenerate_source(
+        self, job: Job, source: JobSource, n: int, start: int, token: CancelToken,
+    ) -> None:
         # NOTE — manifest gap (latent, no fix needed yet):
         # runner.run writes a new manifest.json into out_dir containing ONLY the newly-rendered
         # batch, clobbering the original source manifest. source.variants (in-memory) is the
         # authoritative variant record for the API and is unaffected. Any future route that
         # serves manifest.json from disk must merge/preserve the original manifest first.
-        start = max((v.index for v in source.variants), default=0)
-        job = self._jobs.get(job_id)
-        allow_creative_escalate = job.allow_creative_escalate if job else True
-        quality_mode = job.quality_mode if job else "fast"
-        result = self._runner.run(
-            self._ws.source_in_path(job_id, source_id, source.filename),
-            count=n, out_dir=out_dir, source_id=source_id, on_event=lambda e: None,
-            allow_creative_escalate=allow_creative_escalate,
-            quality_mode=quality_mode,
-        )
-        before = len(source.variants)
-        for v in result.variants:
-            source.variants.append(VariantInfo(
-                source_id=source_id, index=start + v.index, filename=v.filename,
-                status=v.status, quality=v.quality,
-                uniqueness=v.uniqueness, uniqueness_status=v.uniqueness_status,
-                uniqueness_metric=v.uniqueness_metric, uniqueness_target=v.uniqueness_target,
-                preset_used=v.preset_used, strength_final=v.strength_final,
-                escalated=v.escalated, platform_result=v.platform_result,
-                look_status=getattr(v, "look_status", None),
-                look_mae=getattr(v, "look_mae", None),
-                look_src=getattr(v, "look_src", None),
-                look_var=getattr(v, "look_var", None),
-                caption=_caption_for(source, start + v.index),
-            ))
-        self._record_ok_variants(source.variants[before:])
-        return source
+        try:
+            def on_event(e: VariantEvent) -> None:
+                mapped = replace(e, index=start + e.index)
+                job.events.append(mapped)
+                if token.runpod_job_id:
+                    source.runpod_job_id = token.runpod_job_id
+                if mapped.state in ("done", "looking") or token.runpod_job_id:
+                    self._persist(job)
+
+            result = self._runner.run(
+                self._ws.source_in_path(job.job_id, source.source_id, source.filename),
+                count=n,
+                out_dir=self._ws.source_out_dir(job.job_id, source.source_id),
+                source_id=source.source_id,
+                on_event=on_event,
+                allow_creative_escalate=job.allow_creative_escalate,
+                quality_mode=job.quality_mode,
+                cancel_token=token,
+            )
+            before = len(source.variants)
+            for v in result.variants:
+                source.variants.append(VariantInfo(
+                    source_id=source.source_id, index=start + v.index, filename=v.filename,
+                    status=v.status, quality=v.quality,
+                    uniqueness=v.uniqueness, uniqueness_status=v.uniqueness_status,
+                    uniqueness_metric=v.uniqueness_metric, uniqueness_target=v.uniqueness_target,
+                    preset_used=v.preset_used, strength_final=v.strength_final,
+                    escalated=v.escalated, platform_result=v.platform_result,
+                    look_status=getattr(v, "look_status", None),
+                    look_mae=getattr(v, "look_mae", None),
+                    look_src=getattr(v, "look_src", None),
+                    look_var=getattr(v, "look_var", None),
+                    caption=_caption_for(source, start + v.index),
+                ))
+            self._record_ok_variants(source.variants[before:])
+            source.runpod_job_id = None
+            self._persist(job)
+        except JobCancelled:
+            job.error = USER_CANCEL_MSG
+        except Exception as exc:
+            if token.is_set():
+                job.error = USER_CANCEL_MSG
+            else:
+                job.error = _public_job_error(exc)
+                print(
+                    f"job {job.job_id} regenerate {source.source_id} failed: "
+                    f"{type(exc).__name__}: {exc}",
+                    flush=True,
+                )
+        finally:
+            if job.job_id not in self._jobs:
+                return
+            job.state = "cancelled" if token.is_set() else "done"
+            self._refresh_copy_error(job)
+            self._record_fast_hours(job)
+            self._persist(job)
+            ev = self._done.get(job.job_id)
+            if ev is not None:
+                ev.set()
 
     def set_platform_result(self, source_id: str, index: int, result: str) -> VariantInfo | None:
         if result not in PLATFORM_RESULTS:

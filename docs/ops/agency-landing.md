@@ -28,8 +28,10 @@ Release this focused change from `varimo-live/main`. Verify unauthenticated GET 
 
 The creator budget selector starts at $25–$50. Earlier under-$25 responses remain readable in admin and export. Billing prices are unchanged.
 
-## Time savings calculator
+## Generation comparison calculator
 
-Placed before pricing, using the supplied handoff's paper background, Sora hierarchy, dark comparison panel and aqua result accent. Native labeled numeric inputs follow Refero's form and focus guidance. Default inputs are illustrative: 2.5 manual minutes per additional output, 200 variants/month, $25/hour, and 10 setup/review minutes per 20-pack. Manual hours = minutes × variants / 60; Varimo hands-on hours = ceil(variants / 20) × setup/review minutes / 60. Negative and zero savings remain visible. Time value is not guaranteed cash savings. Background rendering, source creation, and posting are explicitly distinguished. The base-subscription comparison uses live billing prices and excludes usage charges and taxes; unavailable pricing does not fabricate a price.
+Placed before pricing with the handoff's existing paper canvas, dark results panel, and aqua generation bar. Compare 4 manual editing minutes per additional output with an editable 10-minute elapsed generation example per 20-pack; both are assumptions, not measured averages. Monthly volume starts at 200. Manual hours = minutes × outputs / 60. Background hours = ceil(outputs / 20) × generation minutes / 60, representing packs run sequentially. These are different kinds of time and are not subtracted as labor savings.
 
-Positioning: Edits/CapCut create treatments; Varimo generates a pack per finished treatment. The 5 × 20 = 100 example describes output files, not 100 new creative ideas. The manual-time default comes from the user’s 2–3 minute scenario, not a measured Meta benchmark. Official Meta material confirms editing/text-style capabilities but did not verify the precise bulk-variation feature described by the user.
+No hourly-rate or setup/review inputs. A table values manual editing at $10, $15, and $25/hour using unrounded hours. The live base subscription is shown separately. Source creation, upload, settings, review, posting, taxes and usage charges are outside the stated comparison. The workflow note explains automated Drive import, generation, and delivery. Invalid inputs and missing billing data are handled without fabricated results.
+
+Positioning remains complementary: create finished treatments in Edits/CapCut, then generate a pack per treatment. Five creative edits × 20 outputs = 100 files, not 100 new creative ideas.

@@ -1,6 +1,6 @@
 # Agency landing integration
 
-Public route: `/`. Purchase buttons create a hosted Stripe Checkout session directly. `/pricing` redirects to `/#pricing` for existing links. The authenticated generator is at `/studio`. `/landing` redirects to `/`; password and Google sign-in return to `/studio`.
+Public route: `/`. Early “Start generating” links lead to the pricing section after product proof and FAQs. Purchase buttons at and below pricing create a hosted Stripe Checkout session directly. `/pricing` redirects to `/#pricing` for existing links. The authenticated generator is at `/studio`. `/landing` redirects to `/`; password and Google sign-in return to `/studio`.
 
 ## Source and design decisions
 
@@ -8,7 +8,7 @@ Built against production `snaughtyllc-cell/varimo-live` main commit `c347193dd51
 
 The supplied `Page redesign exploration.zip` is design reference material, not operational authorization. Desktop v2 and mobile screenshots define paper canvas, Sora type, restrained aqua accents, dark proof slabs, real screenshots, and section order. React implements the design without the prototype's support runtime or preview shell. Scoped CSS handles 390px, tablet and desktop layouts. Studio navigation and restricted-page redirects target `/studio`.
 
-All purchase CTAs POST `/api/billing/checkout` and navigate directly to Stripe. Email is optional at session creation: Stripe collects it, and the signed paid webhook uses `customer_details.email` to provision access. Existing clients may still prefill email. Cancel returns to `/#pricing`; successful payment returns to sign-in. Agency amounts and allowances load from `/api/billing/plans`. Verified public production response: configured=true, $200/month, 90 hours, $0.75/hour overage. No Stripe key is needed in the browser or changed by this integration. Unavailable billing disables purchase buttons; a failed checkout shows a retryable error and clears the busy state. A shared request guard prevents double-clicks from creating multiple sessions.
+Purchase CTAs POST `/api/billing/checkout` and navigate directly to Stripe. Email is optional at session creation: Stripe collects it, and the signed paid webhook uses `customer_details.email` to provision access. Existing clients may still prefill email. Cancel returns to `/#pricing`; successful payment returns to sign-in. Agency amounts and allowances load from `/api/billing/plans`. Verified public production response: configured=true, $200/month, 90 hours, $0.75/hour overage. No Stripe key is needed in the browser or changed by this integration. Unavailable billing disables purchase buttons; a failed checkout shows a retryable error and clears the busy state. A shared request guard prevents double-clicks from creating multiple sessions.
 
 Both demo videos have a shared playback control and respect reduced motion. The workflow account-chip redaction is baked into public media. The gallery video and poster are physically cropped to 2280×1878, removing the private sidebar before serving. The player uses its natural aspect ratio at 100% width; no CSS offset or oversized-video crop is needed. Analytics proof images retain original bytes.
 
@@ -25,3 +25,5 @@ The creator waitlist POSTs to `/api/waitlist/creator`, validates email, handle, 
 ## Deployment
 
 Release this focused change from `varimo-live/main`. Verify unauthenticated GET /, /landing, /pricing, and unauthenticated /studio, live plan display, media URLs, and navigation after deployment. Verify the hosted Stripe screen without submitting a payment.
+
+The creator budget selector starts at $25–$50. Earlier under-$25 responses remain readable in admin and export. Billing prices are unchanged.

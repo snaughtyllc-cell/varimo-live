@@ -15,13 +15,13 @@ export function CreatorWaitlistAdmin() {
     })();
     return () => { active = false; };
   }, [offset, revision]);
-  const label = (options: Record<string,string>, value:string) => options[value] ?? value;
+  const label = (options: Record<string,string>, value:string) => options[value] ?? (value === "under_25" ? "Under $25 / month (earlier response)" : value);
   return <section className="creator-admin" aria-labelledby="creator-admin-heading">
     <header><div><h2 id="creator-admin-heading">Creator waitlist</h2><p>{data ? `${data.total} unique signups` : "Loading creator demand…"}</p></div><div><button onClick={() => setRevision(v=>v+1)}>Refresh</button> <a href="/api/admin/creator-waitlist/export" download>Export CSV</a></div></header>
     {error && <p role="alert">{error}</p>}
     {data && <>
       <div className="creator-admin-summaries">
-        <div><h3>Comfortable monthly budget</h3>{Object.entries(CREATOR_BUDGETS).map(([key,text])=><p key={key}><span>{text}</span><strong>{data.budgets[key] ?? 0}</strong></p>)}</div>
+        <div><h3>Comfortable monthly budget</h3>{Object.entries({under_25: "Under $25 / month (earlier responses)", ...CREATOR_BUDGETS}).map(([key,text])=><p key={key}><span>{text}</span><strong>{data.budgets[key] ?? 0}</strong></p>)}</div>
         <div><h3>Expected variants per month</h3>{Object.entries(CREATOR_VOLUMES).map(([key,text])=><p key={key}><span>{text}</span><strong>{data.usage[key] ?? 0}</strong></p>)}</div>
       </div>
       {data.total === 0 ? <p>No signups yet. The public waitlist is ready to collect interest.</p> : <><div className="creator-admin-table"><table><thead><tr>{["Joined","Email","Instagram","Monthly variants","Monthly budget","Use case"].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{data.items.map(row=><tr key={row.email}><td>{row.created_at.slice(0,10)}</td><td>{row.email}</td><td>{row.instagram ? `@${row.instagram}` : "—"}</td><td>{label(CREATOR_VOLUMES,row.monthly_variants)}</td><td>{label(CREATOR_BUDGETS,row.monthly_budget)}</td><td>{row.use_case || "—"}</td></tr>)}</tbody></table></div>

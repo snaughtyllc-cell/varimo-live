@@ -300,7 +300,7 @@ export function LandingClient() {
 <span >{copy("What happens when I use up my 90 hours?")}</span>
 <span className="l222" aria-hidden="true">{"+"}</span>
 </summary>
-<p className="l223">{copy("Nothing stops. Extra Fast time bills at $0.75/hour for the rest of the month. No hard cutoff, no throttle, and no pretending it is unlimited.")}</p>
+<p className="l223">{copy("Nothing stops. Extra Fast time bills at $0.75/hour for the rest of the month. Keep generating beyond your included hours—no hard stop.")}</p>
 </details>
 <details className="l224">
 <summary className="l225">
@@ -360,7 +360,7 @@ export function LandingClient() {
 <span className="l260">{"/ month"}</span>
 </div>
 <span className="l261">{"Billed monthly. USD."}</span>
-<p className="l262">{copy("90 Fast hours included each month. Then $0.75/hr. No hard stop \u2014 and not \"unlimited.\"")}</p>
+<p className="l262">{copy("90 Fast hours included each month. Then $0.75/hr. Keep generating beyond your included hours—no hard stop.")}</p>
 <div className="l263">
 <span className="l264">{copy("A 20-pack takes ~10 min of Fast time. 90 hours \u2248 ")}<strong className="l265">{copy("540 packs (~10,800 copies)")}</strong>{" a month."}</span>
 <span className="l266">{"Typical, not a guarantee. Heavier clips take longer."}</span>

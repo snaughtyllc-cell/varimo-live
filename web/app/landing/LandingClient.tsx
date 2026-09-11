@@ -3,6 +3,7 @@
 /* Adapted from the supplied Agency v2 desktop and mobile handoff. */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { TimeSavingsCalculator } from "./TimeSavingsCalculator";
 import { CreatorWaitlistForm } from "./CreatorWaitlistForm";
 import { listBillingPlans, startBillingCheckout } from "@/lib/api";
 import type { BillingPlan } from "@/lib/types";
@@ -346,6 +347,7 @@ export function LandingClient() {
 </details>
 </div>
 </section>
+<TimeSavingsCalculator plan={plan} />
 <section className="l249" id="pricing" aria-labelledby="h-pricing">
 <span className="l250">{"Pricing"}</span>
 <h2 className="l251" id="h-pricing">{"One plan."}<br /><span className="l252">{"Built for the roster."}</span></h2>

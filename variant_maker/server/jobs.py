@@ -43,6 +43,12 @@ COPY_FAILED_MSG = (
 # Haiku can retry once at 45s. Join after encode so a hung caption call cannot
 # keep the job "running" forever, but still attach copy when it lands.
 CAPTION_JOIN_SEC = 180.0
+# Quality-floor encodes still wrote an mp4. Hide uniqueness_fail / corrupt only.
+SHIPPED_STATUSES = frozenset({"ok", "best_effort"})
+
+
+def is_shipped(status: str | None) -> bool:
+    return status in SHIPPED_STATUSES
 
 
 def variant_on_disk(ws: Workspace, job_id: str, source_id: str, filename: str) -> bool:
@@ -54,7 +60,7 @@ def variant_on_disk(ws: Workspace, job_id: str, source_id: str, filename: str) -
 def missing_ok_filenames(source: JobSource, ws: Workspace, job_id: str) -> list[str]:
     missing: list[str] = []
     for v in source.variants:
-        if v.status != "ok" or not v.filename:
+        if not is_shipped(v.status) or not v.filename:
             continue
         if not variant_on_disk(ws, job_id, source.source_id, v.filename):
             missing.append(v.filename)
@@ -64,7 +70,7 @@ def missing_ok_filenames(source: JobSource, ws: Workspace, job_id: str) -> list[
 def source_files_ready(source: JobSource, ws: Workspace, job_id: str) -> int:
     return sum(
         1 for v in source.variants
-        if v.status == "ok" and v.filename
+        if is_shipped(v.status) and v.filename
         and variant_on_disk(ws, job_id, source.source_id, v.filename)
     )
 
@@ -117,7 +123,8 @@ class JobSource:
 
     @property
     def delivered(self) -> int:
-        return sum(1 for v in self.variants if v.status == "ok")
+        # best_effort still wrote a file — hide uniqueness_fail/corrupt only.
+        return sum(1 for v in self.variants if v.status in SHIPPED_STATUSES)
 
     @property
     def shortfall(self) -> int:
@@ -1066,7 +1073,7 @@ class JobStore:
         if loc is None:
             return
         _, source = loc
-        names = [v.filename for v in source.variants if v.status == "ok" and v.filename]
+        names = [v.filename for v in source.variants if is_shipped(v.status) and v.filename]
         for v in source.variants:
             for n in (v.look_src, v.look_var):
                 if n:
@@ -1350,7 +1357,7 @@ class JobStore:
         self._pull_missing_outputs(source_id)
         members: list[tuple[str, str]] = []
         for v in source.variants:
-            if v.status != "ok" or not v.filename:
+            if not is_shipped(v.status) or not v.filename:
                 continue
             fpath = self.find_variant(source_id, v.filename)
             if fpath:

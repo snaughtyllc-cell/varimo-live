@@ -1,5 +1,5 @@
 import { isFileReady } from "./gallery";
-import type { SourceOut } from "./types";
+import { isShippedStatus, type SourceOut } from "./types";
 
 export type ShareNavigatorLike = {
   canShare?: (data?: { files?: File[] }) => boolean;
@@ -184,7 +184,7 @@ export function isShareableVideo<T extends ShareableVariant>(
   variant: T,
 ): variant is T & { file_url: string } {
   if (!isFileReady(variant)) return false;
-  if (variant.status != null && variant.status !== "ok") return false;
+  if (variant.status != null && !isShippedStatus(variant.status)) return false;
   return Boolean(variant.file_url);
 }
 

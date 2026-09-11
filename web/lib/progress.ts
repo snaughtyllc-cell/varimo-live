@@ -1,4 +1,4 @@
-import { VariantEvent, Quality, PlatformResult } from "./types";
+import { VariantEvent, Quality, PlatformResult, isShippedStatus } from "./types";
 import { variantUrl } from "./api";
 
 export type InFlightState = "rendering" | "checking" | "looking" | "rerolling" | "uniqueness" | "escalating";
@@ -135,7 +135,7 @@ export function reduceEvent(run: RunProgress, ev: VariantEvent | { state: "job-d
         look_var_url: lookStillUrl(e.source_id, e.look_var, e.look_var_url) || null,
       }];
       next.done = prev.done + 1;
-      if (e.status === "ok") next.delivered = prev.delivered + 1;
+      if (isShippedStatus(e.status)) next.delivered = prev.delivered + 1;
       dropFlight(next, e.index);
     }
   }

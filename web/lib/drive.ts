@@ -1,4 +1,4 @@
-import type { Destination, DriveStatus, ExportVariantRef, SourceOut } from "./types";
+import { isShippedStatus, type Destination, type DriveStatus, type ExportVariantRef, type SourceOut } from "./types";
 
 function captionOf(v: { caption?: string | null }): string | null | undefined {
   return v.caption;
@@ -8,7 +8,7 @@ export function okVariantRefs(sources: SourceOut[], selected: Set<string>): Expo
   const refs: ExportVariantRef[] = [];
   for (const source of sources) {
     for (const variant of source.variants) {
-      if (variant.status !== "ok") continue;
+      if (!isShippedStatus(variant.status)) continue;
       if (variant.file_ready === false) continue;
       if (!selected.has(`${source.source_id}:${variant.index}`)) continue;
       const caption = captionOf(variant)?.trim();
@@ -26,7 +26,7 @@ export function okVariantKeys(sources: SourceOut[]): string[] {
   const keys: string[] = [];
   for (const source of sources) {
     for (const variant of source.variants) {
-      if (variant.status !== "ok") continue;
+      if (!isShippedStatus(variant.status)) continue;
       if (variant.file_ready === false) continue;
       keys.push(`${source.source_id}:${variant.index}`);
     }

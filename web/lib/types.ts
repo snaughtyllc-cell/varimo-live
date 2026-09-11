@@ -23,6 +23,10 @@ export interface Quality {
   vmaf_scope?: string | null;
 }
 export type Status = "ok" | "best_effort" | "corrupt" | "uniqueness_fail";
+/** Quality-floor encodes still wrote a file. Hide uniqueness_fail / corrupt only. */
+export function isShippedStatus(status?: string | null): boolean {
+  return status === "ok" || status === "best_effort";
+}
 export type PlatformResult = "passed" | "duplicate_reject" | "flagged" | "unknown";
 export interface VariantOut {
   index: number; filename: string; status: Status; quality: Quality; file_url: string;

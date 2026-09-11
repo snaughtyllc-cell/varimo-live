@@ -40,6 +40,8 @@ def _store_with_ok(tmp_path):
 def test_build_export_files_filters_non_ok(tmp_path):
     store, ws = _store_with_ok(tmp_path)
     job = store.get("j1")
+    be_path = Path(ws.source_out_dir("j1", "s1")) / "v02.mp4"
+    be_path.write_bytes(b"best-effort-bytes")
     job.sources[0].variants.append(VariantInfo(
         source_id="s1", index=2, filename="v02.mp4", status="best_effort", quality={},
     ))
@@ -47,7 +49,7 @@ def test_build_export_files_filters_non_ok(tmp_path):
         source_id="s1", index=3, filename="v03.mp4", status="uniqueness_fail", quality={"bits": 12},
     ))
     files = build_export_files(store, [VariantRef("s1", 1), VariantRef("s1", 2), VariantRef("s1", 3)])
-    assert len(files) == 1 and files[0].filename == "v01.mp4"
+    assert [f.filename for f in files] == ["v01.mp4", "v02.mp4"]
 
 
 def test_build_export_files_uses_caption_as_drive_name(tmp_path):

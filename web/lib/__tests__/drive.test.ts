@@ -23,9 +23,12 @@ const sources: SourceOut[] = [{
 }];
 
 describe("okVariantRefs", () => {
-  it("keeps only ok selected", () => {
+  it("keeps shipped selected (ok and best_effort)", () => {
     const sel = new Set(["s1:1", "s1:2"]);
-    expect(okVariantRefs(sources, sel)).toEqual([{ source_id: "s1", index: 1 }]);
+    expect(okVariantRefs(sources, sel)).toEqual([
+      { source_id: "s1", index: 1 },
+      { source_id: "s1", index: 2 },
+    ]);
   });
 
   it("includes caption when the variant has one", () => {
@@ -63,7 +66,7 @@ describe("select all ok variants", () => {
 
   it("selects every ok variant and deselects them", () => {
     const all = withOkSelection(new Set(), sources, true);
-    expect([...all]).toEqual(["s1:1"]);
+    expect([...all]).toEqual(["s1:1", "s1:2"]);
     expect(selectionHasAllOk(all, sources)).toBe(true);
     expect([...withOkSelection(all, sources, false)]).toEqual([]);
   });

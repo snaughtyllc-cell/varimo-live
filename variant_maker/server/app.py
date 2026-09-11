@@ -127,6 +127,7 @@ from .jobs import (
     Job,
     JobSource,
     JobStore,
+    is_shipped,
     source_copy_status,
     source_files_ready,
     variant_on_disk,
@@ -316,7 +317,7 @@ def _look_preview(job: Job | None, source_id: str) -> LookPreviewOut | None:
 
 def _source_out(s: JobSource, *, ok_only: bool, job: Job | None = None,
                 ws: Workspace | None = None) -> SourceOut:
-    variants = [v for v in s.variants if (v.status == "ok" or not ok_only)]
+    variants = [v for v in s.variants if (is_shipped(v.status) or not ok_only)]
     failed = sum(1 for v in s.variants if v.status in ("best_effort", "corrupt", "uniqueness_fail"))
     job_id = job.job_id if job is not None else None
     files_ready = (

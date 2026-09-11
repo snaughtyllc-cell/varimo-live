@@ -131,14 +131,24 @@ def test_create_job_runs_in_background_and_completes(tmp_path):
         assert s.requested == 3
 
 
-def test_delivered_and_shortfall_count_only_ok(tmp_path):
-    # variant 2 is best_effort -> delivered 2 of 3, shortfall 1
-    store = _store(tmp_path, plan={2: "best_effort"})
+def test_delivered_and_shortfall_count_shipped_copies(tmp_path):
+    # best_effort wrote a file — count it. uniqueness_fail is the shortfall.
+    store = _store(tmp_path, plan={2: "best_effort", 3: "uniqueness_fail"})
     job = store.create_job([("a.mp4", b"x")], count=3)
     store.wait(job.job_id, timeout=5)
     src = store.get(job.job_id).sources[0]
     assert src.delivered == 2
     assert src.shortfall == 1
+
+
+def test_all_best_effort_pack_has_no_shortfall(tmp_path):
+    store = _store(tmp_path, plan={1: "best_effort", 2: "best_effort"})
+    job = store.create_job([("a.mp4", b"x")], count=2)
+    store.wait(job.job_id, timeout=5)
+    src = store.get(job.job_id).sources[0]
+    assert src.delivered == 2
+    assert src.shortfall == 0
+    assert source_files_ready(src, store._ws, job.job_id) == 2
 
 
 def test_events_recorded_per_job(tmp_path):
@@ -157,8 +167,10 @@ def test_gallery_and_diagnostics_split_by_status(tmp_path):
 
     gallery = store.gallery()
     assert len(gallery) == 1
-    ok_in_gallery = [v for v in gallery[0].variants if v.status == "ok"]
-    assert len(ok_in_gallery) == 2
+    shipped = [v for v in gallery[0].variants if v.status in ("ok", "best_effort")]
+    assert len(shipped) == 3
+    assert gallery[0].delivered == 3
+    assert gallery[0].shortfall == 0
 
     diag = store.diagnostics()
     assert len(diag) == 1

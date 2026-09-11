@@ -1,7 +1,7 @@
 """Drive export: eligibility filtering, sequential upload runner, per-job persistence.
 
 An export takes a selection of already-rendered variants (`VariantRef`s), filters to the
-ones that actually exist and passed quality (`status == "ok"`), then uploads them to a
+ones that actually exist and shipped (`ok` or `best_effort`), then uploads them to a
 Drive folder one at a time, renaming on name collisions (`unique_upload_name`). Progress
 is persisted to disk after every file so a client can poll `ExportStore.get` for status
 and a failed upload can be retried without touching files that already succeeded.
@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from variant_maker.farm.drive import DriveClient
 from variant_maker.server.captions import caption_filename
 from variant_maker.server.drive_names import unique_upload_name
-from variant_maker.server.jobs import JobStore
+from variant_maker.server.jobs import JobStore, is_shipped
 
 
 class ExportError(Exception):
@@ -61,12 +61,12 @@ def _now() -> str:
 
 
 def build_export_files(job_store: JobStore, refs: list[VariantRef]) -> list[ExportFile]:
-    """Resolve refs to on-disk, quality-passing variants. Anything missing (variant,
-    file) or not `status == "ok"` is silently dropped from the export selection."""
+    """Resolve refs to on-disk shipped variants. Anything missing (variant,
+    file) or uniqueness_fail/corrupt is silently dropped from the export."""
     files: list[ExportFile] = []
     for ref in refs:
         variant = job_store.get_variant(ref.source_id, ref.index)
-        if variant is None or variant.status != "ok":
+        if variant is None or not is_shipped(variant.status):
             continue
         local_path = job_store.find_variant(ref.source_id, variant.filename)
         if local_path is None:

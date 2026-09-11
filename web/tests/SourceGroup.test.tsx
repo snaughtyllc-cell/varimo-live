@@ -21,7 +21,7 @@ vi.mock("@/lib/api", () => ({
 
 import { SourceGroup } from "@/components/gallery/SourceGroup";
 import { uniquenessCoverageSubcopy } from "@/lib/prepareCopy";
-import { phoneShareHintCopy, zipSecondaryCopy } from "@/lib/shareVideos";
+import { clearSharedVariantFileCache, phoneShareHintCopy, zipSecondaryCopy } from "@/lib/shareVideos";
 
 const quality = {
   vmaf: 95,
@@ -77,6 +77,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  clearSharedVariantFileCache();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   document.body.innerHTML = "";
@@ -191,28 +192,35 @@ describe("SourceGroup phone save/share", () => {
     expect(payload.url).toBeUndefined();
   });
 
-  it("does not fetch variants that are not ready or not ok", async () => {
+  it("does not fetch variants that are not ready or not shipped", async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response("x", { status: 200, headers: { "Content-Type": "video/mp4" } }),
     );
     render(
       <SourceGroup
         source={source({
-          files_ready: 1,
+          files_ready: 2,
           variants: [
             variant({ file_ready: false }),
             variant({ index: 2, filename: "v02.mp4", file_url: "/api/variants/s1/v02.mp4", status: "best_effort" }),
             variant({ index: 3, filename: "v03.mp4", file_url: "/api/variants/s1/v03.mp4" }),
+            variant({ index: 4, filename: "v04.mp4", file_url: "/api/variants/s1/v04.mp4", status: "uniqueness_fail" }),
           ],
         })}
         {...props}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /save to phone/i }));
-    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    await waitFor(() => {
+      const urls = vi.mocked(fetch).mock.calls.map((c) => String(c[0]));
+      expect(urls).toEqual(expect.arrayContaining([
+        "/api/variants/s1/v02.mp4",
+        "/api/variants/s1/v03.mp4",
+      ]));
+    });
     const urls = vi.mocked(fetch).mock.calls.map((c) => String(c[0]));
-    expect(urls.every((url) => url === "/api/variants/s1/v03.mp4")).toBe(true);
-    expect(urls.length).toBeGreaterThanOrEqual(1);
+    expect(urls).not.toContain("/api/variants/s1/v04.mp4");
+    expect(urls.every((url) => url !== "/api/variants/s1/v01.mp4")).toBe(true);
   });
 });
 

@@ -81,11 +81,12 @@ describe("progress reducer", () => {
     expect(r.bySource.s1.variants[0].status).toBe("uniqueness_fail");
   });
 
-  it("done(best_effort) bumps done but not delivered", () => {
+  it("done(best_effort) bumps done and delivered", () => {
     let r = base();
     r = reduceEvent(r, ev({ state: "done", index: 2, status: "best_effort", quality: { ...q, passed: false }, filename: "v02.mp4" }));
     expect(r.bySource.s1.done).toBe(1);
-    expect(r.bySource.s1.delivered).toBe(0);
+    expect(r.bySource.s1.delivered).toBe(1);
+    expect(r.bySource.s1.variants[0].file_url).toMatch(/v02/);
   });
 
   it("is idempotent on replayed done events (reconnect replays the full log)", () => {

@@ -64,8 +64,21 @@ def test_get_job_detail_shows_ok_variants_and_counts(tmp_path):
     store.wait(job_id, timeout=5)
     detail = client.get(f"/api/jobs/{job_id}").json()
     src = detail["sources"][0]
-    assert src["delivered"] == 2 and src["shortfall"] == 1
-    assert [v["status"] for v in src["variants"]] == ["ok", "ok"]  # ok-only in cards
+    assert src["delivered"] == 3 and src["shortfall"] == 0
+    assert [v["status"] for v in src["variants"]] == ["ok", "best_effort", "ok"]
+
+
+def test_job_detail_shows_all_best_effort_pack(tmp_path):
+    """Talking-head Fast often ships every copy as best_effort. Cards must not go empty."""
+    client, store = _client(tmp_path, plan={1: "best_effort", 2: "best_effort"})
+    job_id = client.post("/api/jobs",
+                         files=[("files", ("a.mp4", b"x", "video/mp4"))],
+                         data={"count": "2"}).json()["job_id"]
+    store.wait(job_id, timeout=5)
+    src = client.get(f"/api/jobs/{job_id}").json()["sources"][0]
+    assert src["delivered"] == 2 and src["shortfall"] == 0
+    assert [v["status"] for v in src["variants"]] == ["best_effort", "best_effort"]
+    assert all(v.get("file_url") for v in src["variants"])
 
 
 def test_get_unknown_job_404(tmp_path):
@@ -325,11 +338,11 @@ def test_gallery_groups_sources_ok_only(tmp_path):
     store.wait(job_id, timeout=5)
     gallery = client.get("/api/gallery").json()
     assert len(gallery) == 1
-    assert gallery[0]["delivered"] == 2
-    assert gallery[0]["shortfall"] == 1
+    assert gallery[0]["delivered"] == 3
+    assert gallery[0]["shortfall"] == 0
     assert gallery[0]["failed"] == 1
     assert gallery[0]["job_state"] == "done"
-    assert all(v["status"] == "ok" for v in gallery[0]["variants"])
+    assert [v["status"] for v in gallery[0]["variants"]] == ["ok", "best_effort", "ok"]
     assert gallery[0]["variants"][0]["uniqueness"] == 0.42
 
 

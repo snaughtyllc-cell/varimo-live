@@ -104,7 +104,10 @@ The control plane runs GPU jobs on a RunPod serverless endpoint using
    [`docs/ops/railway-studio.md`](../../docs/ops/railway-studio.md).
 
 5. **Fast CPU endpoint** (all Fast packs; min workers 0). Image:
-   `ghcr.io/snaughtyllc-cell/variant-fast:latest` from `Dockerfile.fast`.
+   `ghcr.io/snaughtyllc-cell/varimo-live/variant-fast:latest` from
+   `Dockerfile.fast` (Live Actions). The older Lab package
+   `ghcr.io/snaughtyllc-cell/variant-fast` is still what some endpoints
+   are digest-pinned to — do not retarget those until a promote.
    CPU, 8+ cores, same `R2_*`, execution timeout 3600s. Do not point HQ at it.
 
 6. **Rotate the RunPod API key** (it was pasted in chat early in the project).

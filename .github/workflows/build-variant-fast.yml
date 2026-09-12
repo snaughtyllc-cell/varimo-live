@@ -11,11 +11,25 @@ on:
       - variant_maker/server/**
       - pyproject.toml
       - .github/workflows/build-variant-fast.yml
+  pull_request:
+    paths:
+      - deploy/runpod/Dockerfile.fast
+      - deploy/runpod/cp_handler.py
+      - variant_maker/*.py
+      - variant_maker/server/**
+      - pyproject.toml
+      - .github/workflows/build-variant-fast.yml
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
+
+env:
+  # Lab created ghcr.io/snaughtyllc-cell/variant-fast on variant-maker.
+  # This repo's GITHUB_TOKEN cannot write that package (write_package).
+  # Live-owned image; RunPod stays on the Lab digest until a promote.
+  IMAGE: ghcr.io/${{ github.repository }}/variant-fast
 
 jobs:
   build-and-push:
@@ -31,11 +45,12 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Live Fast is ghcr.io/snaughtyllc-cell/variant-fast. The package was
-      # created from Lab; this repo needs Actions write on it or every push
-      # dies with write_package and RunPod keeps the last digest.
       - name: Build and push Fast CPU worker
         run: |
           docker build -f deploy/runpod/Dockerfile.fast \
-            -t ghcr.io/snaughtyllc-cell/variant-fast:latest .
-          docker push ghcr.io/snaughtyllc-cell/variant-fast:latest
+            -t "${IMAGE}:latest" \
+            -t "${IMAGE}:${GITHUB_SHA}" .
+          docker push "${IMAGE}:${GITHUB_SHA}"
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            docker push "${IMAGE}:latest"
+          fi

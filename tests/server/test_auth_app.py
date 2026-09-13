@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import base64
 import json
-from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
@@ -432,8 +431,8 @@ def test_workspace_owner_invites_and_removes_own_va(tmp_path):
     assert helper.get("/api/gallery").status_code == 401
 
 
-def test_team_invite_moves_existing_owner_onto_shared_drive(tmp_path):
-    """A partner already on an empty studio must join the connected workspace."""
+def test_team_invite_rejects_existing_owner(tmp_path):
+    """An owner already on their own studio must stay there."""
     app, _store = _auth_app(tmp_path)
     jeff = TestClient(app)
     ops = TestClient(app)
@@ -449,33 +448,16 @@ def test_team_invite_moves_existing_owner_onto_shared_drive(tmp_path):
     _login(partner, "partner")
     partner_id = partner.get("/api/auth/me").json()["workspace_id"]
     assert partner_id != ops_id
-    assert partner.get("/api/drive/status").json()["status"] == "not_configured"
-
-    studio_token = Path(tmp_path) / "tenants" / ops_id / "drive" / "oauth_token.json"
-    studio_token.parent.mkdir(parents=True, exist_ok=True)
-    studio_token.write_text(json.dumps({
-        "email": "studio@varimo.io",
-        "refresh_token": "refresh-studio",
-        "token": "access-studio",
-    }))
-    assert ops.get("/api/drive/status").json()["status"] == "ready"
-    assert ops.get("/api/drive/status").json()["connected_email"] == "studio@varimo.io"
 
     inv = ops.post("/api/workspace/invites", json={"email": "partner@x.com"})
-    assert inv.status_code == 201
-    assert ops.get("/api/workspace/team").json()["invites"] == []
-    members = {m["email"] for m in ops.get("/api/workspace/team").json()["members"]}
-    assert members == {"ops@x.com", "partner@x.com"}
+    assert inv.status_code == 400
+    assert "already has a studio" in inv.json()["detail"]
 
     me = partner.get("/api/auth/me").json()
-    assert me["workspace_id"] == ops_id
-    assert me["role"] == "member"
-    drive = partner.get("/api/drive/status").json()
-    assert drive["status"] == "ready"
-    assert drive["connected_email"] == "studio@varimo.io"
-    again = ops.post("/api/workspace/invites", json={"email": "partner@x.com"})
-    assert again.status_code == 400
-    assert "already on this team" in again.json()["detail"]
+    assert me["workspace_id"] == partner_id
+    assert me["role"] == "owner"
+    members = {m["email"] for m in ops.get("/api/workspace/team").json()["members"]}
+    assert members == {"ops@x.com"}
 
 
 def test_admin_team_invites_home_even_when_viewing_other(tmp_path):
@@ -650,6 +632,13 @@ def test_second_site_admin_can_open_another_workspace(tmp_path):
     assert viewing["viewing_other"] is True
     assert viewing["workspace_id"] == ops_id
     assert viewing["home_workspace_id"] != ops_id
+
+    _login(partner, "partner")
+    home = partner.get("/api/auth/me").json()
+    assert home["viewing_other"] is False
+    assert home["workspace_id"] == home["home_workspace_id"]
+    assert home["workspace_id"] != ops_id
+    assert partner.cookies.get(VIEW_COOKIE_NAME) in (None, "")
 
     assert partner.delete(f"/api/admin/users/{ADMIN}").status_code == 400
 

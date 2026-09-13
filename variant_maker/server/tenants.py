@@ -555,14 +555,14 @@ def migrate_legacy_data(data_dir: str, workspace_id: str) -> bool:
     return moved
 
 
-def attach_or_invite(
+def invite_to_workspace(
     store: TenantStore,
     *,
     email: str,
     workspace_id: str,
     admin_email: str | None = None,
 ) -> Invite:
-    """Join invite. Existing logins move onto this studio immediately."""
+    """Join invite only. Never steal an existing owner onto another studio."""
     addr = normalize_email(email)
     if not _EMAIL_RE.match(addr):
         raise ValueError("invalid email")
@@ -575,17 +575,7 @@ def attach_or_invite(
         raise ValueError("cannot move the admin account")
     if existing.workspace_id == workspace_id:
         raise ValueError("already on this team")
-    store.move_user_to_workspace(addr, workspace_id, role="member")
-    leftover = next((i for i in store.list_invites() if i.email == addr), None)
-    if leftover is not None:
-        store.consume_invite(addr)
-    return Invite(
-        id="attached",
-        email=addr,
-        kind="join",
-        workspace_id=workspace_id,
-        created_utc=_now(),
-    )
+    raise ValueError("that email already has a studio")
 
 
 def tenant_root(data_dir: str, workspace_id: str) -> str:
@@ -604,16 +594,6 @@ def provision_login(
     addr = normalize_email(email)
     existing = store.get_user(addr)
     if existing is not None and existing.workspace_id:
-        pending = next((i for i in store.list_invites() if i.email == addr), None)
-        if pending is not None and pending.kind == "join":
-            ws = store.get_workspace(pending.workspace_id or "")
-            if ws is not None and normalize_experience(ws.experience) == "agency":
-                store.consume_invite(addr)
-                if existing.workspace_id != ws.id:
-                    moved = store.move_user_to_workspace(addr, ws.id, role="member")
-                    if moved is not None:
-                        _bind_billing_workspace(store, addr, moved.workspace_id)
-                        return moved
         _bind_billing_workspace(store, addr, existing.workspace_id)
         if name and name != existing.name:
             return store.upsert_user(UserInfo(

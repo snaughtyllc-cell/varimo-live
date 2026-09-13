@@ -214,7 +214,7 @@ from .stripe_billing import gateway_from_env
 from .tenant_runtime import TenantHub
 from .tenants import (
     TenantStore,
-    attach_or_invite,
+    invite_to_workspace,
     can_manage_instagram,
     combined_admin_emails,
     is_admin_email,
@@ -1374,6 +1374,8 @@ def create_app(
             email=user.email, workspace_id=user.workspace_id, secret=auth_secret,
         )
         response.set_cookie(COOKIE_NAME, token, **_cookie_kw(request))
+        # Login always lands in the account's home studio. Admin view is opt-in.
+        response.delete_cookie(VIEW_COOKIE_NAME, path="/")
 
     @app.get("/api/auth/me", response_model=AuthMeOut)
     def auth_me(request: Request) -> AuthMeOut:
@@ -1553,7 +1555,7 @@ def create_app(
         ws_id = admin.workspace_id if body.kind == "join" else None
         try:
             if body.kind == "join":
-                inv = attach_or_invite(
+                inv = invite_to_workspace(
                     tenants, email=body.email, workspace_id=ws_id or "",
                     admin_email=admin_email,
                 )
@@ -1617,7 +1619,7 @@ def create_app(
         owner = _require_agency_team(request)
         assert tenants is not None
         try:
-            inv = attach_or_invite(
+            inv = invite_to_workspace(
                 tenants, email=body.email, workspace_id=owner.workspace_id,
                 admin_email=admin_email,
             )

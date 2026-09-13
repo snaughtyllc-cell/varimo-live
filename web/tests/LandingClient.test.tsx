@@ -55,6 +55,19 @@ it("recovers from checkout failure so visitors can retry", async () => {
   expect(screen.getAllByRole("button", {name:"Start generating — $225/month"})[0]).toBeEnabled();
 });
 
+it("slashes the $200 list price when Agency is on the $150 sale", async () => {
+  vi.mocked(listBillingPlans).mockResolvedValue({configured:true,plans:[{id:"agency",name:"Agency",price_usd:150,list_price_usd:200,discount_usd:50,included_fast_hours:90,overage_usd_per_hour:0.75,typical_fast20_packs:540,typical_fast20_copies:10800}]});
+  const {container} = render(<LandingClient />);
+  await waitFor(() => expect(screen.getAllByRole("button",{name:"Start generating — $150/month"})).toHaveLength(2));
+  const pricing = screen.getByRole("region", {name:/One plan\./});
+  expect(pricing).toHaveTextContent("$200");
+  expect(pricing).toHaveTextContent("$150");
+  expect(pricing).toHaveTextContent(/Launch discount — \$50 off the regular \$200 price/i);
+  expect(pricing).toHaveTextContent("Save $50");
+  expect(container.querySelector(".l259-list")).toHaveTextContent("$200");
+  expect(container.querySelector(".l259")).toHaveTextContent("$150");
+});
+
 it("introduces the product before pricing and links early CTAs to the plan", async () => {
  const {container}=render(<LandingClient />);
  await screen.findAllByRole("button", {name:"Start generating — $225/month"});

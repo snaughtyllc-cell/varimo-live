@@ -1,7 +1,7 @@
 """Varimo subscription plans: packs of 8, billed monthly.
 
 Pay as you go / Creator / Studio / Agency are the sell ladder. Internal is
-Jeff's uncapped operator studio. Agency is $200 / 90 Fast hours, no hard
+Jeff's uncapped operator studio. Agency is $150 (list $200) / 90 Fast hours, no hard
 stop — the meter drains to 0, then Usage. Missing/unknown plan ids stay
 internal so existing live workspaces are not capped on deploy.
 """
@@ -20,7 +20,7 @@ PLAN_IDS: tuple[PlanId, ...] = ("payg", "creator", "studio", "agency", "internal
 _UPGRADE: dict[str, tuple[str, int, int]] = {
     "payg": ("Creator", 35, 12),
     "creator": ("Studio", 79, 32),
-    "studio": ("Agency", 200, 0),
+    "studio": ("Agency", 150, 0),
 }
 
 
@@ -48,7 +48,7 @@ PLANS: dict[str, Plan] = {
     "payg": Plan("payg", "Pay as you go", 0, 0, 5.0, "solo"),
     "creator": Plan("creator", "Creator", 35, 12, 3.5, "solo"),
     "studio": Plan("studio", "Studio", 79, 32, 3.0, "agency"),
-    "agency": Plan("agency", "Agency", 200, 0, 0.75, "agency", uncapped=False, hard_stop=False),
+    "agency": Plan("agency", "Agency", 150, 0, 0.75, "agency", uncapped=False, hard_stop=False),
     "internal": Plan("internal", "Internal", 0, 0, 0.0, "agency", uncapped=True, hard_stop=False),
 }
 

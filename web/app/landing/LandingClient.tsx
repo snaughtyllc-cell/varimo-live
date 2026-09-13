@@ -56,6 +56,8 @@ export function LandingClient() {
    return ({ "$200": `$${plan.price_usd}`, "90": String(plan.included_fast_hours), "0.75": plan.overage_usd_per_hour.toFixed(2), "540": String(plan.typical_fast20_packs ?? "—"), "10,800": plan.typical_fast20_copies?.toLocaleString("en-US") ?? "—" })[token] ?? token;
   });
  }
+ const listPrice = plan && Number.isFinite(plan.list_price_usd) && (plan.list_price_usd as number) > plan.price_usd ? plan.list_price_usd as number : null;
+ const discountUsd = listPrice != null ? listPrice - plan!.price_usd : null;
  return <div className="varimo-landing">{checkoutError && <div className="checkout-error" role="alert"><span>{checkoutError}</span><button type="button" onClick={() => setCheckoutError(null)} aria-label="Dismiss checkout error">×</button></div>}{pricingError && <p className="pricing-unavailable" role="status">Checkout is temporarily unavailable. Please try again shortly.</p>}<a className="landing-skip" href="#h-hero">Skip to content</a><header className="l0">
 <nav className="l1" aria-label="Primary">
 <div className="l2" aria-label="varimo" role="img">
@@ -356,11 +358,14 @@ export function LandingClient() {
 <div className="l255">
 <div className="l256">
 <span className="l257">{"Monthly plan"}</span>
+{discountUsd != null && <span className="l257-save">{`Save $${discountUsd}`}</span>}
 </div>
 <div className="l258">
+{listPrice != null && <span className="l259-list">{`$${listPrice}`}</span>}
 <span className="l259">{copy("$200")}</span>
 <span className="l260">{"/ month"}</span>
 </div>
+{listPrice != null && discountUsd != null && <span className="l261-discount">{`Launch discount — $${discountUsd} off the regular $${listPrice} price, every month.`}</span>}
 <span className="l261">{"Billed monthly. USD."}</span>
 <p className="l262">{copy("90 Fast hours included each month. Then $0.75/hr. Keep generating beyond your included hours—no hard stop.")}</p>
 <div className="l263">

@@ -23,10 +23,14 @@ from variant_maker.server.usage import in_flight_fast_seconds
 FAST_USD_PER_HOUR = 0.58
 
 AGENCY_PLAN_ID = "agency"
-AGENCY_PRICE_USD = 200
+# Sale price shown + charged. Stripe Price stays at $200; Checkout applies
+# STRIPE_COUPON_AGENCY ($50 off forever) so the hosted page slashes $200 → $150.
+AGENCY_PRICE_USD = 150
+AGENCY_LIST_PRICE_USD = 200
 AGENCY_INCLUDED_FAST_HOURS = 90
 AGENCY_OVERAGE_USD_PER_HOUR = 0.75
 AGENCY_PRICE_ENV = "STRIPE_PRICE_AGENCY"
+AGENCY_COUPON_ENV = "STRIPE_COUPON_AGENCY"
 AGENCY_FAST_HOURS_ENV = "VARIANT_PLAN_AGENCY_FAST_HOURS"
 AGENCY_OVERAGE_ENV = "VARIANT_PLAN_AGENCY_OVERAGE_USD"
 PERIOD_DAYS = 30
@@ -43,10 +47,12 @@ class Plan:
     id: str
     name: str
     price_usd: int
+    list_price_usd: int
     included_fast_hours: float
     overage_usd_per_hour: float
     cogs_fast_usd_per_hour: float
     stripe_price_env: str
+    stripe_coupon_env: str
 
 
 @dataclass(frozen=True)
@@ -80,10 +86,12 @@ def get_plan(plan_id: str | None = AGENCY_PLAN_ID, environ: Mapping[str, str] | 
         id=AGENCY_PLAN_ID,
         name="Agency",
         price_usd=AGENCY_PRICE_USD,
+        list_price_usd=AGENCY_LIST_PRICE_USD,
         included_fast_hours=max(0.0, hours),
         overage_usd_per_hour=max(0.0, overage),
         cogs_fast_usd_per_hour=FAST_USD_PER_HOUR,
         stripe_price_env=AGENCY_PRICE_ENV,
+        stripe_coupon_env=AGENCY_COUPON_ENV,
     )
 
 
@@ -94,6 +102,16 @@ def plan_catalog(environ: Mapping[str, str] | None = None) -> list[Plan]:
 def stripe_price_id(plan: Plan, environ: Mapping[str, str] | None = None) -> str:
     env = os.environ if environ is None else environ
     return (env.get(plan.stripe_price_env) or "").strip()
+
+
+def stripe_coupon_id(plan: Plan, environ: Mapping[str, str] | None = None) -> str:
+    env = os.environ if environ is None else environ
+    return (env.get(plan.stripe_coupon_env) or "").strip()
+
+
+def plan_needs_checkout_coupon(plan: Plan) -> bool:
+    """Sale price below list must use a Stripe coupon so Checkout slashes $200."""
+    return plan.list_price_usd > plan.price_usd
 
 
 def period_fast_seconds(
@@ -436,16 +454,20 @@ def apply_stripe_event(store: TenantStore, event: Mapping[str, Any]) -> str:
 
 def plan_public_dict(plan: Plan) -> dict[str, Any]:
     packs, copies = typical_fast20_throughput(plan.included_fast_hours)
-    return {
+    payload: dict[str, Any] = {
         "id": plan.id,
         "name": plan.name,
         "price_usd": plan.price_usd,
+        "list_price_usd": plan.list_price_usd,
         "included_fast_hours": plan.included_fast_hours,
         "overage_usd_per_hour": plan.overage_usd_per_hour,
         "typical_fast20_minutes": TYPICAL_FAST20_MINUTES,
         "typical_fast20_packs": packs,
         "typical_fast20_copies": copies,
     }
+    if plan.list_price_usd > plan.price_usd:
+        payload["discount_usd"] = plan.list_price_usd - plan.price_usd
+    return payload
 
 
 def billing_status_payload(

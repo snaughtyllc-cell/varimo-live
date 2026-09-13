@@ -16,9 +16,11 @@ from variant_maker.server.billing import (
     billing_status_payload,
     get_plan,
     plan_catalog,
+    plan_needs_checkout_coupon,
     plan_public_dict,
     session_email,
     session_is_paid,
+    stripe_coupon_id,
     stripe_price_id,
 )
 from variant_maker.server.stripe_billing import (
@@ -68,8 +70,11 @@ def register_billing_routes(
 
     @app.get("/api/billing/plans")
     def billing_plans() -> dict[str, Any]:
-        price = stripe_price_id(get_plan(AGENCY_PLAN_ID, billing_env), billing_env)
-        configured = bool(auth_on and tenants is not None and gateway is not None and price)
+        plan = get_plan(AGENCY_PLAN_ID, billing_env)
+        price = stripe_price_id(plan, billing_env)
+        coupon = stripe_coupon_id(plan, billing_env)
+        sale_ready = bool(price) and (coupon if plan_needs_checkout_coupon(plan) else True)
+        configured = bool(auth_on and tenants is not None and gateway is not None and sale_ready)
         return {
             "configured": configured,
             "plans": [plan_public_dict(p) for p in plan_catalog(billing_env)],
@@ -97,6 +102,15 @@ def register_billing_routes(
                 status_code=503,
                 detail=f"Set {plan.stripe_price_env} to the Stripe Price id for {plan.name}.",
             )
+        coupon_id = stripe_coupon_id(plan, billing_env)
+        if plan_needs_checkout_coupon(plan) and not coupon_id:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"Set {plan.stripe_coupon_env} to the Stripe coupon that takes "
+                    f"{plan.name} from ${plan.list_price_usd} to ${plan.price_usd}."
+                ),
+            )
         origin = studio_origin(request).rstrip("/")
         email_query = f"&email={quote(email, safe='')}" if email else ""
         success = f"{origin}/login?paid=1{email_query}&session_id={{CHECKOUT_SESSION_ID}}"
@@ -107,6 +121,7 @@ def register_billing_routes(
             price_id=price_id,
             success_url=success,
             cancel_url=cancel,
+            coupon_id=coupon_id,
         )
         try:
             session = gateway.create_checkout_session(params)

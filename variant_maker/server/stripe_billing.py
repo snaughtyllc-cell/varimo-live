@@ -46,6 +46,7 @@ def checkout_session_params(
     price_id: str,
     success_url: str,
     cancel_url: str,
+    coupon_id: str = "",
 ) -> dict[str, Any]:
     """Hosted Checkout for the Agency subscription. Dynamic payment methods — do not
     pass payment_method_types. automatic_tax stays off until a Stripe Tax registration
@@ -68,6 +69,10 @@ def checkout_session_params(
     # Without a prefill Stripe collects email; the paid webhook reads customer_details.email.
     if addr:
         params.update(customer_email=addr, client_reference_id=addr)
+    cid = (coupon_id or "").strip()
+    if cid:
+        # Keeps the $200 Stripe Price on the receipt and slashes it to the sale.
+        params["discounts"] = [{"coupon": cid}]
     return params
 
 

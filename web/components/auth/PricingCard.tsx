@@ -55,7 +55,9 @@ export function PricingCard({ emailPrefill = "" }: { emailPrefill?: string }) {
 
   const hours = plan?.included_fast_hours ?? 90;
   const overage = plan?.overage_usd_per_hour ?? 0.75;
-  const price = plan?.price_usd ?? 200;
+  const price = plan?.price_usd ?? 150;
+  const listPrice = plan?.list_price_usd != null && plan.list_price_usd > price ? plan.list_price_usd : null;
+  const discount = listPrice != null ? listPrice - price : null;
   const packMinutes = plan?.typical_fast20_minutes ?? 10;
   const packs = plan?.typical_fast20_packs ?? 540;
   const copies = plan?.typical_fast20_copies ?? 10800;
@@ -64,7 +66,15 @@ export function PricingCard({ emailPrefill = "" }: { emailPrefill?: string }) {
   return (
     <>
       <p style={{ fontSize: 13, color: "var(--color-muted)", lineHeight: 1.5, margin: "0 0 12px" }}>
-        ${price}/month Agency. {hours} Fast worker-hours included each period, then{" "}
+        {listPrice != null && discount != null ? (
+          <>
+            <span style={{ textDecoration: "line-through" }}>${listPrice}</span>{" "}
+            ${price}/month Agency — ${discount} off the regular price, every month.{" "}
+          </>
+        ) : (
+          <>${price}/month Agency. </>
+        )}
+        {hours} Fast worker-hours included each period, then{" "}
         ${overage.toFixed(2)}/hr. Not a hard stop — you keep generating, and extra Fast
         time is usage, not a fake unlimited cap.
       </p>

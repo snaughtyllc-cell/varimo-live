@@ -47,6 +47,7 @@ def _billing_client(tmp_path, *, gateway=None, extra_env=None):
         ENV_OAUTH_CLIENT_ID: "test-client-id",
         ENV_OAUTH_CLIENT_SECRET: "test-client-secret",
         "STRIPE_PRICE_AGENCY": "price_agency_test",
+        "STRIPE_COUPON_AGENCY": "coupon_agency_test",
     }
     if extra_env:
         env.update(extra_env)
@@ -79,6 +80,23 @@ def test_checkout_params_omit_payment_method_types_and_tax():
     assert params["metadata"]["plan"] == "agency"
     assert params["integration_identifier"].startswith("varyforge_agency_")
     assert params["line_items"] == [{"price": "price_1", "quantity": 1}]
+    assert "discounts" not in params
+
+
+def test_checkout_params_apply_coupon_so_stripe_slashes_list_price():
+    plan = get_plan("agency")
+    params = checkout_session_params(
+        email="ops@x.com",
+        plan=plan,
+        price_id="price_1",
+        success_url="https://studio.test/login?paid=1",
+        cancel_url="https://studio.test/pricing",
+        coupon_id="coupon_agency_test",
+    )
+    assert params["line_items"] == [{"price": "price_1", "quantity": 1}]
+    assert params["discounts"] == [{"coupon": "coupon_agency_test"}]
+    assert "payment_method_types" not in params
+    assert "automatic_tax" not in params
 
 
 def test_plans_are_public_and_checkout_starts_session(tmp_path):
@@ -88,6 +106,9 @@ def test_plans_are_public_and_checkout_starts_session(tmp_path):
     body = plans.json()
     assert body["configured"] is True
     assert body["plans"][0]["id"] == "agency"
+    assert body["plans"][0]["price_usd"] == 150
+    assert body["plans"][0]["list_price_usd"] == 200
+    assert body["plans"][0]["discount_usd"] == 50
     assert body["plans"][0]["included_fast_hours"] == 90
     assert body["plans"][0]["overage_usd_per_hour"] == 0.75
     assert body["plans"][0]["typical_fast20_minutes"] == 10
@@ -98,6 +119,7 @@ def test_plans_are_public_and_checkout_starts_session(tmp_path):
     assert resp.status_code == 200
     assert resp.json()["url"].startswith("https://checkout.stripe.com/")
     assert gw.sessions[0]["customer_email"] == "buyer@x.com"
+    assert gw.sessions[0]["discounts"] == [{"coupon": "coupon_agency_test"}]
     assert "payment_method_types" not in gw.sessions[0]
 
 
@@ -171,6 +193,17 @@ def test_checkout_503_when_price_missing(tmp_path):
     client, _gw, _env = _billing_client(tmp_path, extra_env={"STRIPE_PRICE_AGENCY": ""})
     resp = client.post("/api/billing/checkout", json={"email": "buyer@x.com"})
     assert resp.status_code == 503
+
+
+def test_checkout_503_when_sale_coupon_missing(tmp_path):
+    """Site says $150; without the coupon Stripe would charge the $200 list price."""
+    client, gw, _env = _billing_client(tmp_path, extra_env={"STRIPE_COUPON_AGENCY": ""})
+    plans = client.get("/api/billing/plans")
+    assert plans.status_code == 200
+    assert plans.json()["configured"] is False
+    resp = client.post("/api/billing/checkout", json={"email": "buyer@x.com"})
+    assert resp.status_code == 503
+    assert gw.sessions == []
 
 
 def test_checkout_without_email_lets_stripe_collect_it(tmp_path):

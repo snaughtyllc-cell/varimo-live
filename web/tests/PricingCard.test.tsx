@@ -18,7 +18,9 @@ describe("PricingCard", () => {
       plans: [{
         id: "agency",
         name: "Agency",
-        price_usd: 200,
+        price_usd: 150,
+        list_price_usd: 200,
+        discount_usd: 50,
         included_fast_hours: 90,
         typical_fast20_minutes: 10,
         typical_fast20_packs: 540,
@@ -44,7 +46,9 @@ describe("PricingCard", () => {
     expect(screen.getByText(/10,800 copies/i)).toBeInTheDocument();
     expect(screen.queryByText(/we pay about/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Analytics coming soon/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Subscribe — \$200\/month/i })).toBeEnabled();
+    expect(screen.getByText("$200")).toBeInTheDocument();
+    expect(screen.getByText(/\$50 off the regular price/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Subscribe — \$150\/month/i })).toBeEnabled();
   });
 
   it("starts Stripe Checkout with the work email", async () => {

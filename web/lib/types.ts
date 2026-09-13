@@ -315,6 +315,8 @@ export interface BillingPlan {
   id: string;
   name: string;
   price_usd: number;
+  list_price_usd?: number;
+  discount_usd?: number;
   included_fast_hours: number;
   overage_usd_per_hour: number;
   cogs_fast_usd_per_hour?: number;

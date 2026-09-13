@@ -26,7 +26,7 @@ def test_ladder_matches_the_sell_sheet():
     assert creator.included_variants == 96
     assert (studio.included_packs, studio.extra_pack_price, studio.monthly) == (32, 3.0, 79)
     assert studio.included_variants == 256
-    assert agency.monthly == 200
+    assert agency.monthly == 150
     assert agency.uncapped is False
     assert agency.hard_stop is False
     assert get_plan("internal").uncapped is True
@@ -56,7 +56,7 @@ def test_limit_copy_points_at_the_next_upgrade():
         "Creator includes 12 packs. Extra packs are $3.50, or Studio is $79 for 32."
     )
     assert limit_message(get_plan("studio")) == (
-        "Studio includes 32 packs. Extra packs are $3.00, or Agency is $200/month."
+        "Studio includes 32 packs. Extra packs are $3.00, or Agency is $150/month."
     )
     assert get_plan("agency").uncapped is False
     assert get_plan("agency").hard_stop is False

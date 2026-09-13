@@ -10,13 +10,16 @@ from variant_maker.server.billing import (
     get_plan,
     grant_paid_subscription,
     overage_snapshot,
+    plan_needs_checkout_coupon,
+    plan_public_dict,
+    stripe_coupon_id,
     typical_fast20_throughput,
 )
 from variant_maker.server.tenants import TenantStore, provision_login
 
 
 def test_agency_includes_ninety_fast_hours_by_default():
-    """Product lock: $200 Agency includes 90 Fast hours, not the first-cut 40."""
+    """Product lock: $150 Agency (list $200) includes 90 Fast hours, not the first-cut 40."""
     assert AGENCY_INCLUDED_FAST_HOURS == 90
     plan = get_plan("agency", environ={})
     assert plan.included_fast_hours == 90
@@ -27,7 +30,8 @@ def test_agency_includes_ninety_fast_hours_by_default():
 
 def test_agency_overage_is_worker_hours_not_per_pack():
     plan = get_plan("agency")
-    assert plan.price_usd == 200
+    assert plan.price_usd == 150
+    assert plan.list_price_usd == 200
     assert plan.included_fast_hours == AGENCY_INCLUDED_FAST_HOURS
     assert plan.overage_usd_per_hour == AGENCY_OVERAGE_USD_PER_HOUR
     assert plan.cogs_fast_usd_per_hour == FAST_USD_PER_HOUR
@@ -39,6 +43,13 @@ def test_agency_overage_is_worker_hours_not_per_pack():
     hour_over = overage_snapshot(plan, (AGENCY_INCLUDED_FAST_HOURS + 1) * 3600)
     assert hour_over.overage_fast_seconds == 3600
     assert hour_over.overage_usd == AGENCY_OVERAGE_USD_PER_HOUR
+    assert plan_needs_checkout_coupon(plan) is True
+    pub = plan_public_dict(plan)
+    assert pub["price_usd"] == 150
+    assert pub["list_price_usd"] == 200
+    assert pub["discount_usd"] == 50
+    assert stripe_coupon_id(plan, environ={}) == ""
+    assert stripe_coupon_id(plan, environ={"STRIPE_COUPON_AGENCY": "c_1"}) == "c_1"
 
 
 def test_agency_hours_and_rate_are_env_overridable(monkeypatch):

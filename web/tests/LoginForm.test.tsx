@@ -3,9 +3,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/api", () => ({
   passwordLogin: vi.fn(),
+  getBillingCheckoutSession: vi.fn(),
 }));
 
-import { passwordLogin } from "@/lib/api";
+import { getBillingCheckoutSession, passwordLogin } from "@/lib/api";
 import { LoginForm } from "@/components/auth/LoginForm";
 
 describe("LoginForm", () => {
@@ -46,7 +47,7 @@ describe("LoginForm", () => {
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "va-secret" } });
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
     await waitFor(() => {
-      expect(passwordLogin).toHaveBeenCalledWith("va@x.com", "va-secret");
+      expect(passwordLogin).toHaveBeenCalledWith("va@x.com", "va-secret", undefined);
     });
     await waitFor(() => {
       expect(assign).toHaveBeenCalledWith("/studio");
@@ -60,8 +61,32 @@ describe("LoginForm", () => {
   });
 
   it("prefills email and explains first sign-in after payment", () => {
-    render(<LoginForm paid emailPrefill="buyer@x.com" />);
+    render(<LoginForm paid emailPrefill="buyer@x.com" sessionId="cs_test_1" />);
     expect(screen.getByLabelText("Email")).toHaveValue("buyer@x.com");
+    expect(screen.getByLabelText("Create a password")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set password and enter" })).toBeInTheDocument();
     expect(screen.getByText(/Payment received/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Continue with Google" })).not.toBeInTheDocument();
+  });
+
+  it("sends the Stripe session id with the first password", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { assign });
+    render(<LoginForm paid emailPrefill="buyer@x.com" sessionId="cs_test_1" />);
+    fireEvent.change(screen.getByLabelText("Create a password"), { target: { value: "agency-pass" } });
+    fireEvent.click(screen.getByRole("button", { name: "Set password and enter" }));
+    await waitFor(() => {
+      expect(passwordLogin).toHaveBeenCalledWith("buyer@x.com", "agency-pass", "cs_test_1");
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("loads checkout email from the Stripe session", async () => {
+    vi.mocked(getBillingCheckoutSession).mockResolvedValue({ paid: true, email: "direct@x.com" });
+    render(<LoginForm sessionId="cs_test_1" />);
+    await waitFor(() => {
+      expect(screen.getByLabelText("Email")).toHaveValue("direct@x.com");
+    });
+    expect(getBillingCheckoutSession).toHaveBeenCalledWith("cs_test_1");
   });
 });

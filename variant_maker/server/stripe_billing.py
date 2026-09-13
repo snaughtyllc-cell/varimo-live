@@ -17,6 +17,7 @@ CHECKOUT_ORIGINS_ENV = "VARIANT_BILLING_CHECKOUT_ORIGINS"
 
 class StripeGateway(Protocol):
     def create_checkout_session(self, params: dict[str, Any]) -> dict[str, Any]: ...
+    def retrieve_checkout_session(self, session_id: str) -> dict[str, Any]: ...
     def parse_webhook(self, payload: bytes, sig: str) -> dict[str, Any]: ...
 
 
@@ -88,6 +89,10 @@ class LiveStripeGateway:
             raise RuntimeError("Stripe Checkout did not return a URL")
         return {"id": str(sid or ""), "url": str(url)}
 
+    def retrieve_checkout_session(self, session_id: str) -> dict[str, Any]:
+        session = self._client.v1.checkout.sessions.retrieve(session_id)
+        return _stripe_to_dict(session)
+
     def parse_webhook(self, payload: bytes, sig: str) -> dict[str, Any]:
         if not self._webhook_secret:
             raise ValueError("missing STRIPE_WEBHOOK_SECRET")
@@ -97,6 +102,18 @@ class LiveStripeGateway:
         if hasattr(event, "to_dict"):
             return event.to_dict()
         return dict(event)
+
+
+def _stripe_to_dict(obj: Any) -> dict[str, Any]:
+    if isinstance(obj, dict):
+        return obj
+    if hasattr(obj, "to_dict_recursive"):
+        data = obj.to_dict_recursive()
+        return data if isinstance(data, dict) else dict(data)
+    if hasattr(obj, "to_dict"):
+        data = obj.to_dict()
+        return data if isinstance(data, dict) else dict(data)
+    return dict(obj)
 
 
 def _obj_get(obj: Any, key: str) -> Any:

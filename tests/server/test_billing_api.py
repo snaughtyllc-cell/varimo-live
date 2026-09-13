@@ -17,6 +17,7 @@ from variant_maker.server.workspace import Workspace
 class FakeStripeGateway:
     def __init__(self) -> None:
         self.sessions: list[dict] = []
+        self.paid_sessions: dict[str, dict] = {}
         self.valid_sig = "t=1,v1=valid"
 
     def create_checkout_session(self, params: dict) -> dict:
@@ -24,6 +25,11 @@ class FakeStripeGateway:
         assert "automatic_tax" not in params
         self.sessions.append(params)
         return {"id": "cs_test_1", "url": "https://checkout.stripe.com/c/pay/cs_test_1"}
+
+    def retrieve_checkout_session(self, session_id: str) -> dict:
+        if session_id not in self.paid_sessions:
+            raise KeyError(session_id)
+        return self.paid_sessions[session_id]
 
     def parse_webhook(self, payload: bytes, sig: str) -> dict:
         if sig != self.valid_sig:
@@ -195,3 +201,56 @@ def test_checkout_rejects_invalid_optional_email(tmp_path):
     resp = client.post("/api/billing/checkout", json={"email": "invalid"})
     assert resp.status_code == 400
     assert gw.sessions == []
+
+
+def test_return_from_stripe_sets_password_before_webhook(tmp_path):
+    """Stripe success lands before the webhook. session_id must still open Studio."""
+    client, gw, _env = _billing_client(tmp_path)
+    gw.paid_sessions["cs_test_return"] = {
+        "id": "cs_test_return",
+        "payment_status": "paid",
+        "customer": "cus_return",
+        "subscription": "sub_return",
+        "customer_details": {"email": "newagency@x.com"},
+        "metadata": {"plan": "agency"},
+    }
+    peek = client.get("/api/billing/checkout-session", params={"session_id": "cs_test_return"})
+    assert peek.status_code == 200
+    assert peek.json() == {"paid": True, "email": "newagency@x.com"}
+    first = _password_login(
+        client, "newagency@x.com", "agency-pass", session_id="cs_test_return",
+    )
+    assert first.status_code == 200
+    body = first.json()
+    assert body["email"] == "newagency@x.com"
+    assert body["role"] == "owner"
+    assert body["experience"] == "agency"
+    assert body["plan"] == "agency"
+    assert body["has_password"] is True
+    again = _password_login(client, "newagency@x.com", "agency-pass")
+    assert again.status_code == 200
+
+
+def test_unpaid_checkout_session_cannot_create_a_login(tmp_path):
+    client, gw, _env = _billing_client(tmp_path)
+    gw.paid_sessions["cs_unpaid"] = {
+        "id": "cs_unpaid",
+        "payment_status": "unpaid",
+        "customer_details": {"email": "nope@x.com"},
+    }
+    peek = client.get("/api/billing/checkout-session", params={"session_id": "cs_unpaid"})
+    assert peek.json()["paid"] is False
+    denied = _password_login(client, "nope@x.com", "secret12", session_id="cs_unpaid")
+    assert denied.status_code == 401
+
+
+def test_checkout_session_email_must_match_login(tmp_path):
+    client, gw, _env = _billing_client(tmp_path)
+    gw.paid_sessions["cs_paid"] = {
+        "id": "cs_paid",
+        "payment_status": "paid",
+        "customer_details": {"email": "buyer@x.com"},
+        "metadata": {"plan": "agency"},
+    }
+    mismatch = _password_login(client, "other@x.com", "secret12", session_id="cs_paid")
+    assert mismatch.status_code == 400

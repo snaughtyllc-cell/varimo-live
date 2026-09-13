@@ -17,6 +17,8 @@ from variant_maker.server.billing import (
     get_plan,
     plan_catalog,
     plan_public_dict,
+    session_email,
+    session_is_paid,
     stripe_price_id,
 )
 from variant_maker.server.stripe_billing import (
@@ -114,6 +116,23 @@ def register_billing_routes(
         if not url:
             raise HTTPException(status_code=502, detail="Stripe Checkout failed.")
         return CheckoutOut(url=url, session_id=str(session.get("id") or ""))
+
+    @app.get("/api/billing/checkout-session")
+    def billing_checkout_session(session_id: str = "") -> dict[str, Any]:
+        """Public peek after Stripe redirect. session_id is the unguessable receipt."""
+        sid = (session_id or "").strip()
+        if not sid.startswith("cs_") or gateway is None:
+            raise HTTPException(status_code=404, detail="checkout session not found")
+        retrieve = getattr(gateway, "retrieve_checkout_session", None)
+        if not callable(retrieve):
+            raise HTTPException(status_code=404, detail="checkout session not found")
+        try:
+            session = retrieve(sid)
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail="checkout session not found") from exc
+        if not isinstance(session, dict) or not session_is_paid(session):
+            return {"paid": False, "email": None}
+        return {"paid": True, "email": session_email(session) or None}
 
     @app.post("/api/billing/webhook")
     async def billing_webhook(request: Request) -> JSONResponse:

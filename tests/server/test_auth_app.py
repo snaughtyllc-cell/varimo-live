@@ -455,8 +455,11 @@ def test_admin_team_invites_home_even_when_viewing_other(tmp_path):
     assert inv.json()["workspace_id"] != ops_id
 
 
-def _password_login(client: TestClient, email: str, password: str):
-    return client.post("/api/auth/password", json={"email": email, "password": password})
+def _password_login(client: TestClient, email: str, password: str, session_id: str = ""):
+    body = {"email": email, "password": password}
+    if session_id:
+        body["session_id"] = session_id
+    return client.post("/api/auth/password", json=body)
 
 
 def test_password_login_404_when_auth_off(tmp_path):

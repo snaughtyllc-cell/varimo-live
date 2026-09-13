@@ -9,19 +9,25 @@ function first(raw: string | string[] | undefined): string {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string | string[]; paid?: string | string[]; email?: string | string[] }>;
+  searchParams: Promise<{
+    error?: string | string[];
+    paid?: string | string[];
+    email?: string | string[];
+    session_id?: string | string[];
+  }>;
 }) {
   const params = await searchParams;
   const error = first(params.error) || null;
-  const paid = first(params.paid) === "1" || first(params.paid) === "true";
+  const sessionId = first(params.session_id);
+  const paid = first(params.paid) === "1" || first(params.paid) === "true" || Boolean(sessionId);
   const email = first(params.email);
 
   return (
     <main className="login-page">
       <div className="login-card">
         <div className="login-brand"><VarimoWordmark /></div>
-        <h1>{paid ? "You're in" : "Sign in"}</h1>
-        <LoginForm oauthError={error} paid={paid} emailPrefill={email} />
+        <h1>{paid ? "Set your password" : "Sign in"}</h1>
+        <LoginForm oauthError={error} paid={paid} emailPrefill={email} sessionId={sessionId} />
       </div>
     </main>
   );

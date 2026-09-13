@@ -490,8 +490,9 @@ class AuthMeOut(BaseModel):
 
 
 class PasswordLoginIn(BaseModel):
-    email: str
+    email: str = ""
     password: str
+    session_id: str = ""
 
 
 class PasswordSetIn(BaseModel):

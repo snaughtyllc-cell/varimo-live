@@ -19,6 +19,7 @@ PUBLIC_API_PATHS = frozenset({
     "/api/billing/plans",
     "/api/waitlist/creator",
     "/api/billing/checkout",
+    "/api/billing/checkout-session",
     "/api/billing/webhook",
     # Instagram returns here from instagram.com; browsers often omit SameSite=Lax cookies.
     "/api/instagram/oauth/callback",

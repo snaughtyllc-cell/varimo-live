@@ -18,6 +18,7 @@ import {
   Invite,
   InviteKind,
   BillingCheckout,
+  BillingCheckoutSession,
   BillingPlans,
   BillingStatus,
   SplitExportDest,
@@ -742,15 +743,24 @@ export async function logout(): Promise<void> {
   if (!res.ok) throw new Error(await errorMessage(res));
 }
 
-export function passwordLogin(email: string, password: string): Promise<AuthMe> {
+export function passwordLogin(email: string, password: string, sessionId?: string): Promise<AuthMe> {
   return fetch("/api/auth/password", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      email,
+      password,
+      ...(sessionId ? { session_id: sessionId } : {}),
+    }),
   }).then(json<AuthMe>);
 }
 
 export const listBillingPlans = () => fetch("/api/billing/plans").then(json<BillingPlans>);
+
+export function getBillingCheckoutSession(sessionId: string): Promise<BillingCheckoutSession> {
+  return fetch(`/api/billing/checkout-session?session_id=${encodeURIComponent(sessionId)}`)
+    .then(json<BillingCheckoutSession>);
+}
 
 export function startBillingCheckout(email?: string, plan = "agency"): Promise<BillingCheckout> {
   return fetch("/api/billing/checkout", {

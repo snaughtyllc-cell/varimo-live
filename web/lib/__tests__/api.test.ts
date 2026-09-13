@@ -633,8 +633,9 @@ describe("auth API", () => {
   });
 
   it("passwordLogin POSTs email and password", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ ...loggedOut, email: "a@b.com", has_password: true }), { status: 200 }),
+    const body = { ...loggedOut, email: "a@b.com", has_password: true };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify(body), { status: 200 }),
     );
     await api.passwordLogin("a@b.com", "secret12");
     const [url, init] = fetchMock.mock.calls[0];
@@ -643,6 +644,12 @@ describe("auth API", () => {
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
       email: "a@b.com",
       password: "secret12",
+    });
+    await api.passwordLogin("a@b.com", "secret12", "cs_test_1");
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toEqual({
+      email: "a@b.com",
+      password: "secret12",
+      session_id: "cs_test_1",
     });
   });
 

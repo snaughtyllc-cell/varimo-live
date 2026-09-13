@@ -333,6 +333,11 @@ export interface BillingCheckout {
   session_id: string;
 }
 
+export interface BillingCheckoutSession {
+  paid: boolean;
+  email: string | null;
+}
+
 export interface BillingStatus {
   plan: BillingPlan | null;
   status: string;

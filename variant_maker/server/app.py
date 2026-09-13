@@ -23,7 +23,7 @@ from variant_maker.farm.drive import DriveClient, is_video_file
 from variant_maker.farm.ledger import Ledger
 
 from .auth_app import PUBLIC_API_PATHS, AttrProxy, JobStoreProxy, current_bundle, tenant_cv
-from .billing import billing_status_payload
+from .billing import billing_status_payload, grant_from_checkout, session_email, session_is_paid
 from .creator_waitlist import register_creator_waitlist_routes
 from .billing_api import register_billing_routes
 from .caption_ai import parse_caption_prompts_field
@@ -546,6 +546,8 @@ def create_app(
     auth_on = tenant_auth_required(auth_env)
     admin_email = combined_admin_emails(auth_env) or None
     data_dir = fallback_store._ws.root
+    billing_env: Mapping[str, str] = billing_environ if billing_environ is not None else auth_env
+    billing_gateway = gateway_from_env(billing_env, injected=stripe_gateway)
 
     app = FastAPI(title="variant-maker control plane")
 
@@ -1382,11 +1384,32 @@ def create_app(
         viewing_id = getattr(request.state, "viewing_workspace_id", None) or user.workspace_id
         return _auth_me_out(user, viewing_id)
 
+    def _claim_paid_checkout(session_id: str, email: str) -> str:
+        """Use the Stripe success receipt so login does not wait on the webhook."""
+        sid = (session_id or "").strip()
+        if not sid.startswith("cs_") or billing_gateway is None or tenants is None:
+            return email
+        retrieve = getattr(billing_gateway, "retrieve_checkout_session", None)
+        if not callable(retrieve):
+            return email
+        try:
+            session = retrieve(sid)
+        except Exception:
+            return email
+        if not isinstance(session, dict) or not session_is_paid(session):
+            return email
+        paid_email = session_email(session)
+        addr = normalize_email(email)
+        if paid_email and addr and paid_email != addr:
+            raise HTTPException(status_code=400, detail="Use the same email you paid with.")
+        grant_from_checkout(tenants, session)
+        return paid_email or addr
+
     @app.post("/api/auth/password", response_model=AuthMeOut)
     def auth_password(request: Request, body: PasswordLoginIn, response: Response) -> AuthMeOut:
         if not auth_on or tenants is None:
             raise HTTPException(status_code=404, detail="auth is off")
-        email = normalize_email(body.email)
+        email = _claim_paid_checkout(body.session_id, body.email)
         password = body.password or ""
         if not email:
             raise HTTPException(status_code=400, detail="email is required")
@@ -2577,14 +2600,13 @@ def create_app(
 
     register_creator_waitlist_routes(app, data_dir=data_dir, require_admin=_require_admin)
 
-    billing_env: Mapping[str, str] = billing_environ if billing_environ is not None else auth_env
     register_billing_routes(
         app,
         tenants=tenants,
         auth_on=auth_on,
         store=store,
         billing_env=billing_env,
-        gateway=gateway_from_env(billing_env, injected=stripe_gateway),
+        gateway=billing_gateway,
         studio_origin=_login_origin,
         require_user=_require_user,
         admin_email=admin_email,

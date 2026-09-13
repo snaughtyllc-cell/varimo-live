@@ -289,11 +289,15 @@ def session_plan(session: Mapping[str, Any]) -> str:
     return kind if kind in KNOWN_PLANS else AGENCY_PLAN_ID
 
 
-def _session_paid(session: Mapping[str, Any]) -> bool:
+def session_is_paid(session: Mapping[str, Any]) -> bool:
     status = str(session.get("payment_status") or "").strip().lower()
     if not status:
         return True
     return status in {"paid", "no_payment_required"}
+
+
+def _session_paid(session: Mapping[str, Any]) -> bool:
+    return session_is_paid(session)
 
 
 def grant_paid_subscription(

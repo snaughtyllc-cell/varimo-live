@@ -301,6 +301,23 @@ class TenantStore:
             self._save(data)
         return ws
 
+    def move_user_to_workspace(
+        self, email: str, workspace_id: str, *, role: MemberRole | None = None,
+    ) -> UserInfo | None:
+        """Move an existing login onto another studio. Keeps the password."""
+        user = self.get_user(email)
+        if user is None:
+            return None
+        if self.get_workspace(workspace_id) is None:
+            raise ValueError("workspace not found")
+        return self.upsert_user(UserInfo(
+            email=user.email,
+            name=user.name,
+            workspace_id=workspace_id,
+            role=role or user.role,
+            password_hash=user.password_hash,
+        ))
+
     def upsert_user(self, user: UserInfo) -> UserInfo:
         key = normalize_email(user.email)
         with self._lock:
@@ -538,6 +555,39 @@ def migrate_legacy_data(data_dir: str, workspace_id: str) -> bool:
     return moved
 
 
+def attach_or_invite(
+    store: TenantStore,
+    *,
+    email: str,
+    workspace_id: str,
+    admin_email: str | None = None,
+) -> Invite:
+    """Join invite. Existing logins move onto this studio immediately."""
+    addr = normalize_email(email)
+    if not _EMAIL_RE.match(addr):
+        raise ValueError("invalid email")
+    if store.get_workspace(workspace_id) is None:
+        raise ValueError("workspace not found")
+    existing = store.get_user(addr)
+    if existing is None:
+        return store.add_invite(email=addr, kind="join", workspace_id=workspace_id)
+    if is_admin_email(addr, admin_email):
+        raise ValueError("cannot move the admin account")
+    if existing.workspace_id == workspace_id:
+        raise ValueError("already on this team")
+    store.move_user_to_workspace(addr, workspace_id, role="member")
+    leftover = next((i for i in store.list_invites() if i.email == addr), None)
+    if leftover is not None:
+        store.consume_invite(addr)
+    return Invite(
+        id="attached",
+        email=addr,
+        kind="join",
+        workspace_id=workspace_id,
+        created_utc=_now(),
+    )
+
+
 def tenant_root(data_dir: str, workspace_id: str) -> str:
     return os.path.join(os.path.abspath(data_dir), "tenants", workspace_id)
 
@@ -554,6 +604,16 @@ def provision_login(
     addr = normalize_email(email)
     existing = store.get_user(addr)
     if existing is not None and existing.workspace_id:
+        pending = next((i for i in store.list_invites() if i.email == addr), None)
+        if pending is not None and pending.kind == "join":
+            ws = store.get_workspace(pending.workspace_id or "")
+            if ws is not None and normalize_experience(ws.experience) == "agency":
+                store.consume_invite(addr)
+                if existing.workspace_id != ws.id:
+                    moved = store.move_user_to_workspace(addr, ws.id, role="member")
+                    if moved is not None:
+                        _bind_billing_workspace(store, addr, moved.workspace_id)
+                        return moved
         _bind_billing_workspace(store, addr, existing.workspace_id)
         if name and name != existing.name:
             return store.upsert_user(UserInfo(

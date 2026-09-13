@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
@@ -429,6 +430,52 @@ def test_workspace_owner_invites_and_removes_own_va(tmp_path):
     removed = ops.delete("/api/workspace/members/helper@x.com")
     assert removed.status_code == 204
     assert helper.get("/api/gallery").status_code == 401
+
+
+def test_team_invite_moves_existing_owner_onto_shared_drive(tmp_path):
+    """A partner already on an empty studio must join the connected workspace."""
+    app, _store = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    ops = TestClient(app)
+    partner = TestClient(app)
+
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
+    _login(ops, "ops")
+    ops_id = ops.get("/api/auth/me").json()["workspace_id"]
+    _set_experience(jeff, ops_id, "agency")
+
+    jeff.post("/api/auth/invites", json={"email": "partner@x.com", "kind": "new_workspace"})
+    _login(partner, "partner")
+    partner_id = partner.get("/api/auth/me").json()["workspace_id"]
+    assert partner_id != ops_id
+    assert partner.get("/api/drive/status").json()["status"] == "not_configured"
+
+    studio_token = Path(tmp_path) / "tenants" / ops_id / "drive" / "oauth_token.json"
+    studio_token.parent.mkdir(parents=True, exist_ok=True)
+    studio_token.write_text(json.dumps({
+        "email": "studio@varimo.io",
+        "refresh_token": "refresh-studio",
+        "token": "access-studio",
+    }))
+    assert ops.get("/api/drive/status").json()["status"] == "ready"
+    assert ops.get("/api/drive/status").json()["connected_email"] == "studio@varimo.io"
+
+    inv = ops.post("/api/workspace/invites", json={"email": "partner@x.com"})
+    assert inv.status_code == 201
+    assert ops.get("/api/workspace/team").json()["invites"] == []
+    members = {m["email"] for m in ops.get("/api/workspace/team").json()["members"]}
+    assert members == {"ops@x.com", "partner@x.com"}
+
+    me = partner.get("/api/auth/me").json()
+    assert me["workspace_id"] == ops_id
+    assert me["role"] == "member"
+    drive = partner.get("/api/drive/status").json()
+    assert drive["status"] == "ready"
+    assert drive["connected_email"] == "studio@varimo.io"
+    again = ops.post("/api/workspace/invites", json={"email": "partner@x.com"})
+    assert again.status_code == 400
+    assert "already on this team" in again.json()["detail"]
 
 
 def test_admin_team_invites_home_even_when_viewing_other(tmp_path):

@@ -214,6 +214,7 @@ from .stripe_billing import gateway_from_env
 from .tenant_runtime import TenantHub
 from .tenants import (
     TenantStore,
+    attach_or_invite,
     can_manage_instagram,
     combined_admin_emails,
     is_admin_email,
@@ -1551,7 +1552,13 @@ def create_app(
         assert tenants is not None
         ws_id = admin.workspace_id if body.kind == "join" else None
         try:
-            inv = tenants.add_invite(email=body.email, kind=body.kind, workspace_id=ws_id)
+            if body.kind == "join":
+                inv = attach_or_invite(
+                    tenants, email=body.email, workspace_id=ws_id or "",
+                    admin_email=admin_email,
+                )
+            else:
+                inv = tenants.add_invite(email=body.email, kind=body.kind, workspace_id=ws_id)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return InviteOut(
@@ -1610,8 +1617,9 @@ def create_app(
         owner = _require_agency_team(request)
         assert tenants is not None
         try:
-            inv = tenants.add_invite(
-                email=body.email, kind="join", workspace_id=owner.workspace_id,
+            inv = attach_or_invite(
+                tenants, email=body.email, workspace_id=owner.workspace_id,
+                admin_email=admin_email,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

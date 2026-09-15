@@ -78,3 +78,19 @@ it("introduces the product before pricing and links early CTAs to the plan", asy
  expect(screen.queryByRole("option",{name:"Under $25 / month"})).not.toBeInTheDocument();
  expect(screen.getByRole("option",{name:"$25–$50 / month"})).toBeInTheDocument();
 });
+
+it("centers the spoofing app and the two workflows", async () => {
+ render(<LandingClient />);
+ await screen.findAllByRole("button", {name:"Start generating — $225/month"});
+ expect(screen.getByRole("heading", {level: 1})).toHaveTextContent(/video variations/i);
+ expect(screen.getByText(/spoofing is still highly manual/i)).toBeInTheDocument();
+ expect(screen.getByRole("link", {name: "Workflows"})).toHaveAttribute("href", "#workflows");
+ expect(screen.getByRole("link", {name: "See the two workflows"})).toHaveAttribute("href", "#workflows");
+ const workflows = screen.getByRole("region", {name: /Simple in the app/i});
+ expect(workflows).toHaveTextContent(/Everything in the app/i);
+ expect(workflows).toHaveTextContent(/Drive in, Drive out/i);
+ expect(workflows).toHaveTextContent(/invite their VAs/i);
+ expect(workflows).toHaveTextContent(/existing AI systems/i);
+ expect(screen.getByRole("region", {name: /One plan\./})).toHaveTextContent(/Simple workflow/i);
+ expect(screen.getByRole("region", {name: /One plan\./})).toHaveTextContent(/Advanced workflow/i);
+});

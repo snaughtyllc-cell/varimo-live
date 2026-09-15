@@ -401,3 +401,33 @@
 .varimo-landing .time-costs td,.varimo-landing .time-costs th:last-child { text-align:right; }
 .varimo-landing .time-automation { margin:24px 0 0; max-width:900px; font-size:15px; line-height:1.7; color:#5B5F61; }
 .varimo-landing .time-automation strong { color:#101112; }
+
+.varimo-landing .wf { padding: 116px 32px 0; display: flex; flex-direction: column; align-items: center; }
+.varimo-landing .wf-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.28em; text-transform: uppercase; color: #6A6E70; }
+.varimo-landing .wf-title { margin: 18px 0 0; text-align: center; font-size: 52px; line-height: 1.02; font-weight: 700; letter-spacing: -0.055em; color: #101112; }
+.varimo-landing .wf-title-em { font-family: var(--font-instrument), Georgia, serif; font-style: italic; font-weight: 400; letter-spacing: -0.02em; color: #43494B; }
+.varimo-landing .wf-lead { margin: 20px 0 0; max-width: 560px; text-align: center; font-size: 15.5px; line-height: 1.7; color: #5B5F61; }
+.varimo-landing .wf-grid { width: 100%; max-width: 1180px; margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
+.varimo-landing .wf-card { border-radius: 22px; padding: 36px 34px; display: flex; flex-direction: column; gap: 16px; min-height: 100%; }
+.varimo-landing .wf-card--simple { background: #FBFAF8; border: 1px solid rgba(16,17,18,0.1); }
+.varimo-landing .wf-card--advanced { background: #0B0C0C; border: 1px solid rgba(22,200,211,0.4); }
+.varimo-landing .wf-kicker { font-size: 11px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: #6A6E70; }
+.varimo-landing .wf-card--advanced .wf-kicker { color: #16C8D3; }
+.varimo-landing .wf-name { margin: 0; font-size: 28px; line-height: 1.12; font-weight: 700; letter-spacing: -0.04em; color: #101112; }
+.varimo-landing .wf-card--advanced .wf-name { color: #FFFFFF; }
+.varimo-landing .wf-copy { margin: 0; font-size: 15px; line-height: 1.7; color: #5B5F61; }
+.varimo-landing .wf-card--advanced .wf-copy { color: rgba(255,255,255,0.62); }
+.varimo-landing .wf-steps { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px 16px; }
+.varimo-landing .wf-steps li { display: flex; flex-direction: column; gap: 4px; padding-top: 12px; border-top: 1px solid rgba(16,17,18,0.08); }
+.varimo-landing .wf-card--advanced .wf-steps li { border-top-color: rgba(255,255,255,0.1); }
+.varimo-landing .wf-steps span { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; color: #101112; }
+.varimo-landing .wf-card--advanced .wf-steps span { color: #FFFFFF; }
+.varimo-landing .wf-steps small { font-size: 13px; line-height: 1.45; color: #5B5F61; }
+.varimo-landing .wf-card--advanced .wf-steps small { color: rgba(255,255,255,0.55); }
+@media(max-width:900px){ .varimo-landing .wf-grid { grid-template-columns: minmax(0,1fr); } }
+@media(max-width:600px){
+ .varimo-landing .wf { padding: 64px 20px 0; }
+ .varimo-landing .wf-title { font-size: 32px; line-height: 1.04; }
+ .varimo-landing .wf-card { padding: 28px 24px; }
+ .varimo-landing .wf-steps { grid-template-columns: minmax(0,1fr); }
+}

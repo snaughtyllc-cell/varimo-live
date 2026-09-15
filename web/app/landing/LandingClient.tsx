@@ -67,8 +67,8 @@ export function LandingClient() {
 </div>
 <div className="l5">
 <a className="l6" href="#demo">{"The app"}</a>
-<a className="l8" href="#receipts">{"Receipts"}</a>
-<a className="l10" href="#faq">{"FAQ"}</a>
+<a className="l8" href="#workflows">{"Workflows"}</a>
+<a className="l10" href="#receipts">{"Receipts"}</a>
 <a className="l12" href="#pricing">{"Pricing"}</a>
 </div>
 <div className="l14"></div><a className="landing-signin" href="/login">Sign in</a>
@@ -76,12 +76,12 @@ export function LandingClient() {
 </nav>
 </header><main >
 <section className="l18" aria-labelledby="h-hero">
-<span className="l19" data-anim="">{"Built for teams"}</span>
-<h1 className="l20" id="h-hero" data-anim="">{"Many originals"}<br />{"from one master"}</h1>
-<p className="l21" data-anim="">{"One source video in. A pack of real, original files out \u2014 ready for every account your team already posts from."}</p>
+<span className="l19" data-anim="">{"The spoofing web app"}</span>
+<h1 className="l20" id="h-hero" data-anim="">{"Video variations,"}<br />{"without the hand work"}</h1>
+<p className="l21" data-anim="">{"Spoofing is still highly manual. varimo is the web app that turns one master into a pack of real originals \u2014 in a shared workspace, or automatically through Drive."}</p>
 <div className="l22" data-anim="">
 <a className="l23" href="#pricing">Start generating</a>
-<a className="l25" href="#receipts">{"See the receipts"}</a>
+<a className="l25" href="#workflows">{"See the two workflows"}</a>
 </div>
 <div className="l27">
 <div className="l28">
@@ -115,42 +115,42 @@ export function LandingClient() {
 <p className="l54">{"The default Fast pack is about 20 copies per clip \u2014 genuinely distinct files rendered off one master."}</p>
 </div>
 <div className="l55">
-<span className="l56">{"Every file quality-gated"}</span>
+<span className="l56">{"Two ways to run it"}</span>
 <div className="l57">
-<div className="l58"><span className="l59"></span><span className="l60">{"Colour stays true"}</span></div>
-<div className="l61"><span className="l62"></span><span className="l63">{"Audio stays in sync"}</span></div>
-<div className="l64"><span className="l65"></span><span className="l66">{"Output matches source"}</span></div>
+<div className="l58"><span className="l59"></span><span className="l60">{"Simple \u2014 invite VAs, spoof in the app"}</span></div>
+<div className="l61"><span className="l62"></span><span className="l63">{"Advanced \u2014 Drive in, variants back"}</span></div>
+<div className="l64"><span className="l65"></span><span className="l66">{"Quality gate stays on every file"}</span></div>
 </div>
-<p className="l67">{"Not washed re-encodes. Not sticker-and-overlay remixes."}</p>
+<p className="l67">{"Integrations and automation replace the hand-remix hour."}</p>
 </div>
 </div>
 </section>
 <section className="l68" aria-labelledby="h-vs">
 <div className="l69">
 <div className="l70">
-<span className="l71">{"One file per idea"}</span>
-<h3 className="l72" id="h-vs">{"What it looks like today"}</h3>
+<span className="l71">{"The pain"}</span>
+<h3 className="l72" id="h-vs">{"Spoofing is still manual"}</h3>
 <div className="l73">
-<div className="l74"><span className="l75"></span><span className="l76">{"One upload is one shot. The same file on every account kills reach."}</span></div>
-<div className="l77"><span className="l78"></span><span className="l79">{"VAs hand-remix a winner instead of shipping the next ten."}</span></div>
-<div className="l80"><span className="l81"></span><span className="l82">{"More output means more filming, or more people."}</span></div>
+<div className="l74"><span className="l75"></span><span className="l76">{"VAs remake the same clip by hand for every account."}</span></div>
+<div className="l77"><span className="l78"></span><span className="l79">{"CapCut and Edits eat an hour so one winner can post twice."}</span></div>
+<div className="l80"><span className="l81"></span><span className="l82">{"More output means more people, not a better system."}</span></div>
 </div>
 </div>
 <div className="l83">
-<span className="l84">{"With varimo"}</span>
-<h3 className="l85">{"What it looks like after"}</h3>
+<span className="l84">{"The product"}</span>
+<h3 className="l85">{"Integrations do the spoofing"}</h3>
 <div className="l86">
-<div className="l87"><span className="l88"></span><span className="l89">{"A pack of distinct files off one master, ready for the whole roster."}</span></div>
-<div className="l90"><span className="l91"></span><span className="l92">{"The hand-remixing hour disappears. VAs run packs, not edits."}</span></div>
-<div className="l93"><span className="l94"></span><span className="l95">{"A proven winner stays in rotation instead of retiring after one post."}</span></div>
+<div className="l87"><span className="l88"></span><span className="l89">{"One web app. A pack of real originals off one master."}</span></div>
+<div className="l90"><span className="l91"></span><span className="l92">{"Invite VAs into a shared workspace \u2014 they run packs, not billing."}</span></div>
+<div className="l93"><span className="l94"></span><span className="l95">{"Or connect Drive: sources in, finished variations back, hands off."}</span></div>
 </div>
 </div>
 </div>
 </section>
 <section className="l96" id="demo" aria-labelledby="h-demo">
 <span className="l97">{"The app"}</span>
-<h2 className="l98" id="h-demo">{"Drop a clip."}<br /><span className="l99">{"Watch the pack land."}</span></h2>
-<p className="l100">{"Drop a clip, pick a pack size, hit Generate \u2014 and twenty delivered originals land in the gallery. Real capture, sped up."}</p>
+<h2 className="l98" id="h-demo">{"The product."}<br /><span className="l99">{"Drop a clip. Watch the pack land."}</span></h2>
+<p className="l100">{"Everything happens in the web app: drop a clip, pick a pack size, hit Generate. Twenty delivered originals land in the gallery. Real capture, sped up."}</p>
 <div className="l101">
 <div className="l102">
 <span className="l103">{"01"}</span>
@@ -194,6 +194,34 @@ export function LandingClient() {
 <span className="l134">{"Wherever your team already posts"}</span>
 </div>
 </section>
+<section className="wf" id="workflows" aria-labelledby="h-workflows">
+<span className="wf-eyebrow">{"Two workflows"}</span>
+<h2 className="wf-title" id="h-workflows">{"Simple in the app."}<br /><span className="wf-title-em">{"Advanced through Drive."}</span></h2>
+<p className="wf-lead">{"Start with your team in one workspace. When you already have AI making masters, plug those folders in and let Drive run the spoofing."}</p>
+<div className="wf-grid">
+<article className="wf-card wf-card--simple">
+<span className="wf-kicker">{"01 \u00b7 Simple"}</span>
+<h3 className="wf-name">{"Everything in the app"}</h3>
+<p className="wf-copy">{"Agency owners invite their VAs. The whole team creates and manages video variations from one shared workspace \u2014 no extra tools, no hand-offs."}</p>
+<ol className="wf-steps">
+<li><span>{"Invite"}</span><small>{"Add VAs to the workspace"}</small></li>
+<li><span>{"Drop"}</span><small>{"Upload a master in Studio"}</small></li>
+<li><span>{"Generate"}</span><small>{"Pack lands in the gallery"}</small></li>
+<li><span>{"Send"}</span><small>{"Phone, Drive, or download"}</small></li>
+</ol>
+</article>
+<article className="wf-card wf-card--advanced">
+<span className="wf-kicker">{"02 \u00b7 Advanced"}</span>
+<h3 className="wf-name">{"Drive in, Drive out"}</h3>
+<p className="wf-copy">{"Agencies with existing AI systems connect those folders. Upload sources to Drive, varimo spoofs them automatically, and finished variations go back to Drive."}</p>
+<ol className="wf-steps">
+<li><span>{"Upload"}</span><small>{"Sources land in Drive"}</small></li>
+<li><span>{"Process"}</span><small>{"Workflows pick them up"}</small></li>
+<li><span>{"Return"}</span><small>{"Variants back to Drive"}</small></li>
+</ol>
+</article>
+</div>
+</section>
 <section className="l135" id="receipts" aria-labelledby="h-receipts">
 <div className="l136">
 <div className="l137">
@@ -226,7 +254,7 @@ export function LandingClient() {
 </section>
 <section className="l160">
 <a className="l161" href="#pricing">Start generating</a>
-<span className="l163">One master. More originals. Ready for your team.</span>
+<span className="l163">The app for spoofing. Two workflows. One workspace.</span>
 </section>
 <section className="l164" aria-labelledby="h-spread">
 <span className="l165">{"The spread"}</span>
@@ -286,6 +314,20 @@ export function LandingClient() {
 <div className="l211">
 <details className="l212">
 <summary className="l213">
+<span >{"What are the two workflows?"}</span>
+<span className="l214" aria-hidden="true">{"+"}</span>
+</summary>
+<p className="l215">{"Simple: everything happens in the app. Invite VAs to a shared workspace and generate packs from Studio. Advanced: connect Google Drive so sources go in, varimo spoofs them, and finished variations come back \u2014 built for agencies that already run AI and automation."}</p>
+</details>
+<details className="l216">
+<summary className="l217">
+<span >{"Do I have to use Drive?"}</span>
+<span className="l218" aria-hidden="true">{"+"}</span>
+</summary>
+<p className="l219">{"No. Drive is the advanced path. Most teams start in the app \u2014 drop a clip, generate, send. Connect folders later if you already have an AI stack filling them."}</p>
+</details>
+<details className="l212">
+<summary className="l213">
 <span >{"What files can I put in?"}</span>
 <span className="l214" aria-hidden="true">{"+"}</span>
 </summary>
@@ -310,7 +352,7 @@ export function LandingClient() {
 <span >{"Can my VAs use it without touching billing?"}</span>
 <span className="l226" aria-hidden="true">{"+"}</span>
 </summary>
-<p className="l227">{"Yes. Workspaces are invite-only and scoped \u2014 VAs can run packs and pull from Drive without seeing billing or your accounts."}</p>
+<p className="l227">{"Yes. Invite them into the shared workspace. VAs run the simple workflow \u2014 drop, generate, send \u2014 without seeing billing or your accounts."}</p>
 </details>
 <details className="l228">
 <summary className="l229">
@@ -353,7 +395,7 @@ export function LandingClient() {
 <section className="l249" id="pricing" aria-labelledby="h-pricing">
 <span className="l250">{"Pricing"}</span>
 <h2 className="l251" id="h-pricing">{"One plan."}<br /><span className="l252">{"Built for the roster."}</span></h2>
-<p className="l253">{"For agencies and established content teams already producing variants of work that performs. You buy render time, not seats."}</p>
+<p className="l253">{"For agencies still spoofing by hand, and for teams that already run AI into Drive. You buy render time, not seats."}</p>
 <div className="l254">
 <div className="l255">
 <div className="l256">
@@ -378,8 +420,8 @@ export function LandingClient() {
 <span className="l270">{"What's included"}</span>
 <div className="l271">
 <div className="l272"><span className="l273"></span><span className="l274">{copy("90 Fast hours, then $0.75/hr")}</span></div>
-<div className="l275"><span className="l276"></span><span className="l277">{"Auto-import from Google Drive \u2192 generate \u2192 auto-export back to Drive, organised"}</span></div>
-<div className="l278"><span className="l279"></span><span className="l280">{"Team / VAs run packs (not billing)"}</span></div>
+<div className="l275"><span className="l276"></span><span className="l277">{"Simple workflow \u2014 invite VAs, spoof in one shared workspace"}</span></div>
+<div className="l278"><span className="l279"></span><span className="l280">{"Advanced workflow \u2014 Drive in, auto-generate, variants back to Drive"}</span></div>
 <div className="l281"><span className="l282"></span><span className="l283">{"Auto captions \u2014 a unique caption per copy"}</span></div>
 <div className="l284"><span className="l285"></span><span className="l286">{"Quality gate stays on (colour + audio sync)"}</span></div>
 <div className="l287"><span className="l288"></span><span className="l289">{"Analytics \u2014 coming soon"}</span></div>
@@ -390,8 +432,8 @@ export function LandingClient() {
 <CreatorWaitlistForm />
 <section className="l290" id="access" aria-labelledby="h-close">
 <div className="l291">
-<h2 className="l292" id="h-close">{"Many originals"}<br /><span className="l293">{"from one master."}</span></h2>
-<p className="l294">{"One source video in. A pack of real, original files out \u2014 ready for every account your team already posts from."}</p>
+<h2 className="l292" id="h-close">{"Spoofing,"}<br /><span className="l293">{"without the hand work."}</span></h2>
+<p className="l294">{"Invite your VAs and run packs in the app. Or connect Drive and let finished variations come back on their own."}</p>
 <button className="l295" type="button" onClick={buySubscription} disabled={checkoutBusy || !checkoutReady} aria-busy={checkoutBusy}>{checkoutBusy ? "Opening Stripe…" : <>{copy("Start generating \u2014 $200/month")}</>}</button>
 <span className="l297">{"varimo.io"}</span>
 </div>

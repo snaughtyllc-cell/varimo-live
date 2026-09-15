@@ -45,7 +45,7 @@ export function TimeSavingsCalculator({ plan }: { plan: BillingPlan | null }) {
         </>}
       </div>
     </div>
-    <p className="time-automation"><strong>Even fewer manual steps with workflows.</strong> Connect your Drive folders to automate importing, generation, and delivery. Add your source clip to the connected folder and let the workflow run.</p>
+    <p className="time-automation"><strong>Two workflows, same quality gate.</strong> Simple: invite VAs and generate in the app. Advanced: connect Drive so sources go in and finished variations come back — built for agencies that already run AI.</p>
     <p className="time-method">How it works: manual editing minutes × outputs, versus generation minutes × 20-packs (partial packs round up). Hands-on editing and background generation are different kinds of time, so we don’t subtract one from the other as labor saved. Uploading, settings, review, source creation, and posting are excluded from this comparison. Actual generation time depends on the clip, processing settings, and queue. Labor costs use the full unrounded manual hours; subscription pricing excludes usage charges and taxes.</p>
   </section>;
 }

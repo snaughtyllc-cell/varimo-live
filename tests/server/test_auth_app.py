@@ -431,6 +431,35 @@ def test_workspace_owner_invites_and_removes_own_va(tmp_path):
     assert helper.get("/api/gallery").status_code == 401
 
 
+def test_team_invite_rejects_existing_owner(tmp_path):
+    """An owner already on their own studio must stay there."""
+    app, _store = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    ops = TestClient(app)
+    partner = TestClient(app)
+
+    _login(jeff, "jeff")
+    jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
+    _login(ops, "ops")
+    ops_id = ops.get("/api/auth/me").json()["workspace_id"]
+    _set_experience(jeff, ops_id, "agency")
+
+    jeff.post("/api/auth/invites", json={"email": "partner@x.com", "kind": "new_workspace"})
+    _login(partner, "partner")
+    partner_id = partner.get("/api/auth/me").json()["workspace_id"]
+    assert partner_id != ops_id
+
+    inv = ops.post("/api/workspace/invites", json={"email": "partner@x.com"})
+    assert inv.status_code == 400
+    assert "already has a studio" in inv.json()["detail"]
+
+    me = partner.get("/api/auth/me").json()
+    assert me["workspace_id"] == partner_id
+    assert me["role"] == "owner"
+    members = {m["email"] for m in ops.get("/api/workspace/team").json()["members"]}
+    assert members == {"ops@x.com"}
+
+
 def test_admin_team_invites_home_even_when_viewing_other(tmp_path):
     app, _ = _auth_app(tmp_path)
     jeff = TestClient(app)
@@ -603,6 +632,13 @@ def test_second_site_admin_can_open_another_workspace(tmp_path):
     assert viewing["viewing_other"] is True
     assert viewing["workspace_id"] == ops_id
     assert viewing["home_workspace_id"] != ops_id
+
+    _login(partner, "partner")
+    home = partner.get("/api/auth/me").json()
+    assert home["viewing_other"] is False
+    assert home["workspace_id"] == home["home_workspace_id"]
+    assert home["workspace_id"] != ops_id
+    assert partner.cookies.get(VIEW_COOKIE_NAME) in (None, "")
 
     assert partner.delete(f"/api/admin/users/{ADMIN}").status_code == 400
 

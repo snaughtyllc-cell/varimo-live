@@ -301,6 +301,23 @@ class TenantStore:
             self._save(data)
         return ws
 
+    def move_user_to_workspace(
+        self, email: str, workspace_id: str, *, role: MemberRole | None = None,
+    ) -> UserInfo | None:
+        """Move an existing login onto another studio. Keeps the password."""
+        user = self.get_user(email)
+        if user is None:
+            return None
+        if self.get_workspace(workspace_id) is None:
+            raise ValueError("workspace not found")
+        return self.upsert_user(UserInfo(
+            email=user.email,
+            name=user.name,
+            workspace_id=workspace_id,
+            role=role or user.role,
+            password_hash=user.password_hash,
+        ))
+
     def upsert_user(self, user: UserInfo) -> UserInfo:
         key = normalize_email(user.email)
         with self._lock:
@@ -536,6 +553,29 @@ def migrate_legacy_data(data_dir: str, workspace_id: str) -> bool:
     with open(marker, "w", encoding="utf-8") as f:
         f.write(workspace_id + "\n")
     return moved
+
+
+def invite_to_workspace(
+    store: TenantStore,
+    *,
+    email: str,
+    workspace_id: str,
+    admin_email: str | None = None,
+) -> Invite:
+    """Join invite only. Never steal an existing owner onto another studio."""
+    addr = normalize_email(email)
+    if not _EMAIL_RE.match(addr):
+        raise ValueError("invalid email")
+    if store.get_workspace(workspace_id) is None:
+        raise ValueError("workspace not found")
+    existing = store.get_user(addr)
+    if existing is None:
+        return store.add_invite(email=addr, kind="join", workspace_id=workspace_id)
+    if is_admin_email(addr, admin_email):
+        raise ValueError("cannot move the admin account")
+    if existing.workspace_id == workspace_id:
+        raise ValueError("already on this team")
+    raise ValueError("that email already has a studio")
 
 
 def tenant_root(data_dir: str, workspace_id: str) -> str:

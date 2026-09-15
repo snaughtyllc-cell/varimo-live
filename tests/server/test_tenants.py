@@ -8,6 +8,7 @@ from variant_maker.server.sessions import load_or_create_secret, read_session, s
 from variant_maker.server.tenants import (
     TenantStore,
     UserInfo,
+    invite_to_workspace,
     auth_required,
     is_admin_email,
     migrate_legacy_data,
@@ -182,6 +183,74 @@ def test_provision_join_invite(tmp_path):
     assert va is not None
     assert va.workspace_id == owner.workspace_id
     assert va.role == "member"
+
+
+def test_join_invite_does_not_steal_an_existing_owner(tmp_path):
+    """A later Team invite must not pull an owner into someone else's studio."""
+    store = TenantStore(str(tmp_path / "t.json"))
+    owner = provision_login(
+        store, email="jeff@x.com", name="Jeff", admin_email="jeff@x.com",
+    )
+    assert owner is not None
+    store.add_invite(email="va@x.com", kind="new_workspace", workspace_id=None)
+    va = provision_login(
+        store, email="va@x.com", name="VA", admin_email="jeff@x.com",
+    )
+    assert va is not None and va.role == "owner"
+    assert va.workspace_id != owner.workspace_id
+    home = va.workspace_id
+    store.set_password(va.email, "pbkdf2_sha256$1$abc$def")
+    store.add_invite(email="va@x.com", kind="join", workspace_id=owner.workspace_id)
+    again = provision_login(
+        store, email="va@x.com", name="VA", admin_email="jeff@x.com",
+    )
+    assert again is not None
+    assert again.workspace_id == home
+    assert again.role == "owner"
+    assert again.password_hash == "pbkdf2_sha256$1$abc$def"
+
+
+def test_invite_to_workspace_rejects_existing_owner(tmp_path):
+    store = TenantStore(str(tmp_path / "t.json"))
+    studio = store.create_workspace(name="Jeff Tingz", experience="agency")
+    empty = store.create_workspace(name="stranded", experience="agency")
+    store.upsert_user(UserInfo(
+        email="partner@x.com", name="Partner", workspace_id=empty.id, role="owner",
+        password_hash="pbkdf2_sha256$1$abc$def",
+    ))
+    try:
+        invite_to_workspace(store, email="Partner@x.com", workspace_id=studio.id)
+        raise AssertionError("expected already has a studio")
+    except ValueError as exc:
+        assert "already has a studio" in str(exc)
+    stayed = store.get_user("partner@x.com")
+    assert stayed is not None
+    assert stayed.workspace_id == empty.id
+    assert stayed.role == "owner"
+
+
+def test_invite_to_workspace_new_email_stays_pending(tmp_path):
+    store = TenantStore(str(tmp_path / "t.json"))
+    studio = store.create_workspace(name="Jeff Tingz", experience="agency")
+    inv = invite_to_workspace(store, email="va@x.com", workspace_id=studio.id)
+    assert inv.kind == "join"
+    assert store.get_user("va@x.com") is None
+    assert [i.email for i in store.list_invites()] == ["va@x.com"]
+
+
+def test_move_user_to_workspace_preserves_password(tmp_path):
+    store = TenantStore(str(tmp_path / "t.json"))
+    studio = store.create_workspace(name="Jeff Tingz")
+    other = store.create_workspace(name="stranded")
+    store.upsert_user(UserInfo(
+        email="va@x.com", name="VA", workspace_id=other.id, role="owner",
+        password_hash="pbkdf2_sha256$1$abc$def",
+    ))
+    moved = store.move_user_to_workspace("VA@x.com", studio.id, role="member")
+    assert moved is not None
+    assert moved.workspace_id == studio.id
+    assert moved.role == "member"
+    assert moved.password_hash == "pbkdf2_sha256$1$abc$def"
 
 
 def test_provision_new_workspace_invite(tmp_path):

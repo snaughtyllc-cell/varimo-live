@@ -93,6 +93,21 @@ describe("Team page", () => {
   });
 
   it("invites a VA into this workspace", async () => {
+    vi.mocked(getWorkspaceTeam)
+      .mockResolvedValueOnce(team)
+      .mockResolvedValueOnce({
+        ...team,
+        invites: [
+          ...team.invites,
+          {
+            id: "inv_2",
+            email: "new@example.com",
+            kind: "join",
+            workspace_id: "ws_ops",
+            created_utc: "2026-08-20T01:00:00Z",
+          },
+        ],
+      });
     render(<TeamPage />);
     await screen.findByText("va@example.com");
     fireEvent.change(screen.getByLabelText("Invite email"), {
@@ -103,6 +118,36 @@ describe("Team page", () => {
       expect(createWorkspaceInvite).toHaveBeenCalledWith("new@example.com");
     });
     expect(await screen.findByText("new@example.com")).toBeInTheDocument();
+  });
+
+  it("shows an existing login as a member after invite, not a pending invite", async () => {
+    vi.mocked(getWorkspaceTeam)
+      .mockResolvedValueOnce(team)
+      .mockResolvedValueOnce({
+        ...team,
+        members: [
+          ...team.members,
+          {
+            email: "partner@example.com",
+            name: "Partner",
+            role: "member",
+            week_fast: 0,
+            week_hq: 0,
+            week_packs: 0,
+          },
+        ],
+      });
+    render(<TeamPage />);
+    await screen.findByText("va@example.com");
+    fireEvent.change(screen.getByLabelText("Invite email"), {
+      target: { value: "partner@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^invite$/i }));
+    await waitFor(() => {
+      expect(createWorkspaceInvite).toHaveBeenCalledWith("partner@example.com");
+    });
+    expect(await screen.findByText("partner@example.com")).toBeInTheDocument();
+    expect(screen.getByText("helper@example.com")).toBeInTheDocument();
   });
 
   it("Remove revokes a VA login", async () => {

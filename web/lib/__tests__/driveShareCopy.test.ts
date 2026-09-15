@@ -16,6 +16,8 @@ describe("driveShareCopy", () => {
     expect(DRIVE_SHARE_HEADING).toMatch(/share this email/i);
     expect(DRIVE_SHARE_BODY).toMatch(/Editor/i);
     expect(DRIVE_SHARE_BODY).toMatch(/paste the folder link/i);
+    expect(DRIVE_SHARE_BODY).toMatch(/only that folder/i);
     expect(DRIVE_OPERATOR_WAIT).toMatch(/only the site admin connects/i);
+    expect(DRIVE_OPERATOR_WAIT).toMatch(/paste that folder/i);
   });
 });

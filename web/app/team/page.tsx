@@ -59,12 +59,8 @@ export default function TeamPage() {
     setFormError(null);
     setSubmitting(true);
     try {
-      const created = await createWorkspaceInvite(email.trim());
-      setTeam((prev) =>
-        prev
-          ? { ...prev, invites: [created, ...prev.invites.filter((i) => i.email !== created.email)] }
-          : prev,
-      );
+      await createWorkspaceInvite(email.trim());
+      setTeam(await getWorkspaceTeam());
       setEmail("");
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to create invite");

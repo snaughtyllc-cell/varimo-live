@@ -245,7 +245,7 @@ export default function TeamPage() {
           </button>
         </form>
         <div style={{ fontSize: 12, color: "var(--color-muted)", marginBottom: 12, lineHeight: 1.45 }}>
-          They sign in at this Studio URL with that email plus a password they choose, or with Google.
+          They sign in at this Studio URL with that email plus a password they choose.
           First password sign-in sets it. This is a join invite — they land in your studio, not a new one.
         </div>
 

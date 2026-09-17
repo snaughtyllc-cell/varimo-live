@@ -89,6 +89,8 @@ describe("Team page", () => {
     expect(screen.getByText("This week: no packs")).toBeInTheDocument();
     expect(screen.getByText("helper@example.com")).toBeInTheDocument();
     expect(screen.getByText(/join this workspace/i)).toBeInTheDocument();
+    expect(screen.getByText(/password they choose/i)).toBeInTheDocument();
+    expect(screen.queryByText(/or with Google/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Invite kind")).not.toBeInTheDocument();
   });
 

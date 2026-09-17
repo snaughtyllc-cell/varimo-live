@@ -54,7 +54,7 @@ row + progress card.
 | Analytics | `/analytics` | workspace owner / site admin (or auth off) | More (label **Stats**) | Instagram Insights: ranked originals, Connect testers, Sync views onto packs. Opening Stats pulls Graph again when the last Insights pass is ≥2 hours old and shows change since last look. Unmatched Reels (older posts) live in a tab. VAs cannot open this. |
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | Diagnostics | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
-| Login | `/login` | unauthenticated | — | Invite-only email + password or Google. No app tabs. |
+| Login | `/login` | unauthenticated | — | Invite-only email + password. No app tabs. |
 
 ## Nested surfaces a redesign must include
 

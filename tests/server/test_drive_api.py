@@ -24,7 +24,7 @@ def test_status_ready(tmp_path):
     body = client.get("/api/drive/status").json()
     assert body["status"] == "ready"
     assert body["sa_email"] == "bot@x.iam.gserviceaccount.com"
-    assert body["share_email"] == "drive@varyforge.app"
+    assert body["share_email"] == "studio@varimo.io"
 
 
 def test_status_not_configured(tmp_path):

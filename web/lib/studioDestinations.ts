@@ -97,7 +97,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     label: "Login",
     audience: "everyone",
     tab: "none",
-    summary: "Email + password or Google after a paid checkout or an invite. No app tabs on this page.",
+    summary: "Email + password after a paid checkout or an invite. No app tabs on this page.",
   },
   {
     href: "/pricing",

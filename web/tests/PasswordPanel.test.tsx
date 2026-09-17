@@ -40,9 +40,12 @@ beforeEach(() => {
 });
 
 describe("PasswordPanel", () => {
-  it("lets a Google-only user add a password", async () => {
+  it("lets a user without a password add one", async () => {
     render(<PasswordPanel />);
     expect(screen.getByRole("button", { name: "Add password" })).toBeInTheDocument();
+    expect(screen.getByText(/sign in with email/i)).toBeInTheDocument();
+    expect(screen.getByText(/share studio@ \/ paste folder/i)).toBeInTheDocument();
+    expect(screen.queryByText(/google/i)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("New studio password"), {
       target: { value: "secret12" },
     });
@@ -51,5 +54,13 @@ describe("PasswordPanel", () => {
       expect(setStudioPassword).toHaveBeenCalledWith("secret12");
     });
     expect(await screen.findByText("Password saved.")).toBeInTheDocument();
+  });
+
+  it("lets a user replace their email sign-in password", () => {
+    me.data = { ...LOGGED_IN, has_password: true };
+    render(<PasswordPanel />);
+    expect(screen.getByRole("button", { name: "Change password" })).toBeInTheDocument();
+    expect(screen.getByText(/replace the password for email sign-in/i)).toBeInTheDocument();
+    expect(screen.queryByText(/google/i)).not.toBeInTheDocument();
   });
 });

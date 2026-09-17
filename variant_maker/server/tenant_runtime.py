@@ -3,19 +3,19 @@ from __future__ import annotations
 
 import os
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
 from .captions import CaptionStore
 from .destinations import DestinationStore
-from .drive_config import resolve_drive_status
+from .drive_config import resolve_drive_oauth_token_path, resolve_drive_status
 from .drive_exports import ExportStore
 from .drive_oauth import OAuthPendingStore, OAuthTokenStore
 from .instagram_oauth import InstagramAccountStore
 from .jobs import JobStore
 from .runner import Runner
-from .tenants import tenant_root
+from .tenants import is_admin_email, tenant_root
 from .workflows import WorkflowStore
 from .workspace import Workspace
 
@@ -92,9 +92,46 @@ class TenantHub:
             self.bundle(ws_id)
 
 
-def drive_ready(bundle: TenantBundle, *, sa_json_path: str | None, environ: dict):
+def admin_workspace_token_paths(
+    data_dir: str,
+    users: Iterable[Any],
+    admin_email: str | None,
+) -> list[str]:
+    """`{tenants/{id}/drive/oauth_token.json}` for each site-admin user."""
+    paths: list[str] = []
+    seen: set[str] = set()
+    for user in users:
+        email = getattr(user, "email", None)
+        workspace_id = getattr(user, "workspace_id", None)
+        if not email or not workspace_id:
+            continue
+        if not is_admin_email(str(email), admin_email):
+            continue
+        path = os.path.join(tenant_root(data_dir, str(workspace_id)), "drive", "oauth_token.json")
+        if path not in seen:
+            seen.add(path)
+            paths.append(path)
+    return paths
+
+
+def drive_ready(
+    bundle: TenantBundle,
+    *,
+    sa_json_path: str | None,
+    environ: dict,
+    data_dir: str | None = None,
+    auth_on: bool = False,
+    admin_token_paths: list[str] | None = None,
+):
+    token_path = resolve_drive_oauth_token_path(
+        data_dir=data_dir or "",
+        workspace_token_path=bundle.ws.oauth_token_path(),
+        admin_token_paths=admin_token_paths,
+        environ=environ,
+        auth_on=auth_on,
+    )
     return resolve_drive_status(
         sa_json_path,
-        oauth_token_path=bundle.ws.oauth_token_path(),
+        oauth_token_path=token_path,
         environ=environ,
     )

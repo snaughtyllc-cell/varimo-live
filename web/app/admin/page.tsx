@@ -365,7 +365,7 @@ export default function AdminPage() {
         </form>
         <div style={{ fontSize: 12, color: "var(--color-muted)", marginBottom: 12, lineHeight: 1.45 }}>
           Join adds them to your home workspace. New workspace gives them an empty studio of their own.
-          They sign in with that email plus a password they choose, or with Google.
+          They sign in with that email plus a password they choose.
         </div>
 
         <div

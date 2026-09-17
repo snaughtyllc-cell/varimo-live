@@ -47,4 +47,10 @@ describe("studioDestinations", () => {
       "Diagnostics",
     ]);
   });
+
+  it("describes login as email + password only", () => {
+    const login = STUDIO_DESTINATIONS.find((d) => d.href === "/login");
+    expect(login?.summary).toMatch(/email \+ password/i);
+    expect(login?.summary).not.toMatch(/google/i);
+  });
 });

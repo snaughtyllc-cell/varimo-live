@@ -317,7 +317,7 @@ export function LandingClient() {
 <span >{"What are the two workflows?"}</span>
 <span className="l214" aria-hidden="true">{"+"}</span>
 </summary>
-<p className="l215">{"Simple: everything happens in the app. Invite VAs to a shared workspace and generate packs from Studio. Advanced: connect Google Drive so sources go in, varimo spoofs them, and finished variations come back \u2014 built for agencies that already run AI and automation."}</p>
+<p className="l215">{"Simple: everything happens in the app. Invite VAs to a shared workspace and generate packs from Studio. Advanced: share a Drive folder with studio@varimo.io as Editor, paste the folder link, and sources go in / variants come back \u2014 built for agencies that already run AI and automation."}</p>
 </details>
 <details className="l216">
 <summary className="l217">

@@ -92,7 +92,8 @@ def test_status_oauth_available_but_not_connected(tmp_path, monkeypatch):
     assert info.status == "not_configured"
     assert info.oauth_available is True
     assert info.auth_mode is None
-    assert "Connect Google" in info.message or "OAuth" in info.message
+    assert "Connect Google" not in info.message
+    assert "share" in info.message.lower() or "studio" in info.message.lower()
 
 
 def test_status_prefers_oauth_over_sa(tmp_path):
@@ -232,7 +233,7 @@ def test_oauth_callback_saves_token_and_redirects(tmp_path):
     assert status["auth_mode"] == "oauth"
     assert status["connected_email"] == "ops@company.com"
     assert status["oauth_available"] is True
-    assert status["share_email"] == "drive@varyforge.app"
+    assert status["share_email"] == "studio@varimo.io"
 
 
 def test_oauth_disconnect_clears_token(tmp_path):

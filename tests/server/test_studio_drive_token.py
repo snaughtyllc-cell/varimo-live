@@ -216,6 +216,48 @@ def test_admin_oauth_callback_saves_site_token_not_workspace(tmp_path):
     assert not workspace_token.is_file()
 
 
+def test_every_workspace_uses_the_same_studio_token(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    ops = TestClient(app)
+    creator = TestClient(app)
+
+    assert _password_login(jeff, ADMIN, "secret12").status_code == 200
+    _invite_second_workspace(jeff, "ops@x.com")
+    _invite_second_workspace(jeff, "creator@x.com")
+    assert _password_login(ops, "ops@x.com", "ops-secret").status_code == 200
+    assert _password_login(creator, "creator@x.com", "creator-secret").status_code == 200
+
+    site = dc.studio_oauth_token_path(str(tmp_path), {})
+    _write_token(site, "studio@varimo.io")
+
+    for client in (jeff, ops, creator):
+        status = client.get("/api/drive/status").json()
+        assert status["status"] == "ready"
+        assert status["connected_email"] == "studio@varimo.io"
+        assert status["share_email"] == "studio@varimo.io"
+
+
+def test_admin_personal_gmail_is_not_shared_with_customers(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    ops = TestClient(app)
+
+    assert _password_login(jeff, ADMIN, "secret12").status_code == 200
+    _invite_second_workspace(jeff, "ops@x.com")
+    assert _password_login(ops, "ops@x.com", "ops-secret").status_code == 200
+
+    jeff_me = jeff.get("/api/auth/me").json()
+    admin_token = Path(
+        tenant_root(str(tmp_path), jeff_me["workspace_id"]),
+    ) / "drive" / "oauth_token.json"
+    _write_token(admin_token, "jeff@x.com")
+
+    status = ops.get("/api/drive/status").json()
+    assert status["status"] == "not_configured"
+    assert status["connected_email"] in (None, "")
+
+
 def test_admin_disconnect_clears_site_and_admin_fallback(tmp_path):
     app, _ = _auth_app(tmp_path)
     jeff = TestClient(app)
@@ -224,9 +266,10 @@ def test_admin_disconnect_clears_site_and_admin_fallback(tmp_path):
     admin_token = Path(
         tenant_root(str(tmp_path), jeff_me["workspace_id"]),
     ) / "drive" / "oauth_token.json"
-    _write_token(admin_token, "jeff@x.com")
+    _write_token(admin_token, "studio@varimo.io")
 
     assert jeff.get("/api/drive/status").json()["status"] == "ready"
+    assert jeff.get("/api/drive/status").json()["connected_email"] == "studio@varimo.io"
     resp = jeff.post("/api/drive/oauth/disconnect")
     assert resp.status_code == 200
     assert jeff.get("/api/drive/status").json()["status"] == "not_configured"

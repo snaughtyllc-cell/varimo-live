@@ -89,7 +89,7 @@ def test_resolve_admin_fallback_when_site_missing(tmp_path):
     workspace = tmp_path / "tenants" / "cust" / "drive" / "oauth_token.json"
     admin = tmp_path / "tenants" / "admin" / "drive" / "oauth_token.json"
     _write_token(workspace, "customer@x.com")
-    _write_token(admin, "jeff@x.com")
+    _write_token(admin, "studio@varimo.io")
     resolved = dc.resolve_drive_oauth_token_path(
         data_dir=str(tmp_path),
         workspace_token_path=str(workspace),
@@ -98,6 +98,21 @@ def test_resolve_admin_fallback_when_site_missing(tmp_path):
         auth_on=True,
     )
     assert resolved == str(admin)
+
+
+def test_resolve_admin_personal_gmail_is_not_the_studio_token(tmp_path):
+    workspace = tmp_path / "tenants" / "cust" / "drive" / "oauth_token.json"
+    admin = tmp_path / "tenants" / "admin" / "drive" / "oauth_token.json"
+    _write_token(workspace, "customer@x.com")
+    _write_token(admin, "jeff@x.com")
+    resolved = dc.resolve_drive_oauth_token_path(
+        data_dir=str(tmp_path),
+        workspace_token_path=str(workspace),
+        admin_token_paths=[str(admin)],
+        environ={},
+        auth_on=True,
+    )
+    assert resolved is None
 
 
 def test_resolve_ignores_customer_workspace_when_auth_on(tmp_path):

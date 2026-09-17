@@ -60,6 +60,16 @@ def oauth_token_is_usable(path: str | None) -> bool:
     return bool(data.get("refresh_token") or data.get("token"))
 
 
+def token_email_matches_share(path: str | None, environ: Mapping[str, str] | None = None) -> bool:
+    """True when the token file is the studio mailbox people share folders with."""
+    if not path:
+        return False
+    email = OAuthTokenStore(path).read_email()
+    if not isinstance(email, str) or not email.strip():
+        return False
+    return email.strip().lower() == read_share_email(environ).lower()
+
+
 def resolve_drive_oauth_token_path(
     *,
     data_dir: str,
@@ -68,10 +78,11 @@ def resolve_drive_oauth_token_path(
     environ: Mapping[str, str] | None = None,
     auth_on: bool = False,
 ) -> str | None:
-    """Pick the Drive OAuth token file.
+    """Pick the one studio@ Drive token used by every workspace.
 
     Auth off: today's single-workspace path.
-    Auth on: usable site token, else a site-admin workspace token. Never a customer token.
+    Auth on: the site studio@ file, else an admin workspace token that is
+    signed in as the share mailbox. Never a customer token. Never a personal Gmail.
     """
     if not auth_on:
         return workspace_token_path
@@ -79,7 +90,7 @@ def resolve_drive_oauth_token_path(
     if oauth_token_is_usable(site):
         return site
     for path in admin_token_paths or ():
-        if oauth_token_is_usable(path):
+        if oauth_token_is_usable(path) and token_email_matches_share(path, environ):
             return path
     return None
 

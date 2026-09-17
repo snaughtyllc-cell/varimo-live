@@ -26,15 +26,13 @@ describe("LoginForm", () => {
     });
   });
 
-  it("offers email/password and Google", () => {
+  it("offers email/password only", () => {
     render(<LoginForm />);
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Continue with Google" })).toHaveAttribute(
-      "href",
-      "/api/auth/google/start",
-    );
+    expect(screen.queryByRole("link", { name: "Continue with Google" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^or$/i)).not.toBeInTheDocument();
     expect(screen.getByText(/checkout or an invite/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View pricing" })).toHaveAttribute("href", "/pricing");
   });
@@ -55,9 +53,16 @@ describe("LoginForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows a Google oauth error from the URL", () => {
-    render(<LoginForm oauthError="not_invited" />);
+  it("shows an oauth error from the URL without offering Google", () => {
+    const { rerender } = render(<LoginForm oauthError="not_invited" />);
     expect(screen.getByRole("alert")).toHaveTextContent(/isn't on the platform yet/i);
+    expect(screen.queryByRole("link", { name: "Continue with Google" })).not.toBeInTheDocument();
+
+    rerender(<LoginForm oauthError="oauth" />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/sign-in didn't complete/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/email \+ password/i);
+    expect(screen.getByRole("alert")).not.toHaveTextContent(/google/i);
+    expect(screen.queryByRole("link", { name: "Continue with Google" })).not.toBeInTheDocument();
   });
 
   it("prefills email and explains first sign-in after payment", () => {

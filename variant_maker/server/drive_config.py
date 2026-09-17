@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, Mapping
+from typing import Literal
 
 from .drive_oauth import OAuthTokenStore, oauth_client_configured
 
@@ -11,7 +13,8 @@ ENV_OAUTH_CLIENT_ID = "VARIANT_DRIVE_OAUTH_CLIENT_ID"
 ENV_OAUTH_CLIENT_SECRET = "VARIANT_DRIVE_OAUTH_CLIENT_SECRET"
 ENV_OAUTH_REDIRECT_URI = "VARIANT_DRIVE_OAUTH_REDIRECT_URI"
 ENV_SHARE_EMAIL = "VARIANT_DRIVE_SHARE_EMAIL"
-DEFAULT_SHARE_EMAIL = "drive@varyforge.app"
+ENV_STUDIO_OAUTH_TOKEN = "VARIANT_DRIVE_STUDIO_OAUTH_TOKEN"
+DEFAULT_SHARE_EMAIL = "studio@varimo.io"
 
 DriveStatus = Literal["ready", "not_configured", "auth_failed"]
 AuthMode = Literal["oauth", "service_account"]
@@ -32,6 +35,53 @@ def read_share_email(environ: Mapping[str, str] | None = None) -> str:
     env = environ if environ is not None else os.environ
     raw = (env.get(ENV_SHARE_EMAIL) or "").strip()
     return raw or DEFAULT_SHARE_EMAIL
+
+
+def studio_oauth_token_path(data_dir: str, environ: Mapping[str, str] | None = None) -> str:
+    """Site-level studio@ token. Override with VARIANT_DRIVE_STUDIO_OAUTH_TOKEN."""
+    env = environ if environ is not None else os.environ
+    raw = (env.get(ENV_STUDIO_OAUTH_TOKEN) or "").strip()
+    if raw:
+        return raw
+    return os.path.join(os.path.abspath(data_dir), "auth", "studio_oauth_token.json")
+
+
+def oauth_token_is_usable(path: str | None) -> bool:
+    """True when the file exists and has a refresh_token or token (same as resolve_drive_status)."""
+    if not path:
+        return False
+    store = OAuthTokenStore(path)
+    if not store.exists():
+        return False
+    try:
+        data = store.load()
+    except (OSError, json.JSONDecodeError, ValueError):
+        return False
+    return bool(data.get("refresh_token") or data.get("token"))
+
+
+def resolve_drive_oauth_token_path(
+    *,
+    data_dir: str,
+    workspace_token_path: str | None = None,
+    admin_token_paths: list[str] | None = None,
+    environ: Mapping[str, str] | None = None,
+    auth_on: bool = False,
+) -> str | None:
+    """Pick the Drive OAuth token file.
+
+    Auth off: today's single-workspace path.
+    Auth on: usable site token, else a site-admin workspace token. Never a customer token.
+    """
+    if not auth_on:
+        return workspace_token_path
+    site = studio_oauth_token_path(data_dir, environ)
+    if oauth_token_is_usable(site):
+        return site
+    for path in admin_token_paths or ():
+        if oauth_token_is_usable(path):
+            return path
+    return None
 
 
 def read_sa_email(sa_json_path: str) -> str | None:
@@ -114,14 +164,17 @@ def resolve_drive_status(
             oauth_available=oauth_ok,
         )
 
+    share = read_share_email(env)
     if oauth_ok:
         return DriveConfigInfo(
             "not_configured", None,
-            "Drive not connected — Connect Google in Settings",
+            f"Drive not connected — share the folder as Editor with {share}; "
+            "site admin connects the studio account",
             oauth_available=True,
         )
     return DriveConfigInfo(
         "not_configured", None,
-        "Drive not configured — Connect Google (OAuth) or set VARIANT_DRIVE_SERVICE_ACCOUNT_JSON",
+        f"Drive not configured — share the folder as Editor with {share}, "
+        "or set VARIANT_DRIVE_SERVICE_ACCOUNT_JSON",
         oauth_available=False,
     )

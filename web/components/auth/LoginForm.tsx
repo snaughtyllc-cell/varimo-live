@@ -52,7 +52,7 @@ export function LoginForm({
         ? "Payment is still landing. Wait a few seconds and sign in with the email you paid with."
         : "This email isn't on the platform yet. Subscribe on the pricing page, or ask the operator to add you."
       : oauthError === "oauth"
-        ? "Google sign-in didn't complete. Try again."
+        ? "Sign-in didn't complete. Use email + password."
         : null;
   const message = error || oauthMessage;
 
@@ -143,44 +143,6 @@ export function LoginForm({
           {busy ? (afterPay ? "Opening Studio…" : "Signing in…") : afterPay ? "Set password and enter" : "Sign in"}
         </button>
       </form>
-      {!afterPay && (
-        <>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              margin: "18px 0",
-              color: "#87989d",
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-            }}
-          >
-            <span style={{ flex: 1, height: 1, background: "#d4e3e6" }} />
-            or
-            <span style={{ flex: 1, height: 1, background: "#d4e3e6" }} />
-          </div>
-          <Link
-            href="/api/auth/google/start"
-            style={{
-              display: "block",
-              textAlign: "center",
-              textDecoration: "none",
-              fontSize: 14,
-              fontWeight: 700,
-              color: "var(--color-text)",
-              background: "#f3f8f9",
-              border: "1px solid #c9dde0",
-              padding: "12px 16px",
-              borderRadius: 10,
-            }}
-          >
-            Continue with Google
-          </Link>
-        </>
-      )}
     </>
   );
 }

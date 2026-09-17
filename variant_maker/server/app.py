@@ -34,7 +34,9 @@ from .drive_config import (
     ENV_OAUTH_CLIENT_SECRET,
     ENV_OAUTH_REDIRECT_URI,
     read_share_email,
+    resolve_drive_oauth_token_path,
     resolve_drive_status,
+    studio_oauth_token_path,
 )
 from .drive_exports import (
     ExportError,
@@ -211,7 +213,7 @@ from .sessions import (
 )
 from .sheets import GoogleSheets, SheetsClient
 from .stripe_billing import gateway_from_env
-from .tenant_runtime import TenantHub
+from .tenant_runtime import TenantHub, admin_workspace_token_paths
 from .tenants import (
     TenantStore,
     invite_to_workspace,
@@ -596,9 +598,25 @@ def create_app(
     app.state.tenant_hub = hub
     app.state.auth_required = auth_on
 
-    if oauth_token_path is None:
-        oauth_token_path = fallback_store._ws.oauth_token_path()
-    token_store = OAuthTokenStore(oauth_token_path)
+    def _admin_token_paths() -> list[str]:
+        if tenants is None:
+            return []
+        return admin_workspace_token_paths(data_dir, tenants.list_users(), admin_email)
+
+    if auth_on:
+        site_token_path = studio_oauth_token_path(data_dir, oauth_env)
+        token_store = OAuthTokenStore(site_token_path)
+        oauth_token_path = resolve_drive_oauth_token_path(
+            data_dir=data_dir,
+            workspace_token_path=None,
+            admin_token_paths=_admin_token_paths(),
+            environ=oauth_env,
+            auth_on=True,
+        )
+    else:
+        if oauth_token_path is None:
+            oauth_token_path = fallback_store._ws.oauth_token_path()
+        token_store = OAuthTokenStore(oauth_token_path)
     pending_store = OAuthPendingStore(fallback_store._ws.oauth_pending_path())
     app.state.oauth_token_store = token_store
     app.state.oauth_pending = pending_store
@@ -667,12 +685,16 @@ def create_app(
     app.state.workflow_tick_lock = threading.Lock()
 
     def _oauth_tokens() -> OAuthTokenStore:
+        if auth_on:
+            return token_store
         bundle = current_bundle()
         if bundle is not None:
             return bundle.oauth_token_store
         return token_store
 
     def _oauth_pending() -> OAuthPendingStore:
+        if auth_on:
+            return OAuthPendingStore(os.path.join(data_dir, "auth", "studio_oauth_pending.json"))
         bundle = current_bundle()
         if bundle is not None:
             return bundle.oauth_pending
@@ -747,8 +769,16 @@ def create_app(
                         )
         return stolen
 
-    def _token_path() -> str:
-        return _oauth_tokens().path
+    def _token_path() -> str | None:
+        if not auth_on:
+            return _oauth_tokens().path
+        return resolve_drive_oauth_token_path(
+            data_dir=data_dir,
+            workspace_token_path=None,
+            admin_token_paths=_admin_token_paths(),
+            environ=oauth_env,
+            auth_on=True,
+        )
 
     def _compute_drive_info():
         path = _token_path()
@@ -772,6 +802,8 @@ def create_app(
 
     def _attach_oauth_clients() -> tuple[DriveClient | None, SheetsClient | None]:
         path = _token_path()
+        if not path:
+            return None, None
         client = None
         sheets_client = None
         try:
@@ -2032,6 +2064,8 @@ def create_app(
 
     @app.get("/api/drive/oauth/start")
     def drive_oauth_start(request: Request):
+        if auth_on:
+            _require_admin(request)
         if not oauth_env.get(ENV_OAUTH_CLIENT_ID) or not oauth_env.get(ENV_OAUTH_CLIENT_SECRET):
             raise HTTPException(
                 status_code=503,
@@ -2092,12 +2126,16 @@ def create_app(
         return RedirectResponse(url=_settings_url(request, "oauth=connected"), status_code=302)
 
     @app.post("/api/drive/oauth/disconnect")
-    def drive_oauth_disconnect() -> dict:
-        _oauth_tokens().clear()
-        info = _drive_info()
-        if info.auth_mode == "oauth":
-            _set_drive(None)
-            _set_sheets(None)
+    def drive_oauth_disconnect(request: Request) -> dict:
+        if auth_on:
+            _require_admin(request)
+            _oauth_tokens().clear()
+            for path in _admin_token_paths():
+                OAuthTokenStore(path).clear()
+        else:
+            _oauth_tokens().clear()
+        _set_drive(None)
+        _set_sheets(None)
         _refresh_drive_info()
         info = _drive_info()
         if (

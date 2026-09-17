@@ -164,7 +164,10 @@ export function DrivePickerModal({ existingDestinationId, onConfirm, onClose }: 
 
           {!loadingMeta && driveNotReady && (
             <div style={{ fontSize: 12.5, color: "#8e6119", lineHeight: 1.5 }}>
-              <div style={{ marginBottom: 10 }}>{status?.message ?? "Google Drive is not connected."}</div>
+              <div style={{ marginBottom: 10 }}>
+                {status?.message ??
+                  "Go to Drive and paste a folder shared with the studio email."}
+              </div>
               <Link href="/settings/drive" style={{ color: "var(--color-text)", fontWeight: 600 }}>
                 Go to Settings → Drive
               </Link>

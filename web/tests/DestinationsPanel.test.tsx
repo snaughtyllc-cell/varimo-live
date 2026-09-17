@@ -20,6 +20,7 @@ vi.mock("@/lib/useAuthMe", () => ({
 }));
 
 import { getDriveStatus, listDestinations } from "@/lib/api";
+import { DRIVE_OPERATOR_WAIT } from "@/lib/driveShareCopy";
 
 const MEMBER: AuthMe = {
   auth_required: true,
@@ -44,7 +45,7 @@ const ready: DriveStatus = {
   auth_mode: "oauth",
   connected_email: "snaughtyllc@gmail.com",
   oauth_available: true,
-  share_email: "drive@varyforge.app",
+  share_email: "studio@varimo.io",
 };
 
 const notConfigured: DriveStatus = {
@@ -54,7 +55,7 @@ const notConfigured: DriveStatus = {
   auth_mode: null,
   connected_email: null,
   oauth_available: true,
-  share_email: "drive@varyforge.app",
+  share_email: "studio@varimo.io",
 };
 
 describe("DestinationsPanel share email", () => {
@@ -67,23 +68,36 @@ describe("DestinationsPanel share email", () => {
   it("shows a copyable branded mailbox at the top of Drive", async () => {
     render(<DestinationsPanel />);
     await waitFor(() => {
-      expect(screen.getByTestId("drive-share-email").textContent).toBe("drive@varyforge.app");
+      expect(screen.getByTestId("drive-share-email").textContent).toBe("studio@varimo.io");
     });
     expect(screen.getByText(/Share this email/i)).toBeTruthy();
-    expect(screen.getByText(/paste the folder link below/i)).toBeTruthy();
+    expect(screen.getByText(/paste that folder/i)).toBeTruthy();
+    expect(screen.getByText(/do not connect your own Google/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Copy" })).toBeTruthy();
     expect(screen.queryByText(/Reconnect Google as/)).toBeNull();
+  });
+
+  it("keeps name and folder-link fields enabled when Drive is not configured", async () => {
+    vi.mocked(getDriveStatus).mockResolvedValue(notConfigured);
+    render(<DestinationsPanel />);
+    const url = await screen.findByPlaceholderText(/paste drive folder link/i);
+    expect(url).toBeEnabled();
+    expect(screen.getByPlaceholderText("Name")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Add" })).toBeEnabled();
   });
 
   it("hides Connect Google from operators — they only share the studio mailbox", async () => {
     vi.mocked(getDriveStatus).mockResolvedValue(notConfigured);
     render(<DestinationsPanel />);
     await waitFor(() => {
-      expect(screen.getByTestId("drive-share-email").textContent).toBe("drive@varyforge.app");
+      expect(screen.getByTestId("drive-share-email").textContent).toBe("studio@varimo.io");
     });
     expect(screen.queryByRole("link", { name: "Connect Google" })).not.toBeInTheDocument();
     expect(screen.queryByText("Google account")).not.toBeInTheDocument();
-    expect(screen.getAllByText(/only the site admin connects/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(DRIVE_OPERATOR_WAIT).length).toBeGreaterThan(0);
+    expect(DRIVE_OPERATOR_WAIT).toMatch(/share/i);
+    expect(DRIVE_OPERATOR_WAIT).toMatch(/paste/i);
+    expect(DRIVE_OPERATOR_WAIT).not.toMatch(/connect your own/i);
   });
 
   it("lets the site admin Connect Google when Drive is not connected", async () => {
@@ -102,7 +116,7 @@ describe("DestinationsPanel share email", () => {
   it("hides Disconnect from operators on a connected workspace", async () => {
     render(<DestinationsPanel />);
     await waitFor(() => {
-      expect(screen.getByTestId("drive-share-email").textContent).toBe("drive@varyforge.app");
+      expect(screen.getByTestId("drive-share-email").textContent).toBe("studio@varimo.io");
     });
     expect(screen.queryByRole("button", { name: /disconnect/i })).not.toBeInTheDocument();
     expect(screen.queryByText("Google account")).not.toBeInTheDocument();

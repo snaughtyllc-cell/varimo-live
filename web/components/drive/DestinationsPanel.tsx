@@ -90,7 +90,7 @@ export function DestinationsPanel() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (driveNotReady || submitting) return;
+    if (submitting) return;
     setFormError(null);
     setSubmitting(true);
     try {
@@ -118,7 +118,7 @@ export function DestinationsPanel() {
   }
 
   async function handleSaveEdit(id: string) {
-    if (driveNotReady || savingEditId) return;
+    if (savingEditId) return;
     setEditError(null);
     setSavingEditId(id);
     try {
@@ -168,7 +168,7 @@ export function DestinationsPanel() {
   }
 
   const driveNotReady = status != null && status.status !== "ready";
-  const addFormDisabled = driveNotReady || submitting;
+  const addFormDisabled = submitting;
   const connectedEmail = status?.connected_email || status?.sa_email || null;
   const oauthAvailable = Boolean(status?.oauth_available);
   const isOauth = status?.auth_mode === "oauth";
@@ -197,7 +197,7 @@ export function DestinationsPanel() {
           </div>
         )}
 
-        {/* Share-email is the operator path until Connect-your-own-Google is the default. */}
+        {/* Paste-link + studio@ is the default. Connect Google stays site-admin only. */}
         <div className="drive-eyebrow">Step 1 · {DRIVE_SHARE_HEADING}</div>
         <div data-testid="drive-share-card" className="drive-step1-card">
           <div className="drive-step1-card__row">
@@ -296,7 +296,6 @@ export function DestinationsPanel() {
             onChange={(e) => setName(e.target.value)}
             placeholder="Name"
             required
-            disabled={driveNotReady}
             className="drive-input drive-input--name"
           />
           <input
@@ -304,7 +303,6 @@ export function DestinationsPanel() {
             onChange={(e) => setFolderUrl(e.target.value)}
             placeholder="Paste Drive folder link"
             required
-            disabled={driveNotReady}
             className="drive-input drive-input--url"
           />
           <button type="submit" disabled={addFormDisabled} className="drive-btn drive-btn--dark">
@@ -340,7 +338,7 @@ export function DestinationsPanel() {
             {destinations.map((dest) => {
               const isEditing = editingId === dest.id;
               const testResult = testResults[dest.id];
-              const editSaveDisabled = driveNotReady || savingEditId === dest.id;
+              const editSaveDisabled = savingEditId === dest.id;
               const stateKind: "ok" | "untested" | "failed" = !testResult
                 ? "untested"
                 : testResult.ok
@@ -357,14 +355,12 @@ export function DestinationsPanel() {
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         placeholder="Name"
-                        disabled={driveNotReady}
                         className="drive-input drive-input--name"
                       />
                       <input
                         value={editFolderUrl}
                         onChange={(e) => setEditFolderUrl(e.target.value)}
                         placeholder="New Drive folder link (optional)"
-                        disabled={driveNotReady}
                         className="drive-input drive-input--url"
                       />
                     </div>

@@ -36,8 +36,8 @@ export function PasswordPanel() {
       <div className="drive-card__title">Studio password</div>
       <div className="drive-card__copy">
         {hasPassword
-          ? "Replace the password for email sign-in. Google still works."
-          : "Add a password so you can sign in with email instead of Google. Drive Connect stays separate."}
+          ? "Replace the password for email sign-in."
+          : "Add a password so you can sign in with email. Drive stays share studio@ / paste folder."}
       </div>
       <form onSubmit={onSubmit} className="drive-step2-form drive-password-form">
         <input

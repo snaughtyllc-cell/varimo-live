@@ -8,16 +8,20 @@ import {
 } from "@/lib/driveShareCopy";
 
 describe("driveShareCopy", () => {
-  it("defaults to the branded mailbox, not a personal inbox", () => {
-    expect(DEFAULT_DRIVE_SHARE_EMAIL).toBe("drive@varyforge.app");
-    expect(driveShareEmail(null)).toBe("drive@varyforge.app");
-    expect(driveShareEmail("  ")).toBe("drive@varyforge.app");
-    expect(driveShareEmail("ops@varyforge.app")).toBe("ops@varyforge.app");
+  it("defaults to the studio mailbox, not a personal inbox", () => {
+    expect(DEFAULT_DRIVE_SHARE_EMAIL).toBe("studio@varimo.io");
+    expect(driveShareEmail(null)).toBe("studio@varimo.io");
+    expect(driveShareEmail("  ")).toBe("studio@varimo.io");
+    expect(driveShareEmail("ops@varimo.io")).toBe("ops@varimo.io");
     expect(DRIVE_SHARE_HEADING).toMatch(/share this email/i);
     expect(DRIVE_SHARE_BODY).toMatch(/Editor/i);
-    expect(DRIVE_SHARE_BODY).toMatch(/paste the folder link/i);
+    expect(DRIVE_SHARE_BODY).toMatch(/paste.*folder link/i);
     expect(DRIVE_SHARE_BODY).toMatch(/only that folder/i);
-    expect(DRIVE_OPERATOR_WAIT).toMatch(/only the site admin connects/i);
-    expect(DRIVE_OPERATOR_WAIT).toMatch(/paste that folder/i);
+    expect(DRIVE_SHARE_BODY).toMatch(/do not connect your own Google/i);
+    expect(DRIVE_OPERATOR_WAIT).toMatch(/Editor/i);
+    expect(DRIVE_OPERATOR_WAIT).toMatch(/this email|studio@/i);
+    expect(DRIVE_OPERATOR_WAIT).toMatch(/paste/i);
+    expect(DRIVE_OPERATOR_WAIT).toMatch(/site admin connects the studio mailbox/i);
+    expect(DRIVE_OPERATOR_WAIT).not.toMatch(/connect your own/i);
   });
 });

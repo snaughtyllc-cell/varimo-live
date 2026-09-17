@@ -93,4 +93,8 @@ it("centers the spoofing app and the two workflows", async () => {
  expect(workflows).toHaveTextContent(/existing AI systems/i);
  expect(screen.getByRole("region", {name: /One plan\./})).toHaveTextContent(/Simple workflow/i);
  expect(screen.getByRole("region", {name: /One plan\./})).toHaveTextContent(/Advanced workflow/i);
+ expect(screen.getByText(/What are the two workflows/i)).toBeInTheDocument();
+ expect(screen.getByText(/share a Drive folder with studio@varimo.io/i)).toBeInTheDocument();
+ expect(screen.getByText(/paste the folder link/i)).toBeInTheDocument();
+ expect(screen.queryByText(/connect Google Drive/i)).not.toBeInTheDocument();
 });

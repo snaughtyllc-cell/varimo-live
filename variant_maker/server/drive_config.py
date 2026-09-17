@@ -70,6 +70,16 @@ def token_email_matches_share(path: str | None, environ: Mapping[str, str] | Non
     return email.strip().lower() == read_share_email(environ).lower()
 
 
+def token_can_serve_as_studio(path: str | None, environ: Mapping[str, str] | None = None) -> bool:
+    """Usable studio token: labeled studio@, or unlabeled (older Connect left no email)."""
+    if not oauth_token_is_usable(path):
+        return False
+    email = OAuthTokenStore(path).read_email() if path else None
+    if not isinstance(email, str) or not email.strip():
+        return True
+    return token_email_matches_share(path, environ)
+
+
 def resolve_drive_oauth_token_path(
     *,
     data_dir: str,
@@ -82,7 +92,8 @@ def resolve_drive_oauth_token_path(
 
     Auth off: today's single-workspace path.
     Auth on: the site studio@ file, else an admin workspace token that is
-    signed in as the share mailbox. Never a customer token. Never a personal Gmail.
+    signed in as the share mailbox (or unlabeled). Never a customer token.
+    Never a personal Gmail when the file is labeled as one.
     """
     if not auth_on:
         return workspace_token_path
@@ -90,7 +101,7 @@ def resolve_drive_oauth_token_path(
     if oauth_token_is_usable(site):
         return site
     for path in admin_token_paths or ():
-        if oauth_token_is_usable(path) and token_email_matches_share(path, environ):
+        if token_can_serve_as_studio(path, environ):
             return path
     return None
 

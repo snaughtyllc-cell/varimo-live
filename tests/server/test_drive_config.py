@@ -100,6 +100,22 @@ def test_resolve_admin_fallback_when_site_missing(tmp_path):
     assert resolved == str(admin)
 
 
+def test_resolve_admin_token_without_email_is_used(tmp_path):
+    admin = tmp_path / "tenants" / "admin" / "drive" / "oauth_token.json"
+    admin.parent.mkdir(parents=True, exist_ok=True)
+    admin.write_text(json.dumps({
+        "refresh_token": "rt", "token": "at", "client_id": "cid", "client_secret": "sec",
+    }))
+    resolved = dc.resolve_drive_oauth_token_path(
+        data_dir=str(tmp_path),
+        workspace_token_path=None,
+        admin_token_paths=[str(admin)],
+        environ={},
+        auth_on=True,
+    )
+    assert resolved == str(admin)
+
+
 def test_resolve_admin_personal_gmail_is_not_the_studio_token(tmp_path):
     workspace = tmp_path / "tenants" / "cust" / "drive" / "oauth_token.json"
     admin = tmp_path / "tenants" / "admin" / "drive" / "oauth_token.json"

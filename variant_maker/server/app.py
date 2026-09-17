@@ -33,6 +33,7 @@ from .drive_config import (
     ENV_OAUTH_CLIENT_ID,
     ENV_OAUTH_CLIENT_SECRET,
     ENV_OAUTH_REDIRECT_URI,
+    oauth_token_is_usable,
     read_share_email,
     resolve_drive_oauth_token_path,
     resolve_drive_status,
@@ -613,6 +614,14 @@ def create_app(
             environ=oauth_env,
             auth_on=True,
         )
+        if (
+            oauth_token_path
+            and oauth_token_path != site_token_path
+            and oauth_token_is_usable(oauth_token_path)
+        ):
+            os.makedirs(os.path.dirname(site_token_path) or ".", exist_ok=True)
+            shutil.copy2(oauth_token_path, site_token_path)
+            oauth_token_path = site_token_path
     else:
         if oauth_token_path is None:
             oauth_token_path = fallback_store._ws.oauth_token_path()

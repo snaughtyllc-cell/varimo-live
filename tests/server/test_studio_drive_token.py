@@ -238,6 +238,28 @@ def test_every_workspace_uses_the_same_studio_token(tmp_path):
         assert status["share_email"] == "studio@varimo.io"
 
 
+def test_unlabeled_admin_token_makes_customer_drive_ready(tmp_path):
+    app, _ = _auth_app(tmp_path)
+    jeff = TestClient(app)
+    ops = TestClient(app)
+
+    assert _password_login(jeff, ADMIN, "secret12").status_code == 200
+    _invite_second_workspace(jeff, "ops@x.com")
+    assert _password_login(ops, "ops@x.com", "ops-secret").status_code == 200
+
+    jeff_me = jeff.get("/api/auth/me").json()
+    admin_token = Path(
+        tenant_root(str(tmp_path), jeff_me["workspace_id"]),
+    ) / "drive" / "oauth_token.json"
+    admin_token.parent.mkdir(parents=True, exist_ok=True)
+    admin_token.write_text(json.dumps({
+        "refresh_token": "rt", "token": "at", "client_id": "cid", "client_secret": "sec",
+    }))
+
+    status = ops.get("/api/drive/status").json()
+    assert status["status"] == "ready"
+
+
 def test_admin_personal_gmail_is_not_shared_with_customers(tmp_path):
     app, _ = _auth_app(tmp_path)
     jeff = TestClient(app)

@@ -1040,7 +1040,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 }
 
 /* Route-specific content containers, including legacy inline components. */
-.drive-page, .team-page, .admin-page, .diagnostics-page { background: linear-gradient(180deg, #effafb 0%, var(--aqua) 100%); min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 28px; }
+.drive-page, .team-page, .admin-page, .diagnostics-page, .how-to-page { background: linear-gradient(180deg, #effafb 0%, var(--aqua) 100%); min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 28px; }
 .drive-page > div, .team-page > div, .admin-page > div, .diagnostics-page > div { margin-left: auto; margin-right: auto; max-width: 1120px; }
 .team-page > div:last-child, .admin-page > div:last-child, .diagnostics-page > div:last-child { background: rgba(251, 253, 253, 0.9); border: 1px solid #d2e4e7; border-radius: 16px; box-shadow: var(--card-shadow); padding: 18px !important; }
 .team-page > div:last-child, .admin-page > div:last-child { max-width: 1120px; overflow-x: auto; }
@@ -1056,6 +1056,75 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .diagnostics-page [style*="#1c1608"], .diagnostics-page [style*="#2c2210"] { background: #fff8eb !important; border-color: #efdfbd !important; color: #8e6119 !important; }
 .diagnostics-page [style*="#2c1010"], .diagnostics-page [style*="#2c1212"] { background: #fff3f1 !important; border-color: #efc5c0 !important; }
 .diagnostics-page button[style*="linear-gradient"] { background: var(--ink) !important; box-shadow: none !important; }
+.how-to-page .workspace-heading,
+.how-to-page .how-to-article { margin-left: auto; margin-right: auto; max-width: 760px; }
+.how-to-article { display: grid; gap: 12px; }
+.how-to-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.how-to-tabs button {
+  background: #ffffff;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  color: #355056;
+  cursor: pointer;
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  padding: 8px 14px;
+}
+.how-to-tabs button[data-active="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--color-cyan);
+}
+.how-to-panel { display: grid; gap: 12px; }
+.how-to-blurb {
+  color: var(--color-muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+  margin: 4px 0 0;
+}
+.how-to-section {
+  background: rgba(251, 253, 253, 0.9);
+  border: 1px solid #d2e4e7;
+  border-radius: 16px;
+  box-shadow: var(--card-shadow);
+  padding: 16px 18px 18px;
+}
+.how-to-section h2 {
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin: 0 0 8px;
+}
+.how-to-section p {
+  color: var(--color-muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+  margin: 0 0 8px;
+}
+.how-to-section p:last-child { margin-bottom: 0; }
+.how-to-section ul {
+  color: var(--color-muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+  margin: 0;
+  padding-left: 1.15em;
+}
+.how-to-section li { margin: 0 0 6px; }
+.how-to-jumps { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.how-to-jumps a {
+  background: #f3f8f9;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 630;
+  padding: 8px 12px;
+  text-decoration: none;
+}
+.how-to-jumps a:hover { border-color: #a2c8ce; }
 
 /* Flows (/workflows) — redesign restyle (Task 7). Drive watch-folder automations:
    flow cards scroll on the left, a persistent "new flow" form panel sits fixed on
@@ -1404,7 +1473,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   .vf-mobile-tabs a { align-items: center; color: var(--color-muted); display: flex; flex-direction: column; font-size: 9.5px; font-weight: 650; gap: 3px; justify-content: center; min-height: 48px; text-decoration: none; }
   .vf-mobile-tabs a[data-active="true"] { color: #087989; }
   .app-main { padding-bottom: var(--tab-h); }
-  .workspace-page, .drive-page, .team-page, .admin-page, .diagnostics-page { min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 16px 12px; }
+  .workspace-page, .drive-page, .team-page, .admin-page, .diagnostics-page, .how-to-page { min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 16px 12px; }
   .drops-page { min-height: calc(100dvh - var(--nav-h) - var(--tab-h)); padding: 16px 12px; }
   .workspace-heading { margin-bottom: 16px; }
   .workspace-heading h1 { font-size: 28px; }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  CircleHelp,
   Cloud,
   FolderOpen,
   GalleryHorizontalEnd,
@@ -31,6 +32,7 @@ const ICONS = {
   "/drops": PackageCheck,
   "/workflows": Workflow,
   "/settings/drive": Cloud,
+  "/how-to": CircleHelp,
   "/team": UsersRound,
   "/admin": ShieldCheck,
   "/diagnostics": Settings2,

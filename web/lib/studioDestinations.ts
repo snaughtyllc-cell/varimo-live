@@ -64,6 +64,13 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
       "Share the varimo Drive email with a folder, paste the link, captions, Drop Ledger, Instagram testers, password.",
   },
   {
+    href: "/how-to",
+    label: "How to",
+    audience: "everyone",
+    tab: "extra",
+    summary: "Best practices: generating packs, Drive automation, and posting Trial Reels.",
+  },
+  {
     href: "/team",
     label: "Team",
     audience: "owner",
@@ -111,7 +118,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
 /** Phone bottom bar + desktop primary row. */
 export const PRIMARY_TABS = STUDIO_DESTINATIONS.filter((d) => d.tab === "primary");
 
-/** Team / Analytics / Admin / Diagnostics — role-gated in TopNav. */
+/** How to / Team / Analytics / Admin / Diagnostics — role-gated in TopNav. */
 export const EXTRA_TABS = STUDIO_DESTINATIONS.filter((d) => d.tab === "extra");
 
 /** Surfaces that are not top-level tabs but must be in any redesign. */

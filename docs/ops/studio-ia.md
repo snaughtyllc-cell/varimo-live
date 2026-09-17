@@ -20,8 +20,8 @@ describe v1 only. Do not treat them as the current product.
 
 | Audience | Tabs |
 |---|---|
-| Solo creator | **Studio · Gallery · Drive** + **Analytics** (More; owner) |
-| Agency member | **Studio · Gallery · Drops · Workflows · Drive** (no Analytics) |
+| Solo creator | **Studio · Gallery · Drive** + **How to** + **Analytics** (More; owner) |
+| Agency member | **Studio · Gallery · Drops · Workflows · Drive** + **How to** (no Analytics) |
 | Agency owner | + **Team** (invite VAs) + **Analytics** |
 | Site admin (`SITE_ADMIN_EMAILS`) | all of the above + **Admin · Diagnostics** |
 | Unauthenticated | **Login** only |
@@ -33,10 +33,10 @@ operator studios keep Team. New-studio invites write **solo** on
 Team so that studio can invite VAs. Internal stays uncapped for Jeff.
 
 Phone (`< 640px`) only has room for the primary tabs that audience
-can see. Team / Analytics / Admin / Diagnostics sit under **More**.
-Desktop shows extras in the top row when the session is allowed to
-see them. Analytics is owner-only (solo owners included). VAs never
-see it.
+can see. How to / Team / Analytics / Admin / Diagnostics sit under
+**More**. Desktop SideNav puts How to in **Help** (top of extras);
+Team / Analytics / Admin / Diagnostics stay under **Workspace**.
+Analytics is owner-only (solo owners included). VAs never see it.
 
 Watch is **not** a tab. It lives inside Studio + Workflows as a job
 row + progress card.
@@ -50,6 +50,7 @@ row + progress card.
 | Drops | `/drops` | agency | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | Workflows | `/workflows` | agency | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | Drive | `/settings/drive` | everyone | yes | Share varimo Drive email, paste folder link, captions, Drop Ledger, password. Owners also Connect Instagram testers here. |
+| How to | `/how-to` | everyone | More | Best practices: Generating / Automation / Posting. Not a phone-bar tab. |
 | Team | `/team` | agency owner / site admin | More | Workspace owner invites VAs. Solo creators cannot invite. |
 | Analytics | `/analytics` | workspace owner / site admin (or auth off) | More (label **Stats**) | Instagram Insights: ranked originals, Connect testers, Sync views onto packs. Opening Stats pulls Graph again when the last Insights pass is ≥2 hours old and shows change since last look. Unmatched Reels (older posts) live in a tab. VAs cannot open this. |
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
@@ -75,9 +76,10 @@ old four-row list.
 ## What not to invent
 
 - Do not add a Watch tab. Watch stays inside Studio + Workflows.
-- Do not remove Drops, Workflows, Drive, Team, Analytics, or Admin from
+- Do not remove Drops, Workflows, Drive, How to, Team, Analytics, or Admin from
   the catalog — they are live. Solo chrome hides Drops, Workflows, and
-  Team. Analytics stays under More for owners (including solo).
+  Team. How to stays under Help / More for everyone. Analytics stays
+  under More for owners (including solo).
 - Do not put Admin / Diagnostics / Analytics in the phone bottom bar.
   They stay under More so VAs never get a sixth primary tab.
 - Auth gating stays in `web/lib/navAccess.ts` (`showTeamNav`,

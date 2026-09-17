@@ -115,8 +115,9 @@ export function visiblePhoneMoreTabs(me: {
 }
 
 /**
- * Role gate for extra destinations (Team / Analytics / Admin / Diagnostics).
+ * Role gate for extra destinations (How to / Team / Analytics / Admin / Diagnostics).
  * Shared by TopNav so More and the desktop extras agree.
+ * audience === "everyone" extras stay visible (How to) — do not fall through to false.
  */
 export function extraTabVisible(
   href: string,
@@ -127,6 +128,8 @@ export function extraTabVisible(
     experience?: string | null;
   } | undefined,
 ): boolean {
+  const tab = destination(href);
+  if (tab?.tab === "extra" && tab.audience === "everyone") return true;
   if (href === "/diagnostics") return showDiagnosticsNav(me);
   if (href === "/team") return showTeamNav(me);
   if (href === "/analytics") return showAnalyticsNav(me);

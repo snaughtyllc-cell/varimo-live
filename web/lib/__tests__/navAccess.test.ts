@@ -5,6 +5,7 @@ import {
   showAnalyticsNav,
   showDiagnosticsNav,
   showTeamNav,
+  extraTabVisible,
   visiblePhoneBarTabs,
   visiblePhoneMoreTabs,
   visiblePrimaryTabs,
@@ -133,6 +134,7 @@ describe("visiblePhoneBarTabs", () => {
     expect(visiblePhoneMoreTabs(me).map((d) => d.href)).toEqual([
       "/drops",
       "/settings/drive",
+      "/how-to",
       "/team",
     ]);
   });
@@ -140,12 +142,41 @@ describe("visiblePhoneBarTabs", () => {
   it("drops Analytics for VAs and still hides Drive from the bar", () => {
     const me = { experience: "agency", is_admin: false, auth_required: true, role: "member" };
     expect(visiblePhoneBarTabs(me).map((d) => d.href)).toEqual(["/studio", "/gallery", "/workflows"]);
-    expect(visiblePhoneMoreTabs(me).map((d) => d.href)).toEqual(["/drops", "/settings/drive"]);
+    expect(visiblePhoneMoreTabs(me).map((d) => d.href)).toEqual(["/drops", "/settings/drive", "/how-to"]);
   });
 
   it("keeps solo owners at Studio, Gallery, Analytics with Drive under More", () => {
     const me = { experience: "solo", is_admin: false, auth_required: true, role: "owner" };
     expect(visiblePhoneBarTabs(me).map((d) => d.href)).toEqual(["/studio", "/gallery", "/analytics"]);
-    expect(visiblePhoneMoreTabs(me).map((d) => d.href)).toEqual(["/settings/drive"]);
+    expect(visiblePhoneMoreTabs(me).map((d) => d.href)).toEqual(["/settings/drive", "/how-to"]);
+  });
+});
+
+describe("extraTabVisible", () => {
+  it("shows How to for VAs and solo members", () => {
+    expect(
+      extraTabVisible("/how-to", {
+        experience: "agency",
+        role: "member",
+        is_admin: false,
+        auth_required: true,
+      }),
+    ).toBe(true);
+    expect(
+      extraTabVisible("/how-to", {
+        experience: "solo",
+        role: "member",
+        is_admin: false,
+        auth_required: true,
+      }),
+    ).toBe(true);
+    expect(
+      extraTabVisible("/how-to", {
+        experience: "solo",
+        role: "owner",
+        is_admin: false,
+        auth_required: true,
+      }),
+    ).toBe(true);
   });
 });

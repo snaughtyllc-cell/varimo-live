@@ -52,6 +52,23 @@ describe("SideNav", () => {
     expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
   });
 
+  it("shows How to in Help above Workspace for VAs and solo members", () => {
+    me.data = { ...BASE, role: "member" };
+    const { unmount } = render(<SideNav />);
+    expect(screen.getByText("Help")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
+    expect(screen.queryByText("Workspace")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
+    unmount();
+
+    me.data = { ...BASE, experience: "solo", role: "member", is_admin: false };
+    render(<SideNav />);
+    expect(screen.getByText("Help")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
+    expect(screen.queryByText("Workspace")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Analytics" })).not.toBeInTheDocument();
+  });
+
   it("shows Team and Admin for the site admin", () => {
     me.data = { ...BASE, email: "jeff@example.com", is_admin: true };
     render(<SideNav />);
@@ -119,10 +136,14 @@ describe("SideNav", () => {
       "href",
       "/settings/drive",
     );
+    expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
     expect(screen.getAllByRole("link", { name: "Analytics" })[0]).toHaveAttribute(
       "href",
       "/analytics",
     );
+    const help = screen.getByText("Help");
+    const workspace = screen.getByText("Workspace");
+    expect(help.compareDocumentPosition(workspace)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it("renders role extras from the same catalog as the IA doc", () => {

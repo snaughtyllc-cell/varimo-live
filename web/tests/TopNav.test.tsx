@@ -62,6 +62,7 @@ describe("TopNav", () => {
       "href",
       "/settings/drive",
     );
+    expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
   });
 
   it("puts Analytics on the phone bar for owners and Drive in More", () => {
@@ -77,6 +78,7 @@ describe("TopNav", () => {
       "href",
       "/settings/drive",
     );
+    expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
   });
 
   it("keeps agency phone bar at Studio, Gallery, Analytics, Flows with Drive and Drops in More", () => {
@@ -96,6 +98,7 @@ describe("TopNav", () => {
       "/settings/drive",
     );
     expect(screen.getAllByRole("link", { name: "Drops" })[0]).toHaveAttribute("href", "/drops");
+    expect(screen.getAllByRole("link", { name: "How to" })[0]).toHaveAttribute("href", "/how-to");
     expect(screen.getAllByRole("link", { name: "Team" })[0]).toHaveAttribute("href", "/team");
   });
 

@@ -116,6 +116,7 @@ export function WorkflowsPanel() {
   const [submitting, setSubmitting] = useState(false);
 
   const [actionId, setActionId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [openMoreId, setOpenMoreId] = useState<string | null>(null);
 
   const driveNotReady = status != null && status.status !== "ready";
@@ -123,8 +124,8 @@ export function WorkflowsPanel() {
 
   const watchingCount = workflows.filter((w) => w.enabled).length;
 
-  async function refresh() {
-    setLoading(true);
+  async function refresh(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true);
     try {
       const [s, d, w, b] = await Promise.all([
         getDriveStatus(),
@@ -149,7 +150,7 @@ export function WorkflowsPanel() {
     } catch (e) {
       console.error("Failed to load workflows", e);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }
 
@@ -157,6 +158,16 @@ export function WorkflowsPanel() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const anyRunning = workflows.some((wf) => (wf.last_summary?.running ?? 0) > 0);
+  useEffect(() => {
+    if (!anyRunning) return;
+    const id = window.setInterval(() => {
+      refresh({ silent: true });
+    }, 4000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anyRunning]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -268,11 +279,14 @@ export function WorkflowsPanel() {
 
   async function handleRun(wf: Workflow) {
     setActionId(wf.id);
+    setActionError(null);
     try {
       const updated = await runWorkflow(wf.id);
       setWorkflows((prev) => prev.map((x) => (x.id === wf.id ? updated : x)));
+      const sweepError = updated.last_summary?.error;
+      if (sweepError) setActionError(sweepError);
     } catch (err) {
-      console.error("Failed to run workflow", err);
+      setActionError(err instanceof Error ? err.message : "Run failed");
     } finally {
       setActionId(null);
     }
@@ -359,6 +373,12 @@ export function WorkflowsPanel() {
               <Link href="/settings/drive" className="workflow-banner__link">
                 Settings → Drive
               </Link>
+            </div>
+          )}
+
+          {actionError && (
+            <div className="workflow-banner workflow-banner--warn" role="alert">
+              {actionError}
             </div>
           )}
 

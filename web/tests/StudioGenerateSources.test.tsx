@@ -12,6 +12,10 @@ vi.mock("@/lib/api", () => ({
   getHealth: async () => ({ status: "ok", lab: false }),
   createJob: (...args: unknown[]) => createJob(...args),
   createJobFromDrive: (...args: unknown[]) => createJobFromDrive(...args),
+  getDriveStatus: async () => ({ status: "ready", sa_email: null, message: "ok" }),
+  listDestinations: async () => [
+    { id: "dst_out", name: "Reels out", folder_id: "f1", auth_mode: "oauth" },
+  ],
 }));
 
 vi.mock("@/lib/runStore", () => ({
@@ -79,5 +83,20 @@ describe("Studio source draft after Generate", () => {
     expect(screen.queryByText("gym-pull.mp4")).not.toBeInTheDocument();
     expect(screen.getByText(/no clips yet/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /upload files/i })).not.toBeDisabled();
+    expect(createJob.mock.calls[0][8]).toBe("");
+  });
+
+  it("sends the picked Drive folder so the pack uploads when Generate finishes", async () => {
+    const { container } = render(<StudioPage />);
+    const select = await screen.findByRole("combobox", { name: "Output folder" });
+    fireEvent.change(select, { target: { value: "dst_out" } });
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2])], "gym-pull.mp4", { type: "video/mp4" });
+    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: /generate/i }));
+    await waitFor(() => {
+      expect(createJob).toHaveBeenCalled();
+    });
+    expect(createJob.mock.calls[0][8]).toBe("dst_out");
   });
 });

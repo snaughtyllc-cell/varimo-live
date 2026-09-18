@@ -172,6 +172,7 @@ class JobDetail(BaseModel):
     state: str
     sources: list[SourceOut] = []
     error: str | None = None
+    export_destination_id: str | None = None
 
 
 class JobEventsSnapshot(BaseModel):
@@ -352,6 +353,7 @@ class JobFromDriveIn(BaseModel):
     generate_captions: bool = False
     caption_prompt: str = ""
     caption_prompts: list[str] = []
+    export_destination_id: str = ""
 
 
 class WorkflowSummaryOut(BaseModel):

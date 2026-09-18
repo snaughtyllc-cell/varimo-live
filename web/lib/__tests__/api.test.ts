@@ -77,7 +77,18 @@ describe("createJob posts multipart with files + count", () => {
     expect(body.get("caption_prompt")).toBe("");
     expect(body.get("caption_prompts")).toBe("[]");
     expect(body.get("prep_mode")).toBe("none");
+    expect(body.get("export_destination_id")).toBe("");
     expect(body.getAll("files").length).toBe(1);
+  });
+
+  it("sends export_destination_id when Studio picks a Drive folder", async () => {
+    const fetchMock = mockStudio(async () =>
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
+    const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
+    await api.createJob([f], 3, true, "fast", false, "none", "", undefined, "dst_out");
+    const jobCall = fetchMock.mock.calls.find((c) => String(c[0]) === "/api/jobs");
+    const body = (jobCall![1] as RequestInit).body as FormData;
+    expect(body.get("export_destination_id")).toBe("dst_out");
   });
 
   it("sends prep_mode hq when reconstruct-first is on", async () => {
@@ -167,6 +178,7 @@ describe("createJob posts multipart with files + count", () => {
     expect(body.count).toBe(8);
     expect(body.caption_prompt).toBe("");
     expect(body.caption_prompts).toEqual([]);
+    expect(body.export_destination_id).toBe("");
   });
 
   it("reports byte progress before the job exists so Studio is not frozen on starting", async () => {
@@ -220,6 +232,7 @@ describe("createJob posts multipart with files + count", () => {
     expect(fromBody.get("generate_captions")).toBe("false");
     expect(fromBody.get("caption_prompt")).toBe("");
     expect(fromBody.get("caption_prompts")).toBe("[]");
+    expect(fromBody.get("export_destination_id")).toBe("");
   });
 });
 
@@ -440,6 +453,7 @@ describe("createJobFromDrive", () => {
       prep_mode: "none",
       caption_prompt: "",
       caption_prompts: [],
+      export_destination_id: "",
     });
   });
 
@@ -463,6 +477,7 @@ describe("createJobFromDrive", () => {
       prep_mode: "hq",
       caption_prompt: "",
       caption_prompts: [],
+      export_destination_id: "",
     });
   });
 
@@ -487,6 +502,7 @@ describe("createJobFromDrive", () => {
       prep_mode: "none",
       caption_prompt: "POV boil #reels",
       caption_prompts: ["POV boil #reels"],
+      export_destination_id: "",
     });
   });
 
@@ -511,6 +527,31 @@ describe("createJobFromDrive", () => {
       prep_mode: "none",
       caption_prompt: "",
       caption_prompts: ["POV boil #reels", "Gym pull #fyp"],
+      export_destination_id: "",
+    });
+  });
+
+  it("sends export_destination_id when Studio picks an output folder", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }),
+    );
+    await api.createJobFromDrive({
+      destinationId: "dst_in",
+      fileIds: ["f1"],
+      count: 8,
+      exportDestinationId: "dst_out",
+    });
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      destination_id: "dst_in",
+      file_ids: ["f1"],
+      count: 8,
+      quality_mode: "fast",
+      allow_creative_escalate: true,
+      generate_captions: false,
+      prep_mode: "none",
+      caption_prompt: "",
+      caption_prompts: [],
+      export_destination_id: "dst_out",
     });
   });
 });

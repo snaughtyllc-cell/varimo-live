@@ -69,6 +69,7 @@ old four-row list.
 | Pack Options | Gallery | On a pack row, **Options** rewrites every copy's caption from a seed. Videos stay the same. |
 | Send to Drive | Gallery / variant sheet | Pick destination + caption folder; split a pack across folders. |
 | Drive picker | Studio | Import source files from a saved Drive destination. |
+| Output folder | Studio | Options row under captions. Pick a connected Drive folder so the pack uploads when Generate finishes. **Don't send** (default) keeps the current Gallery path. |
 | Watch / queue / cancel | Studio + Workflows | Live job tiles, cancel, re-attach after reload. Workflows can caption from each Drive filename. |
 | Analytics pack sheet | Analytics | Tap a ranked original. Pack totals, trial-reel Insights per @handle, and tracked Reels live here. Account roles (trial vs main) stay operator knowledge — no lane picker. |
 | Unmatched Reel picker | Analytics | **Unmatched Reels** tab. Pick a Gallery pack, then link the Reel that belongs to it. Pre-Varimo posts stay here and do not crowd ranked originals. |

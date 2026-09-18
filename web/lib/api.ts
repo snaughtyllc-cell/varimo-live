@@ -235,6 +235,7 @@ export async function createJob(
   prepMode: "none" | "hq" = "none",
   captionPrompt: string | string[] = "",
   onProgress?: (p: JobUploadProgress) => void,
+  exportDestinationId: string = "",
 ): Promise<CreateJobResponse> {
   const captions = generateCaptions ? "true" : "false";
   const prompts = captionFields(generateCaptions, captionPrompt);
@@ -282,6 +283,7 @@ export async function createJob(
           prep_mode: prepMode,
           caption_prompt: prompts.caption_prompt,
           caption_prompts: JSON.parse(prompts.caption_prompts) as string[],
+          export_destination_id: exportDestinationId,
         }),
       }).then(json<CreateJobResponse>);
     } catch {
@@ -300,6 +302,7 @@ export async function createJob(
     fd.append("caption_prompt", prompts.caption_prompt);
     fd.append("caption_prompts", prompts.caption_prompts);
     fd.append("prep_mode", prepMode);
+    fd.append("export_destination_id", exportDestinationId);
     for (const f of files) fd.append("files", f, f.name);
     report("create", Math.max(0, files.length - 1), files[files.length - 1] ?? null, 1, 1);
     return fetch("/api/jobs", { method: "POST", body: fd }).then(json<CreateJobResponse>);
@@ -320,6 +323,7 @@ export async function createJob(
   fd.append("caption_prompt", prompts.caption_prompt);
   fd.append("caption_prompts", prompts.caption_prompts);
   fd.append("prep_mode", prepMode);
+  fd.append("export_destination_id", exportDestinationId);
   return fetch("/api/jobs/from-uploads", { method: "POST", body: fd }).then(json<CreateJobResponse>);
 }
 
@@ -565,6 +569,7 @@ export function createJobFromDrive(opts: {
   prepMode?: "none" | "hq";
   captionPrompt?: string | string[];
   onProgress?: (p: JobUploadProgress) => void;
+  exportDestinationId?: string;
 }): Promise<CreateJobResponse> {
   opts.onProgress?.({
     phase: "create",
@@ -588,6 +593,7 @@ export function createJobFromDrive(opts: {
       prep_mode: opts.prepMode ?? "none",
       caption_prompt: packed.caption_prompt,
       caption_prompts: JSON.parse(packed.caption_prompts) as string[],
+      export_destination_id: opts.exportDestinationId ?? "",
     }),
   }).then(json<CreateJobResponse>);
 }

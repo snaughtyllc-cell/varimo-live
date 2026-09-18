@@ -52,8 +52,18 @@ class TenantHub:
         self._quota_factory = quota_factory
         self._lock = threading.Lock()
         self._bundles: dict[str, TenantBundle] = {}
+        self._on_bundle: Callable[[TenantBundle], None] | None = None
+
+    def set_on_bundle(self, fn: Callable[[TenantBundle], None] | None) -> None:
+        with self._lock:
+            self._on_bundle = fn
+            bundles = list(self._bundles.values())
+        if fn is not None:
+            for item in bundles:
+                fn(item)
 
     def bundle(self, workspace_id: str) -> TenantBundle:
+        created: TenantBundle | None = None
         with self._lock:
             existing = self._bundles.get(workspace_id)
             if existing is not None:
@@ -70,7 +80,6 @@ class TenantHub:
                 gallery_keep_hours=self._gallery_keep_hours,
                 quota_check=quota_check,
             )
-            store.hydrate_from_disk()
             built = TenantBundle(
                 workspace_id=workspace_id,
                 ws=ws,
@@ -85,7 +94,15 @@ class TenantHub:
                 instagram_pending=OAuthPendingStore(ws.instagram_pending_path()),
             )
             self._bundles[workspace_id] = built
-            return built
+            created = built
+            on_bundle = self._on_bundle
+        # Hook first, then resume. hydrate_from_disk can finish a job on another
+        # thread; Studio output upload must already be attached.
+        if created is not None:
+            if on_bundle is not None:
+                on_bundle(created)
+            created.store.hydrate_from_disk()
+        return created
 
     def hydrate_all(self, workspace_ids: list[str]) -> None:
         for ws_id in workspace_ids:

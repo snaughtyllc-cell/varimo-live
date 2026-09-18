@@ -157,6 +157,7 @@ class Job:
     error: str | None = None
     created_seq: int = 0
     generate_captions: bool = False
+    export_destination_id: str | None = None
 
 
 def _public_job_error(exc: BaseException) -> str:
@@ -329,6 +330,7 @@ def _job_to_dict(job: Job) -> dict:
         "quality_mode": job.quality_mode,
         "allow_creative_escalate": job.allow_creative_escalate,
         "generate_captions": job.generate_captions,
+        "export_destination_id": job.export_destination_id or None,
         "error": job.error,
         "sources": [
             {
@@ -392,6 +394,7 @@ def _job_from_dict(data: dict) -> Job:
         error=data.get("error"),
         created_seq=created_seq,
         generate_captions=bool(data.get("generate_captions") or False),
+        export_destination_id=(str(data.get("export_destination_id") or "").strip() or None),
     )
 
 
@@ -431,6 +434,7 @@ class JobStore:
         self._done: dict[str, threading.Event] = {}
         self._source_index: dict[str, tuple[str, JobSource]] = {}
         self._cancel: dict[str, CancelToken] = {}
+        self.on_job_done: Callable[[Job], None] | None = None
 
     def _assert_quota(self, requested: int) -> None:
         if self._quota_check is not None:
@@ -481,7 +485,8 @@ class JobStore:
                     quality_mode: str = "fast",
                     generate_captions: bool = False,
                     caption_prompt: str = "",
-                    caption_prompts: list[str] | None = None) -> Job:
+                    caption_prompts: list[str] | None = None,
+                    export_destination_id: str | None = None) -> Job:
         self._assert_quota(len(uploads) * int(count))
         job_id = uuid.uuid4().hex[:12]
         sources = []
@@ -495,6 +500,7 @@ class JobStore:
             generate_captions=generate_captions,
             caption_prompt=caption_prompt,
             caption_prompts=caption_prompts,
+            export_destination_id=export_destination_id,
         )
 
     def create_job_from_paths(self, paths: list[tuple[str, str]], count: int,
@@ -502,7 +508,8 @@ class JobStore:
                                quality_mode: str = "fast",
                                generate_captions: bool = False,
                                caption_prompt: str = "",
-                               caption_prompts: list[str] | None = None) -> Job:
+                               caption_prompts: list[str] | None = None,
+                               export_destination_id: str | None = None) -> Job:
         """Create a job from already-staged files: [(filename, abs_path), ...]."""
         self._assert_quota(len(paths) * int(count))
         job_id = uuid.uuid4().hex[:12]
@@ -519,13 +526,15 @@ class JobStore:
             generate_captions=generate_captions,
             caption_prompt=caption_prompt,
             caption_prompts=caption_prompts,
+            export_destination_id=export_destination_id,
         )
 
     def _start_job(self, job_id: str, sources: list[JobSource], count: int,
                     allow_creative_escalate: bool, quality_mode: str = "fast",
                     generate_captions: bool = False,
                     caption_prompt: str = "",
-                    caption_prompts: list[str] | None = None) -> Job:
+                    caption_prompts: list[str] | None = None,
+                    export_destination_id: str | None = None) -> Job:
         briefs = briefs_for_sources(
             len(sources),
             caption_prompt=caption_prompt,
@@ -540,7 +549,8 @@ class JobStore:
                    allow_creative_escalate=allow_creative_escalate,
                    quality_mode=normalize_quality_mode(quality_mode),
                    created_seq=created_seq,
-                   generate_captions=bool(generate_captions))
+                   generate_captions=bool(generate_captions),
+                   export_destination_id=(str(export_destination_id or "").strip() or None))
         token = CancelToken()
         with self._lock:
             self._jobs[job_id] = job
@@ -867,6 +877,15 @@ class JobStore:
                 self._refresh_copy_error(job)
             self._record_fast_hours(job)
             self._persist(job)
+            if job.state == "done" and self.on_job_done is not None:
+                try:
+                    self.on_job_done(job)
+                except Exception as exc:
+                    print(
+                        f"job {job.job_id} studio export hook failed: "
+                        f"{type(exc).__name__}: {exc}",
+                        flush=True,
+                    )
             self.prune_finished_jobs()
             ev = self._done.get(job.job_id)
             if ev is not None:

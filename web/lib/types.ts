@@ -139,6 +139,7 @@ export interface JobDetail {
   delivery_destination?: string | null;
   outputs_expires_utc?: string | null;
   wait_phase?: "queued" | "booting" | string | null;
+  export_destination_id?: string | null;
 }
 export interface CreateJobResponse { job_id: string; sources: SourceOut[]; }
 export interface DiagnosticsItem { source_id: string; index: number; filename: string; status: "best_effort" | "corrupt" | "uniqueness_fail"; quality: Quality; }

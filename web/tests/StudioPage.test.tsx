@@ -37,6 +37,10 @@ vi.mock("@/lib/api", () => ({
   createJob: vi.fn(),
   createJobFromDrive: vi.fn(),
   cancelJob: vi.fn(),
+  getDriveStatus: async () => ({ status: "ready", sa_email: null, message: "ok" }),
+  listDestinations: async () => [
+    { id: "dst_out", name: "Reels out", folder_id: "f1", auth_mode: "oauth" },
+  ],
 }));
 
 import StudioPage from "@/app/studio/page";
@@ -116,5 +120,14 @@ describe("Studio page captions", () => {
     expect(first).toHaveValue("POV boil #reels");
     expect(second).toHaveValue("Gym pull #fyp");
     expect(document.querySelectorAll(".studio-source-thumb").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("replaces Output size with an output folder pick", async () => {
+    render(<StudioPage />);
+    expect(await screen.findByRole("combobox", { name: "Output folder" })).toBeInTheDocument();
+    expect(screen.getByText("Output folder")).toBeInTheDocument();
+    expect(screen.queryByText("Output size")).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Don't send" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Reels out" })).toBeInTheDocument();
   });
 });

@@ -13,6 +13,8 @@ vi.mock("@/lib/api", () => ({
   getHealth: async () => ({ status: "ok", lab: health.lab }),
   createJob: (...args: unknown[]) => createJob(...args),
   createJobFromDrive: (...args: unknown[]) => createJobFromDrive(...args),
+  getDriveStatus: async () => ({ status: "ready", sa_email: null, message: "ok" }),
+  listDestinations: async () => [],
 }));
 
 vi.mock("@/lib/useLabLane", () => ({

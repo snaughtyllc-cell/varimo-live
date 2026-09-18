@@ -1501,6 +1501,19 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   }
   .studio-cockpit { flex: 0 0 auto; min-height: auto; overflow: visible; }
   .studio-cockpit__scroll { flex: 0 0 auto; min-height: auto; overflow: visible; padding: 18px 16px 8px; }
+  .studio-cockpit__spacer {
+    display: block;
+    flex: 0 0 auto;
+    height: calc(var(--generate-dock-h) + 12px);
+  }
+  .studio-output-folder {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    scroll-margin-bottom: calc(var(--generate-dock-h) + 16px);
+  }
+  .studio-output-folder select,
+  .studio-output-folder__link { max-width: none; width: 100%; }
   .studio-clip-card { min-width: 0; width: 100%; }
   .studio-clip-card__thumb { height: 112px; width: 84px; }
   .studio-generate-bar {

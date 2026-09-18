@@ -173,6 +173,7 @@ class JobDetail(BaseModel):
     sources: list[SourceOut] = []
     error: str | None = None
     export_destination_id: str | None = None
+    export_id: str | None = None
 
 
 class JobEventsSnapshot(BaseModel):

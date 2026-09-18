@@ -143,6 +143,9 @@ def bind_studio_export(
         dest_id = (job.export_destination_id or "").strip()
         if job.state != "done" or not dest_id:
             return
+        existing_id = (job.export_id or "").strip()
+        if existing_id and export_store.get(existing_id) is not None:
+            return
         dest = dest_store.get(dest_id)
         drive = drive_fn() if callable(drive_fn) else drive_fn
         if dest is None or drive is None:
@@ -153,7 +156,7 @@ def bind_studio_export(
             )
             return
         try:
-            start_job_export(
+            export = start_job_export(
                 job=job,
                 job_store=store,
                 dest=dest,
@@ -162,6 +165,11 @@ def bind_studio_export(
             )
         except ExportError as exc:
             print(f"job {job.job_id}: skip studio export: {exc}", flush=True)
+            return
+        if export is None:
+            return
+        job.export_id = export.export_id
+        store._persist(job)
 
     store.on_job_done = on_done
 

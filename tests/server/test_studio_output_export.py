@@ -117,9 +117,18 @@ def test_create_job_exports_to_picked_folder_when_done(tmp_path):
     assert store.wait(job_id, timeout=5)
     detail = client.get(f"/api/jobs/{job_id}").json()
     assert detail["export_destination_id"] == dest.id
+    assert (detail.get("export_id") or "").startswith("exp_")
     landed = _wait_landed(drive, folder)
     assert landed, "finished pack should land in the picked Drive folder"
     assert any(n["name"].endswith(".mp4") for n in landed)
+    deadline = time.time() + 3
+    packs = []
+    while time.time() < deadline:
+        packs = client.get("/api/drive/exports").json()
+        if any(p.get("export_id") == detail["export_id"] for p in packs):
+            break
+        time.sleep(0.05)
+    assert any(p.get("export_id") == detail["export_id"] for p in packs)
 
 
 def test_create_job_unknown_export_folder_is_404(tmp_path):
@@ -400,3 +409,207 @@ def test_logged_in_customer_exports_only_to_their_workspace_folder(tmp_path):
     assert detail["export_destination_id"] == ops_dest.id
     assert _wait_landed(drive, ops_folder)
     assert _landed(drive, jeff_folder) == []
+
+
+def test_whitespace_output_folder_is_dont_send(tmp_path):
+    drive = FakeDrive()
+    folder = drive.make_folder("out")
+    client, store = _client(tmp_path, drive=drive)
+    client.app.state.destinations.create(name="Reels out", folder_id=folder, auth_mode="oauth")
+    before = {fid for fid, n in drive._nodes.items() if n["blob"]}
+    resp = client.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "1", "export_destination_id": "   "},
+    )
+    assert resp.status_code == 201
+    job_id = resp.json()["job_id"]
+    assert store.wait(job_id, timeout=5)
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    assert not detail.get("export_destination_id")
+    assert not detail.get("export_id")
+    time.sleep(0.2)
+    after = {fid for fid, n in drive._nodes.items() if n["blob"]}
+    assert after == before
+
+
+def test_failed_generate_still_finishes_and_does_not_export(tmp_path):
+    class BoomRunner:
+        def run(self, *args, **kwargs):
+            raise RuntimeError("ffmpeg died")
+
+    drive = FakeDrive()
+    folder = drive.make_folder("out")
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, BoomRunner())
+    dests = DestinationStore(ws.destinations_path())
+    dest = dests.create(name="Reels out", folder_id=folder, auth_mode="oauth")
+    client, store = _client(tmp_path, drive=drive, store=store)
+    resp = client.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "1", "export_destination_id": dest.id},
+    )
+    assert resp.status_code == 201
+    job_id = resp.json()["job_id"]
+    assert store.wait(job_id, timeout=5)
+    job = store.get(job_id)
+    assert job is not None and job.state == "done"
+    assert job.error
+    time.sleep(0.2)
+    assert _landed(drive, folder) == []
+    assert client.get("/api/drive/exports").json() == []
+
+
+def test_uniqueness_fail_pack_does_not_export(tmp_path):
+    drive = FakeDrive()
+    folder = drive.make_folder("out")
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({1: "uniqueness_fail"}))
+    dests = DestinationStore(ws.destinations_path())
+    dest = dests.create(name="Reels out", folder_id=folder, auth_mode="oauth")
+    client, store = _client(tmp_path, drive=drive, store=store)
+    resp = client.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "1", "export_destination_id": dest.id},
+    )
+    assert resp.status_code == 201
+    assert store.wait(resp.json()["job_id"], timeout=5)
+    time.sleep(0.2)
+    assert _landed(drive, folder) == []
+
+
+def test_from_drive_without_output_does_not_write_inbox(tmp_path):
+    drive = FakeDrive()
+    inbox = drive.make_folder("inbox")
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"video-bytes")
+    fid = drive.put_file("clip.mp4", str(clip), parent=inbox)
+    client, store = _client(tmp_path, drive=drive)
+    inbox_dest = client.app.state.destinations.create(
+        name="Inbox", folder_id=inbox, auth_mode="oauth",
+    )
+    before = {fid for fid, n in drive._nodes.items() if n["parent"] == inbox and n["blob"]}
+    resp = client.post("/api/jobs/from-drive", json={
+        "destination_id": inbox_dest.id,
+        "file_ids": [fid],
+        "count": 1,
+    })
+    assert resp.status_code == 201
+    assert store.wait(resp.json()["job_id"], timeout=5)
+    time.sleep(0.2)
+    after = {fid for fid, n in drive._nodes.items() if n["parent"] == inbox and n["blob"]}
+    assert after == before
+    assert client.get("/api/drive/exports").json() == []
+
+
+def test_gallery_send_still_works_when_studio_left_dont_send(tmp_path):
+    drive = FakeDrive()
+    folder = drive.make_folder("out")
+    client, store = _client(tmp_path, drive=drive)
+    dest = client.app.state.destinations.create(
+        name="Reels out", folder_id=folder, auth_mode="oauth",
+    )
+    resp = client.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "1"},
+    )
+    assert resp.status_code == 201
+    job_id = resp.json()["job_id"]
+    assert store.wait(job_id, timeout=5)
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    assert not detail.get("export_destination_id")
+    source = detail["sources"][0]
+    variant = source["variants"][0]
+    sent = client.post("/api/drive/exports", json={
+        "destination_id": dest.id,
+        "variants": [{"source_id": source["source_id"], "index": variant["index"]}],
+    })
+    assert sent.status_code == 201
+    assert _wait_landed(drive, folder)
+
+
+def test_workflow_job_does_not_create_a_studio_export(tmp_path):
+    drive = FakeDrive()
+    inbox = drive.make_folder("Inbox")
+    out = drive.make_folder("Out")
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"workflow-clip")
+    drive.put_file("clip.mp4", str(clip), parent=inbox)
+    client, store = _client(tmp_path, drive=drive)
+    inbox_dest = client.app.state.destinations.create(
+        name="Inbox", folder_id=inbox, auth_mode="oauth",
+    )
+    out_dest = client.app.state.destinations.create(
+        name="Out", folder_id=out, auth_mode="oauth",
+    )
+    wf = client.post("/api/workflows", json={
+        "name": "Auto",
+        "inbox_destination_id": inbox_dest.id,
+        "output_destination_id": out_dest.id,
+        "count": 1,
+        "poll_seconds": 60,
+    }).json()
+    first = client.post(f"/api/workflows/{wf['id']}/run")
+    assert first.status_code == 200
+    summary = first.json()["last_summary"]
+    for jid in summary.get("job_ids") or []:
+        assert store.wait(jid, timeout=5)
+        job = store.get(jid)
+        assert job is not None
+        assert not job.export_destination_id
+        assert not job.export_id
+    if summary.get("exported", 0) < 1:
+        second = client.post(f"/api/workflows/{wf['id']}/run")
+        summary = second.json()["last_summary"]
+    assert summary["exported"] >= 1
+    assert client.get("/api/drive/exports").json() == []
+    subs = [f for f in drive.list_files(out) if f.is_folder]
+    assert len(subs) == 1
+
+
+def test_regenerate_does_not_export_again(tmp_path):
+    drive = FakeDrive()
+    folder = drive.make_folder("out")
+    client, store = _client(tmp_path, drive=drive)
+    dest = client.app.state.destinations.create(
+        name="Reels out", folder_id=folder, auth_mode="oauth",
+    )
+    resp = client.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "1", "export_destination_id": dest.id},
+    )
+    assert resp.status_code == 201
+    job_id = resp.json()["job_id"]
+    source_id = resp.json()["sources"][0]["source_id"]
+    assert store.wait(job_id, timeout=5)
+    first = _wait_landed(drive, folder)
+    assert first
+    regen = client.post(f"/api/sources/{source_id}/regenerate", data={"n": "1"})
+    assert regen.status_code == 200
+    assert store.wait(job_id, timeout=5)
+    time.sleep(0.3)
+    assert len(_landed(drive, folder)) == len(first)
+
+
+def test_second_finish_hook_does_not_duplicate_upload(tmp_path):
+    drive = FakeDrive()
+    folder = drive.make_folder("out")
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    dests = DestinationStore(ws.destinations_path())
+    dest = dests.create(name="Reels out", folder_id=folder, auth_mode="oauth")
+    exports = ExportStore(ws.exports_dir())
+    bind_studio_export(store, dests, exports, lambda: drive)
+    job = store.create_job(
+        [("a.mp4", b"x")], count=1, export_destination_id=dest.id,
+    )
+    assert store.wait(job.job_id, timeout=5)
+    store.on_job_done(job)
+    store.on_job_done(job)
+    assert _wait_landed(drive, folder)
+    assert len(exports.list()) == 1
+    assert len(_landed(drive, folder)) == 1

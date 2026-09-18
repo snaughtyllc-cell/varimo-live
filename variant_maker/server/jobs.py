@@ -158,6 +158,7 @@ class Job:
     created_seq: int = 0
     generate_captions: bool = False
     export_destination_id: str | None = None
+    export_id: str | None = None
 
 
 def _public_job_error(exc: BaseException) -> str:
@@ -331,6 +332,7 @@ def _job_to_dict(job: Job) -> dict:
         "allow_creative_escalate": job.allow_creative_escalate,
         "generate_captions": job.generate_captions,
         "export_destination_id": job.export_destination_id or None,
+        "export_id": job.export_id or None,
         "error": job.error,
         "sources": [
             {
@@ -395,6 +397,7 @@ def _job_from_dict(data: dict) -> Job:
         created_seq=created_seq,
         generate_captions=bool(data.get("generate_captions") or False),
         export_destination_id=(str(data.get("export_destination_id") or "").strip() or None),
+        export_id=(str(data.get("export_id") or "").strip() or None),
     )
 
 

@@ -1879,7 +1879,8 @@ def create_app(
                          sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
                                   for s in job.sources],
                          error=job.error,
-                         export_destination_id=job.export_destination_id)
+                         export_destination_id=job.export_destination_id,
+                         export_id=job.export_id)
 
     @app.post("/api/jobs/{job_id}/cancel", response_model=JobDetail)
     def cancel_job(job_id: str) -> JobDetail:
@@ -1891,7 +1892,8 @@ def create_app(
                          sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
                                   for s in job.sources],
                          error=job.error,
-                         export_destination_id=job.export_destination_id)
+                         export_destination_id=job.export_destination_id,
+                         export_id=job.export_id)
 
     @app.get("/api/jobs/{job_id}/events-snapshot", response_model=JobEventsSnapshot)
     def job_events_snapshot(job_id: str) -> JobEventsSnapshot:

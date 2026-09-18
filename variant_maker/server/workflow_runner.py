@@ -20,6 +20,21 @@ from variant_maker.server.captions import CaptionStore, caption_filename
 from variant_maker.server.jobs import COPY_FAILED_MSG, Job, JobSource, JobStore
 from variant_maker.server.workflows import Workflow
 
+EMPTY_INBOX_MSG = (
+    "No videos in the inbox folder. Drop mp4/mov files directly in that folder "
+    "(not a subfolder)."
+)
+
+
+def public_workflow_error(exc: BaseException, *, share_email: str | None = None) -> str:
+    """VA-facing sweep error. 404/403 means studio@ cannot open the pasted folder."""
+    raw = str(exc) or type(exc).__name__
+    low = raw.lower()
+    share = (share_email or "studio@varimo.io").strip() or "studio@varimo.io"
+    if any(token in low for token in ("404", "403", "not found", "permission", "forbidden")):
+        return f"Can't open the inbox folder. Share it as Editor with {share}."
+    return raw
+
 
 @dataclass
 class TickSummary:
@@ -205,6 +220,15 @@ def _queue_new(
         return
     os.makedirs(work_dir, exist_ok=True)
     videos = [f for f in drive.list_files(inbox_folder_id) if is_video_file(f)]
+    if (
+        not videos
+        and summary.queued == 0
+        and summary.exported == 0
+        and summary.failed == 0
+        and summary.running == 0
+    ):
+        summary.error = EMPTY_INBOX_MSG
+        return
     for f in videos:
         if slots <= 0:
             break

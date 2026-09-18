@@ -229,7 +229,7 @@ from .tenants import (
     auth_required as tenant_auth_required,
 )
 from .usage import count_ok_union, month_key
-from .workflow_runner import cancel_workflow_jobs, tick_workflow
+from .workflow_runner import cancel_workflow_jobs, public_workflow_error, tick_workflow
 from .workflows import Workflow, WorkflowError, WorkflowStore
 from .workspace import Workspace
 
@@ -837,9 +837,14 @@ def create_app(
         return client, sheets_client
 
     def _drive() -> DriveClient | None:
+        # Site studio@ client. Every workspace uses this token. Do not rebuild a
+        # per-tenant GoogleDrive from the SA JSON — that cannot see folders
+        # shared only with studio@, and Run now 500s.
+        if app.state.drive is not None:
+            return app.state.drive
         bundle = current_bundle()
         if bundle is None:
-            return app.state.drive
+            return None
         if bundle.drive is not None:
             return bundle.drive
         info = _compute_drive_info()
@@ -850,6 +855,8 @@ def create_app(
                 bundle.drive = _build_drive_client(sa_json_path=sa_arg)
             except Exception:  # noqa: BLE001 — SA json may be unreadable
                 bundle.drive = None
+        if bundle.drive is not None:
+            app.state.drive = bundle.drive
         return bundle.drive
 
     def _sheets() -> SheetsClient | None:
@@ -864,18 +871,16 @@ def create_app(
         return bundle.sheets
 
     def _set_drive(client: DriveClient | None) -> None:
+        app.state.drive = client
         bundle = current_bundle()
         if bundle is not None:
             bundle.drive = client
-        else:
-            app.state.drive = client
 
     def _set_sheets(client: SheetsClient | None) -> None:
+        app.state.sheets = client
         bundle = current_bundle()
         if bundle is not None:
             bundle.sheets = client
-        else:
-            app.state.sheets = client
 
     def _account_email() -> str | None:
         info = _drive_info()
@@ -1294,19 +1299,28 @@ def create_app(
                 wf.id, last_sweep_at=ts, last_summary=summary, touch_sweep=True,
             ) or wf
         ledger = Ledger(store._ws.workflow_ledger_path(wf.id))
-        with app.state.workflow_tick_lock:
-            result = tick_workflow(
-                wf,
-                drive=drive_client,
-                inbox_folder_id=inbox.folder_id,
-                output_folder_id=output.folder_id,
-                job_store=store,
-                ledger=ledger,
-                work_dir=store._ws.workflow_work_dir(),
-                caption_store=app.state.captions,
-            )
+        try:
+            with app.state.workflow_tick_lock:
+                result = tick_workflow(
+                    wf,
+                    drive=drive_client,
+                    inbox_folder_id=inbox.folder_id,
+                    output_folder_id=output.folder_id,
+                    job_store=store,
+                    ledger=ledger,
+                    work_dir=store._ws.workflow_work_dir(),
+                    caption_store=app.state.captions,
+                )
+            summary = result.as_dict()
+        except Exception as exc:  # noqa: BLE001 — show the operator why Run now failed
+            print(f"workflow {wf.id} tick failed: {type(exc).__name__}: {exc}", flush=True)
+            summary = {
+                "queued": 0, "exported": 0, "skipped": 0, "failed": 0,
+                "running": 0, "job_ids": [],
+                "error": public_workflow_error(exc, share_email=_account_email()),
+            }
         return app.state.workflows.update(
-            wf.id, last_sweep_at=ts, last_summary=result.as_dict(), touch_sweep=True,
+            wf.id, last_sweep_at=ts, last_summary=summary, touch_sweep=True,
         ) or wf
 
     @app.middleware("http")

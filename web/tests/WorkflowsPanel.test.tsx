@@ -27,6 +27,7 @@ import {
   listCaptionBanks,
   listDestinations,
   listWorkflows,
+  runWorkflow,
   updateWorkflow,
 } from "@/lib/api";
 import { WorkflowsPanel } from "@/components/workflows/WorkflowsPanel";
@@ -180,6 +181,27 @@ describe("WorkflowsPanel filename captions", () => {
         auto_caption: false,
       });
     });
+  });
+});
+
+describe("WorkflowsPanel Run now", () => {
+  it("shows a Drive share error on the page instead of failing silently", async () => {
+    vi.mocked(runWorkflow).mockResolvedValue({
+      ...live,
+      last_summary: {
+        queued: 0,
+        exported: 0,
+        skipped: 0,
+        failed: 0,
+        running: 0,
+        job_ids: [],
+        error: "Can't open the inbox folder. Share it as Editor with studio@varimo.io.",
+      },
+    });
+    render(<WorkflowsPanel />);
+    fireEvent.click(await screen.findByRole("button", { name: /run now/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/share it as editor/i);
+    expect(runWorkflow).toHaveBeenCalledWith("wf_1");
   });
 });
 

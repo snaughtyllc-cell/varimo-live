@@ -65,7 +65,7 @@ old four-row list.
 
 | Surface | Parent | How it opens |
 |---|---|---|
-| Gallery folders | Gallery | Folder chips at the top. Create/rename/delete, then Move to folder on a pack. Workspace-local — not a Google Drive folder. |
+| Gallery folders | Gallery | Folder chips at the top. Open a folder to Rename or Delete it, then Move to folder on a pack. Workspace-local — not a Google Drive folder. |
 | Variant sheet | Gallery | Tap a finished copy. Compare slider, scrub, editable caption, uniqueness, platform flag, post URL, download. |
 | Pack Options | Gallery | On a pack row, **Options** rewrites every copy's caption from a seed. Videos stay the same. |
 | Send to Drive | Gallery / variant sheet | Pick destination + caption folder; split a pack across folders. |

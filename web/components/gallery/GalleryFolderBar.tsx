@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { GalleryFolder } from "@/lib/types";
 import {
   GALLERY_FOLDER_ALL,
   GALLERY_FOLDER_UNFILED,
-  galleryFolderActionsLabel,
   galleryFolderAllChipLabel,
   galleryFolderAllLabel,
   galleryFolderBarLabel,
@@ -42,22 +41,11 @@ export function GalleryFolderBar({
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [menuId, setMenuId] = useState<string | null>(null);
-  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!menuId) return;
-    function onDoc(event: MouseEvent) {
-      const target = event.target;
-      if (!(target instanceof Element) || !target.closest(".gallery-folder-chip-wrap")) {
-        setMenuId(null);
-      }
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [menuId]);
+  const selectedFolder = folders.find((folder) => folder.id === selectedId) ?? null;
 
   async function submitNew(e: React.FormEvent) {
     e.preventDefault();
@@ -77,15 +65,28 @@ export function GalleryFolderBar({
 
   async function submitRename(e: React.FormEvent) {
     e.preventDefault();
-    if (!renameId || busy || !renameDraft.trim()) return;
+    if (!selectedFolder || busy || !renameDraft.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      await onRename(renameId, renameDraft.trim());
-      setRenameId(null);
-      setMenuId(null);
+      await onRename(selectedFolder.id, renameDraft.trim());
+      setRenaming(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not rename folder");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeSelected() {
+    if (!selectedFolder || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onDelete(selectedFolder.id);
+      setRenaming(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete folder");
     } finally {
       setBusy(false);
     }
@@ -96,6 +97,35 @@ export function GalleryFolderBar({
       <div className="gallery-folders__head">
         <span className="gallery-folders__label">{galleryFolderBarLabel()}</span>
         <p className="gallery-folders__hint">{galleryFolderHint()}</p>
+        {selectedFolder && !renaming && (
+          <div className="gallery-folders__actions">
+            <button
+              type="button"
+              onClick={() => {
+                setRenameDraft(selectedFolder.name);
+                setRenaming(true);
+              }}
+            >
+              {galleryFolderRenameLabel()}
+            </button>
+            <button type="button" onClick={() => void removeSelected()} disabled={busy}>
+              {galleryFolderDeleteLabel()}
+            </button>
+          </div>
+        )}
+        {selectedFolder && renaming && (
+          <form className="gallery-folder-create" onSubmit={submitRename}>
+            <input
+              autoFocus
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              aria-label={galleryFolderRenameLabel()}
+              disabled={busy}
+            />
+            <button type="submit" disabled={busy || !renameDraft.trim()}>Save</button>
+            <button type="button" onClick={() => setRenaming(false)}>Cancel</button>
+          </form>
+        )}
       </div>
       <div className="gallery-folders__rail">
         <button
@@ -123,77 +153,21 @@ export function GalleryFolderBar({
           </button>
         )}
         {folders.map((folder) => (
-          <div key={folder.id} className="gallery-folder-chip-wrap">
-            {renameId === folder.id ? (
-              <form className="gallery-folder-create" onSubmit={submitRename}>
-                <input
-                  autoFocus
-                  value={renameDraft}
-                  onChange={(e) => setRenameDraft(e.target.value)}
-                  aria-label={galleryFolderRenameLabel()}
-                  disabled={busy}
-                />
-                <button type="submit" disabled={busy || !renameDraft.trim()}>Save</button>
-                <button type="button" onClick={() => setRenameId(null)}>Cancel</button>
-              </form>
-            ) : (
-              <button
-                type="button"
-                className="gallery-folder-chip"
-                data-active={selectedId === folder.id}
-                aria-label={galleryFolderNamedChipLabel(folder.name, folder.pack_count)}
-                onClick={() => onSelect(folder.id)}
-              >
-                <span className="material-symbols-rounded" aria-hidden="true">folder</span>
-                {folder.name}
-                <span className="gallery-folder-chip__count" aria-hidden="true">{folder.pack_count}</span>
-              </button>
-            )}
-            {renameId !== folder.id && (
-            <button
-              type="button"
-              className="gallery-folder-chip__more"
-              aria-label={galleryFolderActionsLabel(folder.name)}
-              aria-expanded={menuId === folder.id}
-              onClick={() => setMenuId((id) => (id === folder.id ? null : folder.id))}
-            >
-              <span className="material-symbols-rounded" aria-hidden="true">more_horiz</span>
-            </button>
-            )}
-            {menuId === folder.id && (
-              <div className="gallery-folder-menu" role="menu">
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setRenameId(folder.id);
-                    setRenameDraft(folder.name);
-                    setMenuId(null);
-                  }}
-                >
-                  {galleryFolderRenameLabel()}
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={async () => {
-                    setBusy(true);
-                    setError(null);
-                    try {
-                      await onDelete(folder.id);
-                      setMenuId(null);
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : "Could not delete folder");
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                >
-                  {galleryFolderDeleteLabel()}
-                </button>
-              </div>
-            )}
-          </div>
+          <button
+            key={folder.id}
+            type="button"
+            className="gallery-folder-chip"
+            data-active={selectedId === folder.id}
+            aria-label={galleryFolderNamedChipLabel(folder.name, folder.pack_count)}
+            onClick={() => {
+              setRenaming(false);
+              onSelect(folder.id);
+            }}
+          >
+            <span className="material-symbols-rounded" aria-hidden="true">folder</span>
+            {folder.name}
+            <span className="gallery-folder-chip__count" aria-hidden="true">{folder.pack_count}</span>
+          </button>
         ))}
         {creating ? (
           <form className="gallery-folder-create" onSubmit={submitNew}>

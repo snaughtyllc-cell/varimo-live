@@ -27,6 +27,8 @@ describe("GalleryFolderBar", () => {
     expect(screen.getByRole("button", { name: /^unfiled packs/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /client a folder/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /new folder/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^rename$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /delete folder/i })).not.toBeInTheDocument();
   });
 
   it("creates a folder from the top rail", async () => {
@@ -67,43 +69,41 @@ describe("GalleryFolderBar", () => {
     expect(onSelect).toHaveBeenCalledWith(GALLERY_FOLDER_UNFILED);
   });
 
-  it("renames a folder from the actions menu", async () => {
+  it("renames the open folder from the Folders header", async () => {
     const onRename = vi.fn().mockResolvedValue(undefined);
     render(
       <GalleryFolderBar
         folders={folders}
         unassignedCount={3}
         totalCount={6}
-        selectedId=""
+        selectedId="gf_1"
         onSelect={vi.fn()}
         onCreate={vi.fn()}
         onRename={onRename}
         onDelete={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /folder actions for client a/i }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /rename/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^rename$/i }));
     fireEvent.change(screen.getByLabelText(/rename/i), { target: { value: "Client B" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     await waitFor(() => expect(onRename).toHaveBeenCalledWith("gf_1", "Client B"));
   });
 
-  it("deletes a folder from the actions menu", async () => {
+  it("deletes the open folder from the Folders header", async () => {
     const onDelete = vi.fn().mockResolvedValue(undefined);
     render(
       <GalleryFolderBar
         folders={folders}
         unassignedCount={3}
         totalCount={6}
-        selectedId=""
+        selectedId="gf_1"
         onSelect={vi.fn()}
         onCreate={vi.fn()}
         onRename={vi.fn()}
         onDelete={onDelete}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /folder actions for client a/i }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /delete folder/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete folder/i }));
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith("gf_1"));
   });
 });

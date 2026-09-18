@@ -16,6 +16,7 @@ from variant_maker.server.drive_exports import (
     start_job_export,
 )
 from variant_maker.server.jobs import Job, JobSource, JobStore, VariantInfo
+from variant_maker.server.tenants import ADMIN_EMAIL_ENV
 from variant_maker.server.workspace import Workspace
 
 
@@ -338,3 +339,64 @@ def test_restart_resumes_running_job_and_still_exports(tmp_path):
     assert detail["export_destination_id"] == dest.id
     assert detail["state"] == "done"
     assert _wait_landed(drive, folder)
+
+
+def test_logged_in_customer_exports_only_to_their_workspace_folder(tmp_path):
+    """Live path: auth on, TenantHub, studio@ drive. Do not leak Jeff's folders."""
+    drive = FakeDrive()
+    jeff_folder = drive.make_folder("jeff-out")
+    ops_folder = drive.make_folder("ops-out")
+    env = {
+        ADMIN_EMAIL_ENV: "jeff@x.com",
+        "VARIANT_AUTH_SECRET": "test-auth-secret",
+    }
+    app = create_app(
+        JobStore(Workspace(str(tmp_path)), FakeRunner({})),
+        drive=drive,
+        sa_json_path=_sa(tmp_path),
+        auth_environ=env,
+        oauth_environ=env,
+    )
+    jeff = TestClient(app)
+    ops = TestClient(app)
+    assert jeff.post(
+        "/api/auth/password", json={"email": "jeff@x.com", "password": "secret12"},
+    ).status_code == 200
+    jeff_ws = jeff.get("/api/auth/me").json()["workspace_id"]
+    hub = app.state.tenant_hub
+    jeff_dest = hub.bundle(jeff_ws).destinations.create(
+        name="Jeff out", folder_id=jeff_folder, auth_mode="oauth",
+    )
+
+    inv = jeff.post("/api/auth/invites", json={"email": "ops@x.com", "kind": "new_workspace"})
+    assert inv.status_code == 201
+    assert ops.post(
+        "/api/auth/password", json={"email": "ops@x.com", "password": "ops-secret"},
+    ).status_code == 200
+    ops_ws = ops.get("/api/auth/me").json()["workspace_id"]
+    assert ops_ws != jeff_ws
+    ops_store = hub.bundle(ops_ws).store
+    assert ops_store.on_job_done is not None
+    ops_dest = hub.bundle(ops_ws).destinations.create(
+        name="Ops out", folder_id=ops_folder, auth_mode="oauth",
+    )
+
+    stolen = ops.post(
+        "/api/jobs",
+        files=[("files", ("a.mp4", b"x", "video/mp4"))],
+        data={"count": "1", "export_destination_id": jeff_dest.id},
+    )
+    assert stolen.status_code == 404
+
+    resp = ops.post(
+        "/api/jobs",
+        files=[("files", ("b.mp4", b"y", "video/mp4"))],
+        data={"count": "1", "export_destination_id": ops_dest.id},
+    )
+    assert resp.status_code == 201
+    job_id = resp.json()["job_id"]
+    assert ops_store.wait(job_id, timeout=5)
+    detail = ops.get(f"/api/jobs/{job_id}").json()
+    assert detail["export_destination_id"] == ops_dest.id
+    assert _wait_landed(drive, ops_folder)
+    assert _landed(drive, jeff_folder) == []

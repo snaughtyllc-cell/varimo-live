@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { SourceOut } from "@/lib/types";
+import { GalleryFolder, SourceOut } from "@/lib/types";
+import { PackFolderMenu } from "@/components/gallery/PackFolderMenu";
 import { regenerate, retryCopy, sourceZipUrl, removeSource, getSourceDownloads } from "@/lib/api";
 import {
   copyLandingCopy,
@@ -51,6 +52,8 @@ interface SourceGroupProps {
   onToggleVariant: (key: string) => void;
   onToggleSelectSource: (source: SourceOut, select: boolean) => void;
   onRemove: () => void;
+  folders?: GalleryFolder[];
+  onAssignFolder?: (folderId: string | null) => void;
 }
 
 /**
@@ -60,7 +63,7 @@ interface SourceGroupProps {
  */
 export function SourceGroup({
   source, onOpenVariant, onRegenerate, selected, onToggleVariant, onToggleSelectSource,
-  onRemove,
+  onRemove, folders = [], onAssignFolder,
 }: SourceGroupProps) {
   const [regenLoading, setRegenLoading] = useState(false);
   const [copyLoading, setCopyLoading] = useState(false);
@@ -284,9 +287,13 @@ export function SourceGroup({
               Download ZIP
             </a>
           )}
-          <span className="gallery-pack-header__icon-btn source-folder-link" title="Open source folder">
-            <span className="material-symbols-rounded" aria-hidden="true">folder_open</span>
-          </span>
+          {onAssignFolder && folders.length > 0 && (
+            <PackFolderMenu
+              folders={folders}
+              currentId={source.gallery_folder_id}
+              onAssign={onAssignFolder}
+            />
+          )}
           <button
             type="button"
             className="gallery-pack-header__icon-btn"

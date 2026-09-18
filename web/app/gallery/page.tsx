@@ -35,8 +35,25 @@ import {
   shareVideosLabel,
   shouldOfferPhotosSave,
 } from "@/lib/shareVideos";
-import { getDriveStatus, listDestinations } from "@/lib/api";
-import type { Destination, DriveStatus, SourceOut } from "@/lib/types";
+import {
+  assignGalleryFolder,
+  createGalleryFolder,
+  deleteGalleryFolder,
+  getDriveStatus,
+  listDestinations,
+  listGalleryFolders,
+  renameGalleryFolder,
+} from "@/lib/api";
+import type { Destination, DriveStatus, GalleryFolder, SourceOut } from "@/lib/types";
+import {
+  GALLERY_FOLDER_ALL,
+  GALLERY_FOLDER_UNFILED,
+  filterSourcesByFolder,
+  folderNameForId,
+  galleryFolderEmptyCopy,
+  galleryFolderUnfiledEmptyCopy,
+} from "@/lib/galleryFolders";
+import { GalleryFolderBar } from "@/components/gallery/GalleryFolderBar";
 import { GalleryToolbar } from "@/components/gallery/GalleryToolbar";
 import { GalleryFloatingToolbar } from "@/components/gallery/GalleryFloatingToolbar";
 import { PackList } from "@/components/gallery/PackList";
@@ -57,6 +74,9 @@ export function GalleryContent() {
   const [sort, setSort] = useState<SortMode>("newest");
   const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
   const [packSearch, setPackSearch] = useState("");
+  const [folders, setFolders] = useState<GalleryFolder[]>([]);
+  const [unassignedCount, setUnassignedCount] = useState(0);
+  const [activeFolderId, setActiveFolderId] = useState(GALLERY_FOLDER_ALL);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [driveStatus, setDriveStatus] = useState<DriveStatus | null>(null);
@@ -72,6 +92,15 @@ export function GalleryContent() {
   const fileCacheRef = useRef(new Map<string, File>());
 
   // Load Drive status + destinations once, in parallel with the gallery SWR fetch.
+  function refreshFolders() {
+    return listGalleryFolders()
+      .then((out) => {
+        setFolders(out.folders);
+        setUnassignedCount(out.unassigned_count);
+      })
+      .catch((e) => console.error("Failed to load gallery folders", e));
+  }
+
   useEffect(() => {
     Promise.all([getDriveStatus(), listDestinations()])
       .then(([status, dests]) => {
@@ -79,6 +108,7 @@ export function GalleryContent() {
         setDestinations(dests);
       })
       .catch((e) => console.error("Failed to load Drive status", e));
+    void refreshFolders();
   }, []);
 
   useEffect(() => {
@@ -147,8 +177,16 @@ export function GalleryContent() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  const filtered = filterSources(allSources, filterMode);
+  const filtered = filterSourcesByFolder(
+    filterSources(allSources, filterMode),
+    activeFolderId,
+  );
   const sorted = sortSources(filtered, sort);
+  const folderLabels = Object.fromEntries(
+    allSources
+      .map((source) => [source.source_id, folderNameForId(folders, source.gallery_folder_id)] as const)
+      .filter((entry): entry is readonly [string, string] => Boolean(entry[1])),
+  );
 
   // A deep-linked/open variant sheet (via ?v=) takes priority so the PACKS
   // list stays focused on it; otherwise the last pack clicked, else the top one.
@@ -234,6 +272,7 @@ export function GalleryContent() {
       return next;
     });
     mutate();
+    void refreshFolders();
   }
 
   function handleSendModalClose() {
@@ -243,6 +282,28 @@ export function GalleryContent() {
 
   return (
     <main className="gallery-page">
+      <GalleryFolderBar
+        folders={folders}
+        unassignedCount={unassignedCount}
+        totalCount={allSources.length}
+        selectedId={activeFolderId}
+        onSelect={setActiveFolderId}
+        onCreate={async (name) => {
+          await createGalleryFolder(name);
+          await refreshFolders();
+        }}
+        onRename={async (id, name) => {
+          await renameGalleryFolder(id, name);
+          await refreshFolders();
+        }}
+        onDelete={async (id) => {
+          const wasLast = folders.length === 1 && folders[0].id === id;
+          await deleteGalleryFolder(id);
+          if (activeFolderId === id || wasLast) setActiveFolderId(GALLERY_FOLDER_ALL);
+          await Promise.all([mutate(), refreshFolders()]);
+        }}
+      />
+
       <GalleryToolbar
         count={sorted.length}
         variantCount={totalVariants}
@@ -285,6 +346,7 @@ export function GalleryContent() {
         <PackList
           packs={sorted}
           totalCount={sorted.length}
+          folderLabels={folderLabels}
           activeId={activePack?.source_id}
           onSelect={(id) => {
             setSelectedPackId(id);
@@ -304,11 +366,21 @@ export function GalleryContent() {
           {!isLoading && sorted.length === 0 && (
             <div className="gallery-empty">
               <div className="gallery-empty__icon">⬡</div>
-              <strong>{filterMode === "shortfall" ? "No packs need attention" : "No completed runs yet"}</strong>
+              <strong>
+                {activeFolderId === GALLERY_FOLDER_UNFILED
+                  ? "Unfiled is empty"
+                  : activeFolderId
+                    ? "Empty folder"
+                    : filterMode === "shortfall" ? "No packs need attention" : "No completed runs yet"}
+              </strong>
               <p>
-                {filterMode === "shortfall"
-                  ? "All packs have delivered their full requested count."
-                  : "Start a run in Studio and stay on that page until variant tiles appear. Gallery only lists finished variants — and a Studio redeploy clears unfinished jobs."}
+                {activeFolderId === GALLERY_FOLDER_UNFILED
+                  ? galleryFolderUnfiledEmptyCopy()
+                  : activeFolderId
+                    ? galleryFolderEmptyCopy()
+                    : filterMode === "shortfall"
+                      ? "All packs have delivered their full requested count."
+                      : "Start a run in Studio and stay on that page until variant tiles appear. Gallery only lists finished variants — and a Studio redeploy clears unfinished jobs."}
               </p>
             </div>
           )}
@@ -323,6 +395,11 @@ export function GalleryContent() {
               onToggleVariant={handleToggleVariant}
               onToggleSelectSource={handleToggleSelectSource}
               onRemove={() => handleRemoveSource(activePack)}
+              folders={folders}
+              onAssignFolder={async (folderId) => {
+                await assignGalleryFolder(activePack.source_id, folderId);
+                await Promise.all([mutate(), refreshFolders()]);
+              }}
             />
           )}
 

@@ -46,7 +46,7 @@ row + progress card.
 | Tab | Route | Audience | Phone bar | What it is |
 |---|---|---|---|---|
 | Studio | `/` | everyone | yes | Drop files or pick from Drive, set copies, Fast (HQ coming soon), Advanced, live queue. |
-| Gallery | `/gallery` | everyone | yes | 7-day packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
+| Gallery | `/gallery` | everyone | yes | 7-day packs by source. Folders at the top to label clients/accounts, then the pack list. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips. |
 | Drops | `/drops` | agency | yes | Drive-sent packs this week. Unlabeled = pass. Flagged / duplicate rejected = miss. |
 | Workflows | `/workflows` | agency | yes (label **Flows**) | Watch folder auto-poll, inbox-to-output Drive folders, cancel a live pack. |
 | Drive | `/settings/drive` | everyone | yes | Share varimo Drive email, paste folder link, captions, Drop Ledger, password. Owners also Connect Instagram testers here. |
@@ -65,6 +65,7 @@ old four-row list.
 
 | Surface | Parent | How it opens |
 |---|---|---|
+| Gallery folders | Gallery | Folder chips at the top. Create/rename/delete, then Move to folder on a pack. Workspace-local — not a Google Drive folder. |
 | Variant sheet | Gallery | Tap a finished copy. Compare slider, scrub, editable caption, uniqueness, platform flag, post URL, download. |
 | Pack Options | Gallery | On a pack row, **Options** rewrites every copy's caption from a seed. Videos stay the same. |
 | Send to Drive | Gallery / variant sheet | Pick destination + caption folder; split a pack across folders. |

@@ -47,7 +47,7 @@ export const HOW_TO_CATEGORIES: HowToCategory[] = [
         title: "Studio → Gallery",
         paragraphs: [
           "Set how many copies and generate a Fast pack. Fast is the daily path.",
-          "When the pack is done, it lands in Gallery — that is where you review and send. Pick an output folder in Studio if you want finished copies uploaded there automatically. Leave it on Don't send to keep sending from Gallery.",
+          "When the pack is done, it lands in Gallery — that is where you review and send. Use folders at the top of Gallery to label a client or account, then Move to folder on the pack. Pick an output folder in Studio if you want finished copies uploaded there automatically. Leave it on Don't send to keep sending from Gallery.",
         ],
       },
       {

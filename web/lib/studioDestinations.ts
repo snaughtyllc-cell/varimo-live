@@ -36,7 +36,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "7-day packs by source. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips, variant sheet.",
+      "7-day packs by source. Folders at the top to label clients, then the pack list. Thumbs, uniqueness, Send to Drive, Sent/Flagged chips, variant sheet.",
   },
   {
     href: "/drops",
@@ -123,6 +123,11 @@ export const EXTRA_TABS = STUDIO_DESTINATIONS.filter((d) => d.tab === "extra");
 
 /** Surfaces that are not top-level tabs but must be in any redesign. */
 export const STUDIO_NESTED_SURFACES = [
+  {
+    name: "Gallery folders",
+    opens_from: "/gallery",
+    summary: "Folder chips at the top of Gallery. Label packs like Drive folders; they stay in this studio.",
+  },
   {
     name: "Variant sheet",
     opens_from: "/gallery",

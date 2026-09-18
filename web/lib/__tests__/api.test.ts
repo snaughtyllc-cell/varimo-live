@@ -20,6 +20,39 @@ describe("url builders use relative /api", () => {
   });
 });
 
+describe("gallery folders API", () => {
+  it("listGalleryFolders GETs /api/gallery/folders", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ folders: [], unassigned_count: 2 }), { status: 200 }),
+    );
+    const out = await api.listGalleryFolders();
+    expect(out.unassigned_count).toBe(2);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/gallery/folders");
+  });
+
+  it("createGalleryFolder POSTs a name", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "gf_1", name: "Client A", pack_count: 0 }), { status: 201 }),
+    );
+    await api.createGalleryFolder("Client A");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/gallery/folders");
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      name: "Client A",
+    });
+  });
+
+  it("assignGalleryFolder PUTs folder_id", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ source_id: "s1", gallery_folder_id: "gf_1" }), { status: 200 }),
+    );
+    await api.assignGalleryFolder("s1", "gf_1");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/sources/s1/gallery-folder");
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      folder_id: "gf_1",
+    });
+  });
+});
+
 describe("getQueue", () => {
   it("GETs /api/queue", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(

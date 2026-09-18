@@ -81,4 +81,20 @@ describe("PackList", () => {
     expect(screen.getByText("No packs yet")).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
+
+  it("shows the Gallery folder name on a pack row", () => {
+    render(
+      <PackList
+        packs={[pack({ source_id: "s1", filename: "client.mp4" })]}
+        totalCount={1}
+        activeId="s1"
+        onSelect={() => undefined}
+        search=""
+        onSearchChange={() => undefined}
+        loading={false}
+        folderLabels={{ s1: "Client A" }}
+      />,
+    );
+    expect(screen.getByText("Client A")).toBeInTheDocument();
+  });
 });

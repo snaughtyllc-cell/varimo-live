@@ -99,6 +99,7 @@ export interface SourceOut {
   hold_kind?: string | null;
   suggestion_kind?: string | null;
   suggestion_copy?: string | null;
+  gallery_folder_id?: string | null;
   processing_charge?: string | null;
   delivery_destination?: string | null;
   expires_utc?: string | null;
@@ -290,6 +291,18 @@ export interface CaptionBank {
   remaining?: number;
   low?: boolean;
   is_default?: boolean;
+}
+
+export interface GalleryFolder {
+  id: string;
+  name: string;
+  pack_count: number;
+  created_utc?: string | null;
+}
+
+export interface GalleryFolders {
+  folders: GalleryFolder[];
+  unassigned_count: number;
 }
 
 export interface Workflow {

@@ -7,6 +7,10 @@ const routerReplace = vi.fn();
 const searchParams = new URLSearchParams();
 
 const galleryHold = vi.hoisted(() => ({ sources: [] as SourceOut[] }));
+const folderHold = vi.hoisted(() => ({
+  folders: [] as { id: string; name: string; pack_count: number }[],
+  unassigned: 0,
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: routerPush, replace: routerReplace }),
@@ -24,6 +28,12 @@ vi.mock("@/lib/runStore", () => ({
 vi.mock("@/lib/api", () => ({
   getDriveStatus: () => Promise.resolve({ status: "not_configured", sa_email: null, message: "" }),
   listDestinations: () => Promise.resolve([]),
+  listGalleryFolders: () =>
+    Promise.resolve({ folders: folderHold.folders, unassigned_count: folderHold.unassigned }),
+  createGalleryFolder: vi.fn(),
+  renameGalleryFolder: vi.fn(),
+  deleteGalleryFolder: vi.fn(),
+  assignGalleryFolder: vi.fn(),
   sourceUrl: (id: string) => `/api/sources/${id}/source`,
   sourceZipUrl: () => "/api/sources/s1/zip",
   getSourceDownloads: vi.fn(async () => ({ source_id: "s1", files: [], zip_url: null })),
@@ -79,6 +89,35 @@ describe("Gallery variant sheet open", () => {
     routerReplace.mockReset();
     searchParams.delete("v");
     galleryHold.sources = [source()];
+    folderHold.folders = [];
+    folderHold.unassigned = 0;
+  });
+
+  it("filters packs when a Gallery folder is opened", async () => {
+    folderHold.folders = [{ id: "gf_1", name: "Client A", pack_count: 1 }];
+    folderHold.unassigned = 1;
+    galleryHold.sources = [
+      source({ source_id: "s1", filename: "client.mp4", gallery_folder_id: "gf_1" }),
+      source({ source_id: "s2", filename: "loose.mp4", gallery_folder_id: null, variants: [variant({ index: 1 })] }),
+    ];
+    render(<GalleryContent />);
+    fireEvent.click(await screen.findByRole("button", { name: /client a folder/i }));
+    expect(screen.getAllByText("client.mp4").length).toBeGreaterThan(0);
+    expect(screen.queryByText("loose.mp4")).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /move to folder/i })).toBeInTheDocument();
+  });
+
+  it("shows leftover packs when Unfiled is opened", async () => {
+    folderHold.folders = [{ id: "gf_1", name: "Client A", pack_count: 1 }];
+    folderHold.unassigned = 1;
+    galleryHold.sources = [
+      source({ source_id: "s1", filename: "client.mp4", gallery_folder_id: "gf_1" }),
+      source({ source_id: "s2", filename: "loose.mp4", gallery_folder_id: null, variants: [variant({ index: 1 })] }),
+    ];
+    render(<GalleryContent />);
+    fireEvent.click(await screen.findByRole("button", { name: /^unfiled packs/i }));
+    expect(screen.getAllByText("loose.mp4").length).toBeGreaterThan(0);
+    expect(screen.queryByText("client.mp4")).not.toBeInTheDocument();
   });
 
   it("opens the review pane in the grid so packs stay on screen", () => {

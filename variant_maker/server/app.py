@@ -79,6 +79,7 @@ from .drop_ledger import (
 from .drops import DropPack, build_drop_packs
 from .events import VariantEvent, event_to_dict
 from .experience import resolve_experience
+from .gallery_folders import GalleryFolderError, GalleryFolderStore
 from .instagram_insights import (
     IgMedia,
     InstagramSyncStamp,
@@ -169,6 +170,10 @@ from .models import (
     ExportFileOut,
     ExportJobOut,
     ExportSplitIn,
+    GalleryFolderAssignIn,
+    GalleryFolderCreateIn,
+    GalleryFolderOut,
+    GalleryFoldersOut,
     InFlightOut,
     InstagramLinkIn,
     InstagramStatusOut,
@@ -702,6 +707,9 @@ def create_app(
         "workflows", WorkflowStore(fallback_store._ws.workflows_path()),
     )
     app.state.captions = AttrProxy("captions", CaptionStore(fallback_store._ws.captions_path()))
+    app.state.gallery_folders = AttrProxy(
+        "gallery_folders", GalleryFolderStore(fallback_store._ws.gallery_folders_path()),
+    )
     app.state.workflow_tick_lock = threading.Lock()
 
     def _oauth_tokens() -> OAuthTokenStore:
@@ -1941,14 +1949,91 @@ def create_app(
 
         return EventSourceResponse(gen())
 
+    def _gallery_source_ids() -> set[str]:
+        ids: set[str] = set()
+        for job in store.list():
+            for source in job.sources:
+                ids.add(source.source_id)
+        return ids
+
+    def _stamp_gallery_folder(item: SourceOut) -> SourceOut:
+        item.gallery_folder_id = app.state.gallery_folders.assignment(item.source_id)
+        return item
+
+    def _folders_out() -> GalleryFoldersOut:
+        rows, unassigned = app.state.gallery_folders.overview(_gallery_source_ids())
+        return GalleryFoldersOut(
+            folders=[
+                GalleryFolderOut(
+                    id=folder.id,
+                    name=folder.name,
+                    pack_count=count,
+                    created_utc=folder.created_utc or None,
+                )
+                for folder, count in rows
+            ],
+            unassigned_count=unassigned,
+        )
+
     @app.get("/api/gallery", response_model=list[SourceOut])
     def gallery() -> list[SourceOut]:
         out = []
         for job in store.list():
             for s in job.sources:
-                out.append(_source_out(s, ok_only=True, job=job, ws=store._ws))
+                out.append(_stamp_gallery_folder(
+                    _source_out(s, ok_only=True, job=job, ws=store._ws),
+                ))
         out.sort(key=lambda s: s.created_utc or "", reverse=True)
         return _stamp_source_suggestions(out)
+
+    @app.get("/api/gallery/folders", response_model=GalleryFoldersOut)
+    def list_gallery_folders() -> GalleryFoldersOut:
+        return _folders_out()
+
+    @app.post("/api/gallery/folders", status_code=201, response_model=GalleryFolderOut)
+    def create_gallery_folder(body: GalleryFolderCreateIn) -> GalleryFolderOut:
+        try:
+            folder = app.state.gallery_folders.create(body.name)
+        except GalleryFolderError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return GalleryFolderOut(
+            id=folder.id, name=folder.name, pack_count=0, created_utc=folder.created_utc,
+        )
+
+    @app.patch("/api/gallery/folders/{folder_id}", response_model=GalleryFolderOut)
+    def rename_gallery_folder(folder_id: str, body: GalleryFolderCreateIn) -> GalleryFolderOut:
+        try:
+            folder = app.state.gallery_folders.rename(folder_id, body.name)
+        except GalleryFolderError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if folder is None:
+            raise HTTPException(status_code=404, detail="folder not found")
+        rows, _unassigned = app.state.gallery_folders.overview(_gallery_source_ids())
+        count = next((n for item, n in rows if item.id == folder.id), 0)
+        return GalleryFolderOut(
+            id=folder.id, name=folder.name, pack_count=count, created_utc=folder.created_utc,
+        )
+
+    @app.delete("/api/gallery/folders/{folder_id}", status_code=204)
+    def delete_gallery_folder(folder_id: str) -> None:
+        if not app.state.gallery_folders.delete(folder_id):
+            raise HTTPException(status_code=404, detail="folder not found")
+
+    @app.put("/api/sources/{source_id}/gallery-folder", response_model=SourceOut)
+    def assign_gallery_folder(source_id: str, body: GalleryFolderAssignIn) -> SourceOut:
+        loc = store._locate(source_id)
+        if loc is None:
+            raise HTTPException(status_code=404, detail="source not found")
+        try:
+            app.state.gallery_folders.assign(source_id, body.folder_id or None)
+        except GalleryFolderError as exc:
+            status = 404 if "not found" in str(exc).lower() else 400
+            raise HTTPException(status_code=status, detail=str(exc)) from exc
+        job_id, source = loc
+        job = store.get(job_id)
+        return _stamp_gallery_folder(
+            _source_out(source, ok_only=True, job=job, ws=store._ws),
+        )
 
     @app.get("/api/diagnostics", response_model=list[DiagnosticsItem])
     def diagnostics() -> list[DiagnosticsItem]:
@@ -2002,6 +2087,7 @@ def create_app(
     def delete_source(source_id: str) -> None:
         if not store.delete_source(source_id):
             raise HTTPException(status_code=404, detail="source not found")
+        app.state.gallery_folders.unassign(source_id)
 
     @app.post("/api/sources/{source_id}/captions", response_model=SourceOut)
     def rewrite_captions(source_id: str, body: CaptionRewriteIn) -> SourceOut:

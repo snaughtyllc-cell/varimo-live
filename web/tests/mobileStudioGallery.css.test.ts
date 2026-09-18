@@ -80,6 +80,9 @@ describe("mobile Studio + Gallery CSS contract", () => {
     expect(phoneLive).toMatch(/overflow:\s*visible/);
     expect(rule(mobile, ".studio-cockpit__scroll")).toMatch(/overflow:\s*visible/);
     expect(rule(mobile, ".studio-cockpit__scroll")).not.toMatch(/overflow-y:\s*auto/);
+    expect(rule(mobile, ".studio-cockpit__spacer")).toMatch(/display:\s*block/);
+    expect(rule(mobile, ".studio-cockpit__spacer")).toMatch(/generate-dock-h/);
+    expect(rule(mobile, ".studio-output-folder")).toMatch(/flex-direction:\s*column/);
 
     const deskLive = rule(desktop, ".studio-live");
     expect(deskLive).toMatch(new RegExp(`flex:\\s*0 0 ${STUDIO_LIVE_RAIL_PX}px`));

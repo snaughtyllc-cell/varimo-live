@@ -45,6 +45,7 @@ from .drive_exports import (
     ExportRunner,
     ExportStore,
     VariantRef,
+    bind_studio_export,
     build_export_files,
 )
 from .drive_oauth import (
@@ -588,10 +589,6 @@ def create_app(
             environ=auth_env if auth_environ is not None else None,
         )
         login_pending = OAuthPendingStore(os.path.join(auth_dir, "login_pending.json"))
-        if hydrate:
-            hub.hydrate_all(tenants.list_workspace_ids())
-    elif hydrate:
-        fallback_store.hydrate_from_disk()
 
     store = JobStoreProxy(fallback_store)
     app.state.store = store
@@ -683,10 +680,24 @@ def create_app(
     app.state.drive = drive
     app.state.sheets = sheets
     app.state.drive_info = drive_info
-    app.state.destinations = AttrProxy(
-        "destinations", DestinationStore(fallback_store._ws.destinations_path()),
+    fallback_destinations = DestinationStore(fallback_store._ws.destinations_path())
+    fallback_exports = ExportStore(fallback_store._ws.exports_dir())
+    app.state.destinations = AttrProxy("destinations", fallback_destinations)
+    app.state.exports = AttrProxy("exports", fallback_exports)
+    bind_studio_export(
+        fallback_store, fallback_destinations, fallback_exports, lambda: app.state.drive,
     )
-    app.state.exports = AttrProxy("exports", ExportStore(fallback_store._ws.exports_dir()))
+    if hub is not None:
+        def _attach_studio_export(bundle) -> None:
+            bind_studio_export(
+                bundle.store, bundle.destinations, bundle.exports, lambda: app.state.drive,
+            )
+        hub.set_on_bundle(_attach_studio_export)
+    if hydrate:
+        if hub is not None and tenants is not None:
+            hub.hydrate_all(tenants.list_workspace_ids())
+        elif hub is None:
+            fallback_store.hydrate_from_disk()
     app.state.workflows = AttrProxy(
         "workflows", WorkflowStore(fallback_store._ws.workflows_path()),
     )
@@ -1707,19 +1718,32 @@ def create_app(
         )
         return resp
 
+    def _export_destination_id(raw: str | None) -> str | None:
+        dest_id = (raw or "").strip()
+        if not dest_id:
+            return None
+        dest = app.state.destinations.get(dest_id)
+        if dest is None:
+            raise HTTPException(status_code=404, detail="destination not found")
+        _require_drive()
+        return dest.id
+
     @app.post("/api/jobs", status_code=201, response_model=CreateJobResponse)
     async def create_job(files: list[UploadFile], count: int = Form(...),
                           allow_creative_escalate: bool = Form(True),
                           quality_mode: str = Form("fast"),
                           generate_captions: bool = Form(False),
                           caption_prompt: str = Form(""),
-                          caption_prompts: str = Form("")) -> CreateJobResponse:
+                          caption_prompts: str = Form(""),
+                          export_destination_id: str = Form("")) -> CreateJobResponse:
+        dest_id = _export_destination_id(export_destination_id)
         uploads = [(f.filename or "video.mp4", await f.read()) for f in files]
         job = store.create_job(
             uploads, count=count, allow_creative_escalate=allow_creative_escalate,
             quality_mode=quality_mode, generate_captions=generate_captions,
             caption_prompt=caption_prompt,
             caption_prompts=parse_caption_prompts_field(caption_prompts),
+            export_destination_id=dest_id,
         )
         return CreateJobResponse(job_id=job.job_id,
                                  sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
@@ -1767,7 +1791,9 @@ def create_app(
         generate_captions: bool = Form(False),
         caption_prompt: str = Form(""),
         caption_prompts: str = Form(""),
+        export_destination_id: str = Form(""),
     ) -> CreateJobResponse:
+        dest_id = _export_destination_id(export_destination_id)
         ids = [u.strip() for u in upload_ids.split(",") if u.strip()]
         if not ids:
             raise HTTPException(status_code=400, detail="upload_ids required")
@@ -1784,6 +1810,7 @@ def create_app(
             quality_mode=quality_mode,             generate_captions=generate_captions,
             caption_prompt=caption_prompt,
             caption_prompts=parse_caption_prompts_field(caption_prompts),
+            export_destination_id=dest_id,
         )
         for uid in ids:
             _UPLOAD_META.pop(uid, None)
@@ -1797,6 +1824,7 @@ def create_app(
         dest = app.state.destinations.get(body.destination_id)
         if dest is None:
             raise HTTPException(status_code=404, detail="destination not found")
+        dest_id = _export_destination_id(body.export_destination_id)
         file_ids = [fid.strip() for fid in body.file_ids if str(fid).strip()]
         if not file_ids:
             raise HTTPException(status_code=400, detail="file_ids required")
@@ -1822,6 +1850,7 @@ def create_app(
                 generate_captions=body.generate_captions,
                 caption_prompt=body.caption_prompt,
                 caption_prompts=list(body.caption_prompts or []),
+                export_destination_id=dest_id,
             )
         finally:
             shutil.rmtree(stage, ignore_errors=True)
@@ -1849,7 +1878,9 @@ def create_app(
                          state=job.state,
                          sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
                                   for s in job.sources],
-                         error=job.error)
+                         error=job.error,
+                         export_destination_id=job.export_destination_id,
+                         export_id=job.export_id)
 
     @app.post("/api/jobs/{job_id}/cancel", response_model=JobDetail)
     def cancel_job(job_id: str) -> JobDetail:
@@ -1860,7 +1891,9 @@ def create_app(
                          state=job.state,
                          sources=[_source_out(s, ok_only=True, job=job, ws=store._ws)
                                   for s in job.sources],
-                         error=job.error)
+                         error=job.error,
+                         export_destination_id=job.export_destination_id,
+                         export_id=job.export_id)
 
     @app.get("/api/jobs/{job_id}/events-snapshot", response_model=JobEventsSnapshot)
     def job_events_snapshot(job_id: str) -> JobEventsSnapshot:

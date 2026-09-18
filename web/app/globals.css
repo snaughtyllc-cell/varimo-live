@@ -413,6 +413,20 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
 .studio-option-row__hint { color: #7a9096; font-size: 12.5px; margin-top: 2px; }
 .studio-option-row__value { align-items: center; color: #7a9096; display: flex; flex-shrink: 0; font-size: 13.5px; gap: 6px; }
 .studio-option-row__chevron { color: #b4c6c9; font-size: 18px; transition: transform 160ms ease; }
+.studio-output-folder { align-items: flex-start; }
+.studio-output-folder select {
+  background: #f3f8f9;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 630;
+  max-width: 220px;
+  padding: 8px 10px;
+}
+.studio-output-folder select:disabled { opacity: 0.55; }
+.studio-output-folder__link { color: #087989; flex-shrink: 0; font-size: 12.5px; font-weight: 650; text-decoration: none; }
+.studio-output-folder__link:hover { text-decoration: underline; }
 .studio-option-row__chevron[data-open] { transform: rotate(90deg); }
 .studio-switch { background: var(--color-line); border-radius: 999px; box-sizing: border-box; display: flex; flex-shrink: 0; height: 27px; padding: 3px; width: 46px; }
 .studio-switch[data-on="true"] { background: var(--color-violet); justify-content: flex-end; }
@@ -1487,6 +1501,19 @@ input[type="checkbox"], input[type="radio"] { accent-color: #0caab8; }
   }
   .studio-cockpit { flex: 0 0 auto; min-height: auto; overflow: visible; }
   .studio-cockpit__scroll { flex: 0 0 auto; min-height: auto; overflow: visible; padding: 18px 16px 8px; }
+  .studio-cockpit__spacer {
+    display: block;
+    flex: 0 0 auto;
+    height: calc(var(--generate-dock-h) + 12px);
+  }
+  .studio-output-folder {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    scroll-margin-bottom: calc(var(--generate-dock-h) + 16px);
+  }
+  .studio-output-folder select,
+  .studio-output-folder__link { max-width: none; width: 100%; }
   .studio-clip-card { min-width: 0; width: 100%; }
   .studio-clip-card__thumb { height: 112px; width: 84px; }
   .studio-generate-bar {

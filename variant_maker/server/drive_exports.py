@@ -17,10 +17,13 @@ import tempfile
 import threading
 from dataclasses import dataclass, field
 
+from collections.abc import Callable
+from typing import Any
+
 from variant_maker.farm.drive import DriveClient
 from variant_maker.server.captions import caption_filename
 from variant_maker.server.drive_names import unique_upload_name
-from variant_maker.server.jobs import JobStore, is_shipped
+from variant_maker.server.jobs import Job, JobStore, is_shipped
 
 
 class ExportError(Exception):
@@ -81,6 +84,94 @@ def build_export_files(job_store: JobStore, refs: list[VariantRef]) -> list[Expo
     if not files:
         raise ExportError("No ok videos in selection")
     return files
+
+
+def refs_for_finished_job(job: Job) -> list[VariantRef]:
+    """Shipped variants from a finished Studio job, with captions when present."""
+    refs: list[VariantRef] = []
+    for source in job.sources:
+        planned = list(source.planned_captions or [])
+        for variant in source.variants:
+            if not is_shipped(variant.status):
+                continue
+            caption = (variant.caption or "").strip()
+            if not caption:
+                i = int(variant.index) - 1
+                if 0 <= i < len(planned):
+                    caption = str(planned[i] or "").strip()
+            refs.append(VariantRef(
+                source_id=source.source_id,
+                index=variant.index,
+                caption=caption or None,
+            ))
+    return refs
+
+
+def start_job_export(
+    *,
+    job: Job,
+    job_store: JobStore,
+    dest: Any,
+    export_store: ExportStore,
+    drive: DriveClient,
+) -> ExportJob | None:
+    """Gallery-style flat upload of a finished pack into `dest`."""
+    refs = refs_for_finished_job(job)
+    if not refs:
+        return None
+    files = build_export_files(job_store, refs)
+    export = export_store.create(
+        destination_id=dest.id, folder_id=dest.folder_id, files=files,
+    )
+    ExportRunner(drive, export_store).start(export)
+    return export
+
+
+def bind_studio_export(
+    store: JobStore,
+    dest_store: Any,
+    export_store: ExportStore,
+    drive_fn: Callable[[], DriveClient | None] | DriveClient | None,
+) -> None:
+    """When a Studio job finishes, send shipped copies to the picked folder.
+
+    Pass the concrete tenant DestinationStore + ExportStore. AttrProxy is
+    request-scoped; this hook runs on the worker thread after the request.
+    """
+
+    def on_done(job: Job) -> None:
+        dest_id = (job.export_destination_id or "").strip()
+        if job.state != "done" or not dest_id:
+            return
+        existing_id = (job.export_id or "").strip()
+        if existing_id and export_store.get(existing_id) is not None:
+            return
+        dest = dest_store.get(dest_id)
+        drive = drive_fn() if callable(drive_fn) else drive_fn
+        if dest is None or drive is None:
+            print(
+                f"job {job.job_id}: skip studio export "
+                f"(dest={dest_id!r} drive={'yes' if drive else 'no'})",
+                flush=True,
+            )
+            return
+        try:
+            export = start_job_export(
+                job=job,
+                job_store=store,
+                dest=dest,
+                export_store=export_store,
+                drive=drive,
+            )
+        except ExportError as exc:
+            print(f"job {job.job_id}: skip studio export: {exc}", flush=True)
+            return
+        if export is None:
+            return
+        job.export_id = export.export_id
+        store._persist(job)
+
+    store.on_job_done = on_done
 
 
 class ExportStore:

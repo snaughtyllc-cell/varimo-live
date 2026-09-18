@@ -7,6 +7,7 @@ import { VariantStepper } from "@/components/studio/VariantStepper";
 import { GenerateButton } from "@/components/studio/GenerateButton";
 import { AdvancedPanel } from "@/components/studio/AdvancedPanel";
 import { StudioCaptionsBox, type CaptionSource } from "@/components/studio/StudioCaptionsBox";
+import { StudioOutputFolder } from "@/components/studio/StudioOutputFolder";
 import { StudioLiveQueue } from "@/components/studio/StudioLiveQueue";
 import { accepts, readDurations, tooLargeMessage, totalVariants } from "@/lib/files";
 import { DEFAULT_PER_VIDEO, MAX_PER_VIDEO } from "@/lib/variantStepperCopy";
@@ -46,6 +47,7 @@ export default function StudioPage() {
   const [qualityMode, setQualityMode] = useState<"fast" | "hq">("fast");
   const [hqPrep, setHqPrep] = useState(false);
   const [generateCaptions, setGenerateCaptions] = useState(false);
+  const [outputDestinationId, setOutputDestinationId] = useState("");
   const [fileCaptions, setFileCaptions] = useState<string[]>([]);
   const [driveCaptions, setDriveCaptions] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -175,6 +177,7 @@ export default function StudioPage() {
     const sendFileCaptions = fileCaptions;
     const sendDriveCaptions = driveCaptions;
     const sendGenerateCaptions = generateCaptions;
+    const sendOutputDestinationId = outputDestinationId;
     const names = sendFiles.length > 0
       ? sendFiles.map((f) => f.name)
       : sendPicks.map((p) => p.name);
@@ -198,8 +201,9 @@ export default function StudioPage() {
               prepMode,
               captionPrompt: sendDriveCaptions,
               onProgress: setUpload,
+              exportDestinationId: sendOutputDestinationId,
             })
-          : await createJob(sendFiles, perVideo, allowCreativeEscalate, "fast", sendGenerateCaptions, prepMode, sendFileCaptions, setUpload);
+          : await createJob(sendFiles, perVideo, allowCreativeEscalate, "fast", sendGenerateCaptions, prepMode, sendFileCaptions, setUpload, sendOutputDestinationId);
       if (cancelRequestedRef.current) {
         try {
           await cancelJob(resp.job_id);
@@ -364,13 +368,10 @@ export default function StudioPage() {
                 </label>
                 )}
 
-                <div className="studio-option-row studio-option-row--static">
-                  <span className="studio-option-row__label">Output size</span>
-                  <span className="studio-option-row__value">
-                    Matches source
-                    <span className="material-symbols-rounded studio-option-row__chevron">chevron_right</span>
-                  </span>
-                </div>
+                <StudioOutputFolder
+                  value={outputDestinationId}
+                  onChange={setOutputDestinationId}
+                />
 
                 {agency ? (
                   <AdvancedPanel

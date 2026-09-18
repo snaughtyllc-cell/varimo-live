@@ -17,6 +17,8 @@ describe("howTo copy", () => {
     expect(text).toMatch(/Start from the original/);
     expect(text).toMatch(/do not run a finished copy/i);
     expect(text).toMatch(/Studio → Gallery/);
+    expect(text).toMatch(/output folder/);
+    expect(text).toMatch(/Don't send/);
     expect(text).toMatch(/Check the look/);
     expect(text).toMatch(/Drive in, Drive out/);
     expect(text).toMatch(/Drive filenames/);

@@ -28,7 +28,7 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     audience: "everyone",
     tab: "primary",
     summary:
-      "Generate: drop files or pick from Drive, set copies, Fast, optional Reconstruct first (HQ), captions, Advanced, live queue.",
+      "Generate: drop files or pick from Drive, set copies, Fast, optional Reconstruct first (HQ), captions, output folder, Advanced, live queue.",
   },
   {
     href: "/gallery",
@@ -137,6 +137,11 @@ export const STUDIO_NESTED_SURFACES = [
     name: "Drive picker",
     opens_from: "/studio",
     summary: "Import source files from a saved Drive destination.",
+  },
+  {
+    name: "Output folder",
+    opens_from: "/studio",
+    summary: "Pick a connected Drive folder so the pack uploads when Generate finishes. Don't send keeps Gallery Send to Drive.",
   },
   {
     name: "Watch progress",

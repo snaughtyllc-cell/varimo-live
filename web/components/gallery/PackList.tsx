@@ -13,16 +13,19 @@ interface PackListProps {
   search: string;
   onSearchChange: (value: string) => void;
   loading: boolean;
+  folderLabels?: Record<string, string>;
 }
 
 function PackRow({
   source,
   active,
   onSelect,
+  folderLabel,
 }: {
   source: SourceOut;
   active: boolean;
   onSelect: () => void;
+  folderLabel?: string | null;
 }) {
   const thumbReady = isFileReady(source.variants[0] ?? {});
   const thumbUrl = thumbReady
@@ -43,6 +46,8 @@ function PackRow({
           {source.filename}
         </div>
         <div className="gallery-pack-row__meta">
+          {folderLabel ? <span className="gallery-pack-row__folder">{folderLabel}</span> : null}
+          {folderLabel ? " · " : ""}
           {packMetaLabel(source)}
           {delivered < source.requested ? ` · ${delivered}/${source.requested}` : ""}
           {source.insights_linked
@@ -59,7 +64,9 @@ function PackRow({
   );
 }
 
-export function PackList({ packs, totalCount, activeId, onSelect, search, onSearchChange, loading }: PackListProps) {
+export function PackList({
+  packs, totalCount, activeId, onSelect, search, onSearchChange, loading, folderLabels = {},
+}: PackListProps) {
   const visible = search.trim()
     ? packs.filter((p) => p.filename.toLowerCase().includes(search.trim().toLowerCase()))
     : packs;
@@ -94,6 +101,7 @@ export function PackList({ packs, totalCount, activeId, onSelect, search, onSear
               source={source}
               active={source.source_id === activeId}
               onSelect={() => onSelect(source.source_id)}
+              folderLabel={folderLabels[source.source_id]}
             />
           ))}
       </div>

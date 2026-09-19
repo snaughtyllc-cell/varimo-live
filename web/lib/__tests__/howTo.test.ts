@@ -19,6 +19,7 @@ describe("howTo copy", () => {
     expect(text).toMatch(/Studio → Gallery/);
     expect(text).toMatch(/output folder/);
     expect(text).toMatch(/Don't send/);
+    expect(text).toMatch(/folders at the top of Gallery/);
     expect(text).toMatch(/Check the look/);
     expect(text).toMatch(/Drive in, Drive out/);
     expect(text).toMatch(/Drive filenames/);

@@ -105,3 +105,11 @@ class Workspace:
         d = os.path.join(self.root, "workflow-work")
         os.makedirs(d, exist_ok=True)
         return d
+
+    def gallery_dir(self) -> str:
+        d = os.path.join(self.root, "gallery")
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def gallery_folders_path(self) -> str:
+        return os.path.join(self.gallery_dir(), "folders.json")

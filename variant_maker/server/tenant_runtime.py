@@ -12,6 +12,7 @@ from .destinations import DestinationStore
 from .drive_config import resolve_drive_oauth_token_path, resolve_drive_status
 from .drive_exports import ExportStore
 from .drive_oauth import OAuthPendingStore, OAuthTokenStore
+from .gallery_folders import GalleryFolderStore
 from .instagram_oauth import InstagramAccountStore
 from .jobs import JobStore
 from .runner import Runner
@@ -28,6 +29,7 @@ class TenantBundle:
     destinations: DestinationStore
     captions: CaptionStore
     workflows: WorkflowStore
+    gallery_folders: GalleryFolderStore
     exports: ExportStore
     oauth_token_store: OAuthTokenStore
     oauth_pending: OAuthPendingStore
@@ -87,6 +89,7 @@ class TenantHub:
                 destinations=DestinationStore(ws.destinations_path()),
                 captions=CaptionStore(ws.captions_path()),
                 workflows=WorkflowStore(ws.workflows_path()),
+                gallery_folders=GalleryFolderStore(ws.gallery_folders_path()),
                 exports=ExportStore(ws.exports_dir()),
                 oauth_token_store=OAuthTokenStore(ws.oauth_token_path()),
                 oauth_pending=OAuthPendingStore(ws.oauth_pending_path()),

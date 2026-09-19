@@ -44,6 +44,8 @@ describe("mobile Studio + Gallery CSS contract", () => {
     expect(mobile).toMatch(/\.gallery-body\s*\{[^}]*overflow-y:\s*auto/s);
     expect(mobile).toMatch(/\.gallery-grid-pane\s*\{[^}]*overflow:\s*visible/s);
     expect(mobile).toMatch(/\.gallery-packs\s*\{[^}]*flex-shrink:\s*0/s);
+    expect(css).toMatch(/\.gallery-folders\s*\{[^}]*flex-shrink:\s*0/s);
+    expect(mobile).toMatch(/\.gallery-folders\s*\{[^}]*padding:\s*10px 12px 12px/s);
     expect(mobile).toMatch(/\.gallery-toolbar \.gallery-send-wrap\s*\{[^}]*display:\s*none/s);
     expect(mobile).toMatch(/\.gallery-packs__search\s*\{[^}]*display:\s*none/s);
     expect(mobile).toMatch(/\.gallery-grid\s*\{[^}]*minmax\(\s*80px/s);

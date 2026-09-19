@@ -14,6 +14,8 @@ import {
   DriveVideo,
   DropPack,
   ExportJob,
+  GalleryFolder,
+  GalleryFolders,
   ExportVariantRef,
   Invite,
   InviteKind,
@@ -101,6 +103,42 @@ export const getJob = (id: string) =>
 export const cancelJob = (id: string) =>
   fetch(`/api/jobs/${id}/cancel`, { method: "POST" }).then(json<JobDetail>);
 export const getGallery = () => fetch("/api/gallery").then(json<SourceOut[]>);
+export const listGalleryFolders = () =>
+  fetch("/api/gallery/folders").then(json<GalleryFolders>);
+
+export function createGalleryFolder(name: string): Promise<GalleryFolder> {
+  return fetch("/api/gallery/folders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  }).then(json<GalleryFolder>);
+}
+
+export function renameGalleryFolder(id: string, name: string): Promise<GalleryFolder> {
+  return fetch(`/api/gallery/folders/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  }).then(json<GalleryFolder>);
+}
+
+export async function deleteGalleryFolder(id: string): Promise<void> {
+  const res = await fetch(`/api/gallery/folders/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
+export function assignGalleryFolder(
+  sourceId: string,
+  folderId: string | null,
+): Promise<SourceOut> {
+  return fetch(`/api/sources/${encodeURIComponent(sourceId)}/gallery-folder`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ folder_id: folderId }),
+  }).then(json<SourceOut>);
+}
 export const getDiagnostics = () => fetch("/api/diagnostics").then(json<DiagnosticsItem[]>);
 
 /** RunPod's HTTP proxy often drops multipart bodies above a few MB — chunk instead. */

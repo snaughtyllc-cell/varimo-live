@@ -134,6 +134,7 @@ class SourceOut(BaseModel):
     hold_kind: str | None = None
     suggestion_kind: str | None = None
     suggestion_copy: str | None = None
+    gallery_folder_id: str | None = None
 
 
 class JobSummary(BaseModel):
@@ -355,6 +356,26 @@ class JobFromDriveIn(BaseModel):
     caption_prompt: str = ""
     caption_prompts: list[str] = []
     export_destination_id: str = ""
+
+
+class GalleryFolderOut(BaseModel):
+    id: str
+    name: str
+    pack_count: int = 0
+    created_utc: str | None = None
+
+
+class GalleryFoldersOut(BaseModel):
+    folders: list[GalleryFolderOut]
+    unassigned_count: int = 0
+
+
+class GalleryFolderCreateIn(BaseModel):
+    name: str
+
+
+class GalleryFolderAssignIn(BaseModel):
+    folder_id: str | None = None
 
 
 class WorkflowSummaryOut(BaseModel):

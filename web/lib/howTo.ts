@@ -82,6 +82,7 @@ export const HOW_TO_CATEGORIES: HowToCategory[] = [
         title: "Drive filenames",
         paragraphs: [
           "Plugins like Repurpose.io and Buffer use the Drive filename as the post caption. Name the file before you hand the folder off.",
+          "If you skip a caption on Drive import and in Studio, the file is still an ordinary unique clip name — not the camera UUID or engine v15 / v16 stem. Do not invent a caption just to fill the name.",
         ],
       },
       {

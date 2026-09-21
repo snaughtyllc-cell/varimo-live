@@ -49,6 +49,13 @@ def test_caption_filename_strips_copy_n_of_m():
     assert caption_filename(None, "v01.mp4") == "v01.mp4"
 
 
+def test_caption_filename_does_not_invent_text_for_untitled_engine_name():
+    engine = "A56531F9-75C2-48A0-B7F2-47A84244E81D_v15_c0ffee01.mp4"
+    assert caption_filename(None, engine) == "clip_c0ffee01.mp4"
+    assert caption_filename("   ", engine) == "clip_c0ffee01.mp4"
+    assert caption_filename("Home can wait #reels", engine) == "Home can wait #reels.mp4"
+
+
 def test_store_peek_does_not_advance_take_does(tmp_path):
     store = CaptionStore(str(tmp_path / "captions.json"))
     store.add("one")

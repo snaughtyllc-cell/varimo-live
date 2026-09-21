@@ -21,6 +21,7 @@ from .presets import get_preset
 from .probe import probe
 from .sampler import apply_rotate_safe, clamp_strength, derive_seed, disable_fast_pixel_ops, sample
 from .shot import classify_shot
+from .variant_names import clip_filename
 
 # TikFusion Smart Detector floor ≈ 18 bits. Fast vs-source *gate* is 24/64 (~38% UI)
 # so a medium 20-pack stays on medium. Raising the gate to 32 escalated all 20.
@@ -155,7 +156,6 @@ def run(config: dict, *, on_event=None) -> Manifest:
     # HQ Real-ESRGAN is the true upscaler and still targets the full social canvas.
     if not hq:
         platform = fit_platform_to_source(platform, src.width, src.height)
-    stem = os.path.splitext(os.path.basename(input_path))[0]
     shot_info = classify_shot(src.path, src.duration_s)
     shot_kind = shot_info.get("kind")
     # Talking-head copies of a still face land ~13–17 peer bits even with
@@ -166,8 +166,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
     # peer floor. MIN_PEER_BITS stays 24.
     peer_gate = shot_kind != "talking_head"
 
-    def _name(i: int, vseed: int) -> str:
-        return f"{stem}_v{i:02d}_{vseed & 0xFFFFFFFF:08x}.mp4"
+    def _name(vseed: int) -> str:
+        return clip_filename(vseed)
 
     run_meta = {
         "master_seed": master_seed,
@@ -191,7 +191,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
     def _prep(i: int):
         vseed = derive_seed(master_seed, i)
-        return vseed, _name(i, vseed), os.path.join(out_dir, _name(i, vseed))
+        fname = _name(vseed)
+        return vseed, fname, os.path.join(out_dir, fname)
 
     # --dry-run: print the plan + commands, render nothing, write nothing.
     if dry_run:

@@ -24,6 +24,8 @@ describe("howTo copy", () => {
     expect(text).toMatch(/Drive in, Drive out/);
     expect(text).toMatch(/Drive filenames/);
     expect(text).toMatch(/Plugins like Repurpose\.io and Buffer use the Drive filename/);
+    expect(text).toMatch(/ordinary unique clip name/);
+    expect(text).toMatch(/Do not invent a caption/);
     expect(text).toMatch(/Plugins/);
     expect(text).not.toMatch(/caption bank/i);
     expect(text).not.toMatch(/we do not run those seats/i);

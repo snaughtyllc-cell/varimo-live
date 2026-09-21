@@ -9,6 +9,8 @@ import tempfile
 import threading
 from dataclasses import asdict, dataclass
 
+from variant_maker.variant_names import regularize_variant_filename
+
 MAX_STEM = 240
 _ILLEGAL = re.compile(r"[/\\\x00-\x1f]")
 _DASH_SPLIT = re.compile(r"(?m)^\s*---\s*$")
@@ -68,7 +70,7 @@ def sanitize_caption_stem(text: str) -> str:
 def caption_filename(caption: str | None, fallback: str) -> str:
     stem = sanitize_caption_stem(caption or "")
     if not stem:
-        return fallback
+        return regularize_variant_filename(fallback)
     return f"{stem}.mp4"
 
 

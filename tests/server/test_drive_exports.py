@@ -60,6 +60,28 @@ def test_build_export_files_uses_caption_as_drive_name(tmp_path):
     assert files[0].filename == "POV: she said #reels.mp4"
 
 
+def test_build_export_files_untitled_uuid_engine_names_are_regular_clips(tmp_path):
+    store, ws = _store_with_ok(tmp_path)
+    job = store.get("j1")
+    src = job.sources[0]
+    uuid = "A56531F9-75C2-48A0-B7F2-47A84244E81D"
+    a = f"{uuid}_v15_c0ffee01.mp4"
+    b = f"{uuid}_v16_c0ffee02.mp4"
+    out = Path(ws.source_out_dir("j1", "s1"))
+    (out / a).write_bytes(b"a")
+    (out / b).write_bytes(b"b")
+    src.variants[0].filename = a
+    src.variants.append(VariantInfo(
+        source_id="s1", index=2, filename=b, status="ok", quality={"vmaf": 95},
+    ))
+    untitled = build_export_files(store, [VariantRef("s1", 1), VariantRef("s1", 2)])
+    assert [f.filename for f in untitled] == ["clip_c0ffee01.mp4", "clip_c0ffee02.mp4"]
+    captioned = build_export_files(
+        store, [VariantRef("s1", 1, caption="Home can wait #reels")],
+    )
+    assert captioned[0].filename == "Home can wait #reels.mp4"
+
+
 def test_build_export_files_empty_raises(tmp_path):
     store, _ = _store_with_ok(tmp_path)
     with pytest.raises(ExportError, match="No ok videos"):

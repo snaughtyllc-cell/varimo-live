@@ -19,6 +19,7 @@ describe("HowToPage", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Automation" }));
     expect(screen.getByRole("heading", { name: /^workflows$/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /drive filenames/i })).toBeInTheDocument();
+    expect(screen.getByText(/ordinary unique clip name/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /^plugins$/i })).toBeInTheDocument();
     expect(screen.queryByText(/caption bank/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/we do not run those seats/i)).not.toBeInTheDocument();

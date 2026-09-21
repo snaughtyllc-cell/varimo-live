@@ -122,6 +122,26 @@ def test_keeps_light_preset_when_first_attempt_is_ok(monkeypatch, tmp_path):
     assert record.uniqueness_status == "ok"
 
 
+def test_pipeline_untitled_names_are_clip_seed_not_source_stem(monkeypatch, tmp_path):
+    class UuidSrc(FakeSrc):
+        path = "A56531F9-75C2-48A0-B7F2-47A84244E81D.MOV"
+
+    _stub_common(monkeypatch)
+    monkeypatch.setattr(pipeline, "probe", lambda p: UuidSrc())
+    monkeypatch.setattr(
+        pipeline.uniqueness, "score_uniqueness",
+        lambda src_path, variant_path, target=None: _ok_score(0.6, bits=38),
+    )
+    manifest = pipeline.run(_cfg(tmp_path, count=2))
+    names = [v.filename for v in manifest.variants]
+    assert all(n.startswith("clip_") and n.endswith(".mp4") for n in names)
+    assert names[0] != names[1]
+    for v in manifest.variants:
+        assert v.filename == f"clip_{v.seed & 0xFFFFFFFF:08x}.mp4"
+        assert "_v0" not in v.filename
+        assert "A56531F9" not in v.filename
+
+
 def test_score_look_receives_video_params(monkeypatch, tmp_path):
     """Crop/trim MAE needs the variant's sampled video dict, including auto-tune."""
     _stub_common(monkeypatch)

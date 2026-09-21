@@ -113,7 +113,7 @@ describe("VariantSheet layout", () => {
     expect(screen.queryByText("Look")).not.toBeInTheDocument();
   });
 
-  it("shows a review trigger for MAE over 38, not a looks-bad verdict", async () => {
+  it("hides the look-review box from customers even when MAE is over 38", () => {
     render(
       <VariantSheet
         sourceId="s1"
@@ -147,10 +147,11 @@ describe("VariantSheet layout", () => {
         onRegenerate={() => {}}
       />,
     );
-    expect(screen.getByText("Review this encode")).toBeInTheDocument();
-    expect(screen.getByText(/not a verdict that it looks bad/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /play flagged moment/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /approve this encode/i })).toBeInTheDocument();
+    expect(screen.queryByText("Review this encode")).not.toBeInTheDocument();
+    expect(screen.queryByText(/coarse luma exceeded/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/max MAE/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /play flagged moment/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /approve this encode/i })).not.toBeInTheDocument();
     expect(screen.queryByText("Look fail")).not.toBeInTheDocument();
     expect(screen.getByText(uniquenessCustomerLabel())).toBeInTheDocument();
   });

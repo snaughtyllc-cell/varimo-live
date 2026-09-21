@@ -1,15 +1,14 @@
 "use client";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { VariantOut } from "@/lib/types";
-import { sourceUrl, approveLookEncode } from "@/lib/api";
+import { sourceUrl } from "@/lib/api";
 import { isFileReady } from "@/lib/gallery";
 import { PosterThumb } from "../common/PosterThumb";
 import { CompareSlider } from "./CompareSlider";
 import { ScrubBar } from "./ScrubBar";
 import { CaptionBlock } from "./CaptionBlock";
 import { QualityPanel } from "./QualityPanel";
-import { LookReviewBanner } from "./LookReviewBanner";
 import { VariantActions } from "./VariantActions";
 import { variantWipeHint } from "@/lib/galleryLayout";
 import { insightSnapshotCopy } from "@/lib/instagram";
@@ -62,14 +61,8 @@ export function VariantSheet({
   // Create the two video refs here, pass to both CompareSlider and ScrubBar
   const beforeRef = useRef<HTMLVideoElement | null>(null);
   const afterRef = useRef<HTMLVideoElement | null>(null);
-  const [cueNonce, setCueNonce] = useState(0);
-  const [lookRow, setLookRow] = useState(variants[index]);
-  const [approving, setApproving] = useState(false);
 
-  const variant = lookRow && lookRow.index === variants[index]?.index ? lookRow : variants[index];
-  useEffect(() => {
-    setLookRow(variants[index]);
-  }, [variants, index]);
+  const variant = variants[index];
 
   const isFirst = index <= 0;
   const isLast = index >= variants.length - 1;
@@ -200,11 +193,7 @@ export function VariantSheet({
         </div>
 
         <div className="variant-sheet__scrub">
-          <ScrubBar
-            videos={[beforeRef, afterRef]}
-            cueTime={variant.look_review_t ?? variant.quality?.look_review_t ?? null}
-            cueNonce={cueNonce}
-          />
+          <ScrubBar videos={[beforeRef, afterRef]} />
         </div>
 
         <div className="variant-sheet__filmstrip">
@@ -250,20 +239,6 @@ export function VariantSheet({
           </div>
         </div>
         <div className="variant-sheet__panel-body">
-          <LookReviewBanner
-            variant={variant}
-            busy={approving}
-            onPlayMoment={() => setCueNonce((n) => n + 1)}
-            onApprove={async () => {
-              setApproving(true);
-              try {
-                const next = await approveLookEncode(sourceId, variant.index, true);
-                setLookRow({ ...variant, ...next });
-              } finally {
-                setApproving(false);
-              }
-            }}
-          />
           <QualityPanel
             uniqueness={variant.uniqueness}
             uniquenessStatus={variant.uniqueness_status}

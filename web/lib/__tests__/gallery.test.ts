@@ -6,8 +6,10 @@ import {
   expiresLabel,
   filesReadyCount,
   filterSources,
+  galleryRefreshMs,
   gallerySearchPath,
   isFileReady,
+  packMetaLabel,
   packOriginalityColor,
   parseGalleryVariantQuery,
   pushGallerySearch,
@@ -93,6 +95,46 @@ describe("gallery helpers", () => {
   it("builds a Gallery path that can be pushed without a Next.js navigation", () => {
     expect(gallerySearchPath("abc", 3)).toBe("/gallery?v=abc:3");
     expect(gallerySearchPath()).toBe("/gallery");
+  });
+
+  it("labels a live empty 20-pack as generating, not 0 variants", () => {
+    const now = new Date("2026-09-24T03:46:00Z");
+    const live = {
+      ...mk("saveinta", 20, "2026-09-24T03:40:00Z"),
+      requested: 20,
+      delivered: 0,
+      files_ready: 0,
+      job_state: "running",
+    };
+    expect(packMetaLabel(live, now)).toBe("Generating · 0/20 · today");
+    expect(packMetaLabel(live, now)).not.toMatch(/0 variants/);
+    expect(galleryRefreshMs([live])).toBe(4000);
+  });
+
+  it("labels a finished empty 20-pack as didn't finish", () => {
+    const now = new Date("2026-09-24T03:46:00Z");
+    const dead = {
+      ...mk("saveinta", 20, "2026-09-24T03:40:00Z"),
+      requested: 20,
+      delivered: 0,
+      files_ready: 0,
+      job_state: "done",
+    };
+    expect(packMetaLabel(dead, now)).toBe("Didn't finish · 0/20 · today");
+    expect(galleryRefreshMs([dead])).toBe(0);
+  });
+
+  it("keeps a finished full pack as N variants · today", () => {
+    const now = new Date("2026-09-24T12:00:00Z");
+    const full = {
+      ...mk("winner", 0, "2026-09-24T11:00:00Z"),
+      requested: 20,
+      delivered: 20,
+      files_ready: 20,
+      variants: Array.from({ length: 20 }, (_, i) => ({ index: i + 1 })),
+      job_state: "done",
+    };
+    expect(packMetaLabel(full as never, now)).toBe("20 variants · today");
   });
 
   it("colors originality from the 38% pass line, not a 65% verified band", () => {

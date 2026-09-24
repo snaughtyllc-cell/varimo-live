@@ -82,6 +82,33 @@ describe("PackList", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
+  it("shows Generating on a live 0/20 pack instead of 0 variants", () => {
+    render(
+      <PackList
+        packs={[
+          pack({
+            source_id: "s1",
+            filename: "SaveInta.com_AQMilXCWren.mp4",
+            requested: 20,
+            delivered: 0,
+            files_ready: 0,
+            created_utc: new Date().toISOString(),
+            job_state: "running",
+          }),
+        ]}
+        totalCount={1}
+        activeId="s1"
+        onSelect={() => undefined}
+        search=""
+        onSearchChange={() => undefined}
+        loading={false}
+      />,
+    );
+    expect(screen.getByText(/Generating/)).toBeInTheDocument();
+    expect(screen.getByText(/0\/20/)).toBeInTheDocument();
+    expect(screen.queryByText(/0 variants/)).not.toBeInTheDocument();
+  });
+
   it("shows the Gallery folder name on a pack row", () => {
     render(
       <PackList

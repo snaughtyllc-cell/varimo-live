@@ -134,6 +134,7 @@ describe("SourceGroup phone save/share", () => {
     );
     expect(screen.queryByRole("button", { name: /save to phone/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /download zip/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/generating/i)).toBeInTheDocument();
   });
 
   it("fetches ready mp4s and downloads each file when share is unavailable", async () => {

@@ -1,4 +1,5 @@
 import { uniquenessPassPct } from "./prepareCopy";
+import { jobIsLive } from "./queue";
 import { SourceOut } from "./types";
 
 export function filterSources(sources: SourceOut[], mode: "all" | "shortfall"): SourceOut[] {
@@ -114,12 +115,33 @@ export function packOriginalityColor(pct: number | null): string {
   return pct < uniquenessPassPct() ? "var(--color-amber)" : "var(--color-violet)";
 }
 
-/** "20 variants · today" / "3 variants · Aug 26" — pack-list row meta line. */
+/** Poll Gallery while a pack is still generating so 0/20 rows do not look dead. */
+export function galleryRefreshMs(sources: SourceOut[] | undefined | null): number {
+  if (!sources?.length) return 0;
+  return sources.some((source) => jobIsLive(source.job_state) || !!source.in_flight)
+    ? 4000
+    : 0;
+}
+
+/** "Generating · 0/20 · today" / "20 variants · today" — pack-list row meta line. */
 export function packMetaLabel(source: SourceOut, now: Date = new Date()): string {
-  const n = source.variants.length;
-  const countLabel = `${n} variant${n === 1 ? "" : "s"}`;
+  const delivered = filesReadyCount(source);
   const when = relativeDayLabel(source.created_utc, now);
-  return when ? `${countLabel} · ${when}` : countLabel;
+  const live = jobIsLive(source.job_state) || !!source.in_flight;
+  const parts: string[] = [];
+  if (live) {
+    parts.push("Generating");
+    parts.push(`${delivered}/${source.requested}`);
+  } else {
+    const n = source.variants.length;
+    parts.push(`${n} variant${n === 1 ? "" : "s"}`);
+    if (source.requested > 0 && delivered < source.requested) {
+      if (n === 0) parts[0] = "Didn't finish";
+      parts.push(`${delivered}/${source.requested}`);
+    }
+  }
+  if (when) parts.push(when);
+  return parts.join(" · ");
 }
 
 function relativeDayLabel(iso: string | null | undefined, now: Date): string | null {

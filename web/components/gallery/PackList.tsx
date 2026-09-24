@@ -2,7 +2,7 @@
 
 import { PosterThumb } from "@/components/common/PosterThumb";
 import { SourceOut } from "@/lib/types";
-import { avgOriginalityPct, filesReadyCount, isFileReady, packMetaLabel, packOriginalityColor } from "@/lib/gallery";
+import { avgOriginalityPct, isFileReady, packMetaLabel, packOriginalityColor } from "@/lib/gallery";
 import { formatViews } from "@/lib/instagram";
 
 interface PackListProps {
@@ -32,7 +32,6 @@ function PackRow({
     ? source.variants[0]?.look_var_url || source.poster_url
     : undefined;
   const pct = avgOriginalityPct(source);
-  const delivered = filesReadyCount(source);
 
   return (
     <button type="button" className="gallery-pack-row" data-active={active} onClick={onSelect}>
@@ -49,7 +48,6 @@ function PackRow({
           {folderLabel ? <span className="gallery-pack-row__folder">{folderLabel}</span> : null}
           {folderLabel ? " · " : ""}
           {packMetaLabel(source)}
-          {delivered < source.requested ? ` · ${delivered}/${source.requested}` : ""}
           {source.insights_linked
             ? ` · ${source.insights_views == null ? "linked" : `${formatViews(source.insights_views)} views`}`
             : ""}

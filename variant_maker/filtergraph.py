@@ -284,6 +284,24 @@ def _trim_expr(v: dict, duration_s: float) -> str:
     return f"trim=end={duration_s - end_s:.3f}"
 
 
+def keystone_filter(amount: float) -> str:
+    """Vertical keystone. Positive amount insets the top edge; bottom stays full width."""
+    amount = float(amount or 0.0)
+    if abs(amount) < 0.002:
+        return ""
+    if amount >= 0:
+        x0, x1, x2, x3 = amount, 1.0 - amount, 0.0, 1.0
+    else:
+        aa = abs(amount)
+        x0, x1, x2, x3 = 0.0, 1.0, aa, 1.0 - aa
+    return (
+        "perspective="
+        f"x0=W*{x0:.4f}:y0=0:x1=W*{x1:.4f}:y1=0:"
+        f"x2=W*{x2:.4f}:y2=H:x3=W*{x3:.4f}:y3=H:"
+        "interpolation=cubic:sense=source"
+    )
+
+
 def even_resample_size(target_w: int, target_h: int, px: int) -> tuple[int, int]:
     """Even intermediate size: ``target_w + px`` (even), height follows AR, even.
 
@@ -378,6 +396,12 @@ def build_video_filters(params: dict, src: SourceInfo, platform: Platform) -> st
                 rw, rh = even_resample_size(platform.width, platform.height, px)
                 parts.append(f"scale={rw}:{rh}:flags={flags}")
                 parts.append(f"scale={platform.width}:{platform.height}:flags={flags}")
+
+    # Vertical keystone after rebuild, before rotate. |A| < 0.002 is a no-op.
+    # Positive A magnifies the top. Negative A magnifies the bottom.
+    stone = keystone_filter(float(v.get("keystone_a") or 0.0))
+    if stone:
+        parts.append(stone)
 
     # rotation (tiny angles; corner fill — proper inscribed-crop is a later refinement)
     if abs(v.get("rotate_deg", 0.0)) >= _ROTATE_MIN_DEG:

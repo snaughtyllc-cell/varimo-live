@@ -108,6 +108,12 @@ RESAMPLE_FLAGS = ("lanczos", "spline", "bicubic")
 # Per-copy output cadence. Instagram takes these. Not a second speed factor.
 FPS_CHOICES = (30, 48, 60)
 _EXTRA_AXES_XOR = 0xF95
+# Everyday vertical tilt. Positive magnifies the top; negative magnifies the
+# bottom. Separate RNG so crop and resample draws stay put.
+# 0.5–4% is the normal band. The pipeline may raise a short score toward 6%.
+_KEYSTONE_RNG_XOR = 0x71E7
+KEYSTONE_LO = 0.005
+KEYSTONE_HI = 0.040
 _ROTATE_SAFE_MOTION = (0.7, 1.3)
 _ROTATE_SAFE_HEAD = (0.35, 0.8)
 
@@ -460,6 +466,9 @@ def sample(
     extra = random.Random(int(seed) ^ _EXTRA_AXES_XOR)
     video["vignette"] = extra.uniform(preset.vignette.lo, preset.vignette.hi)
     video["out_fps"] = extra.choice(FPS_CHOICES)
+    ks_rng = random.Random(int(seed) ^ _KEYSTONE_RNG_XOR)
+    mag = ks_rng.uniform(KEYSTONE_LO, KEYSTONE_HI)
+    video["keystone_a"] = (-mag if ks_rng.random() < 0.5 else mag)
 
     # Audio mirrors the single speed factor. Voice-safe default: no pitch / EQ /
     # loudnorm (those make talking sound robotic). audio_uniqueness is the later

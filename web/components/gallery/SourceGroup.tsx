@@ -233,7 +233,9 @@ export function SourceGroup({
           data-tone={fullDelivery ? "ok" : "warn"}
         >
           {fullDelivery ? "✓ " : ""}
-          {copyMissing
+          {stillRunning
+            ? `${filesReady} / ${source.requested} generating`
+            : copyMissing
             ? `${filesReady} / ${source.requested} ready`
             : copyLanding
               ? `${filesReady} / ${source.requested} landing`

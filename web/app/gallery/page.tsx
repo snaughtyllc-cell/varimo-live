@@ -380,7 +380,7 @@ export function GalleryContent() {
                     ? galleryFolderEmptyCopy()
                     : filterMode === "shortfall"
                       ? "All packs have delivered their full requested count."
-                      : "Start a run in Studio and stay on that page until variant tiles appear. Gallery only lists finished variants — and a Studio redeploy clears unfinished jobs."}
+                      : "Start a run in Studio. Live packs show Generating here while copies finish."}
               </p>
             </div>
           )}

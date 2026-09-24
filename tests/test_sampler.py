@@ -10,6 +10,8 @@ from variant_maker.sampler import (
     CROP_Y_KEEP_BOTTOM_HI,
     CROP_Y_KEEP_BOTTOM_LO,
     FPS_CHOICES,
+    KEYSTONE_HI,
+    KEYSTONE_LO,
     RESAMPLE_FLAGS,
     RESAMPLE_PX_CHOICES,
     _axis_distortion,
@@ -396,6 +398,18 @@ def test_overbudget_shrink_is_encode_first_look_survives():
     assert grains_at_calm > 150, f"grain at calm on {grains_at_calm}/200"
     assert sat_off > 50, f"saturation still showing on {sat_off}/200"
     assert crop_off > 50, f"crop still showing on {crop_off}/200"
+
+
+def test_sample_draws_top_or_bottom_tilt_in_the_everyday_band():
+    """0.5–4%, either edge. 6% is a later raise, not the everyday draw."""
+    signs = set()
+    for i in range(80):
+        a = sample(MEDIUM, derive_seed(11, i))["video"]["keystone_a"]
+        assert KEYSTONE_LO - 1e-9 <= abs(a) <= KEYSTONE_HI + 1e-9
+        signs.add(1 if a > 0 else -1)
+        again = sample(MEDIUM, derive_seed(11, i))["video"]["keystone_a"]
+        assert again == a
+    assert signs == {1, -1}
 
 
 def test_sample_draws_resample_fingerprint():

@@ -240,6 +240,32 @@ def test_even_rebuild_size_talking_head_band_stays_sharp():
     assert w >= 960
 
 
+def test_keystone_sits_after_rebuild_and_before_rotate():
+    p = make_params(video={
+        "keystone_a": 0.01,
+        "rotate_deg": 0.8,
+        "rebuild_scale": 0.75,
+        "warp_k1": 0.0,
+    })
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "perspective=" in vf
+    assert "x0=W*0.0100" in vf
+    assert vf.index("perspective=") < vf.index("rotate=")
+
+
+def test_bottom_keystone_insets_the_bottom_edge():
+    p = make_params(video={"keystone_a": -0.03, "rotate_deg": 0.0})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "x0=W*0.0000" in vf
+    assert "x2=W*0.0300" in vf
+
+
+def test_keystone_under_two_thousandths_is_omitted():
+    p = make_params(video={"keystone_a": 0.001})
+    vf = filtergraph.build_video_filters(p, make_src(), REELS)
+    assert "perspective=" not in vf
+
+
 def test_warp_emits_lenscorrection():
     p = make_params(video={"warp_k1": 0.008})
     vf = filtergraph.build_video_filters(p, make_src(), REELS)

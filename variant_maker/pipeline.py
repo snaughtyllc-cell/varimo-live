@@ -39,6 +39,10 @@ DEFAULT_MIN_BITS_VS_PEERS = uniqueness.MIN_PEER_BITS
 # Fast daily packs: one medium encode, then escalate. Five-step bisection on a
 # 720 talking-head that sits at 23 bits is how a Fast 20 hit executionTimeout.
 FAST_TUNE_MAX_ITERS = 1
+# Everyday tilt is sampled at 0.5–4%, top or bottom. A 19–23 source miss raises
+# that same side through these magnitudes and stops at the first that clears 24.
+# 6% is the cap. A miss restores the everyday tilt.
+KEYSTONE_RAISE = (0.04, 0.06)
 
 
 def use_face_protect(quality_mode: str | None) -> bool:
@@ -376,6 +380,56 @@ def run(config: dict, *, on_event=None) -> Manifest:
             look_info = {**look_info, **_write_look_stills()}
             _emit_looking()
 
+        def _try_keystone_ladder() -> None:
+            """Raise a 19–23 miss toward 6% on the same side. Stop on 24.
+
+            The everyday file already has a 0.5–4% top or bottom tilt. This only
+            increases that magnitude. Look fail, or a rung that still misses,
+            puts the everyday tilt back.
+            """
+            nonlocal r, u, look_info, keystone_escalated
+            bits = u.get("bits")
+            if r is None or bits is None or not (19 <= int(bits) <= 23):
+                return
+            if look_info.get("look_status") == "fail":
+                return
+            snap = _snapshot_medium()
+            base_params = r["params"]
+            current = float((base_params.get("video") or {}).get("keystone_a") or 0.0)
+            sign = -1.0 if current < 0 else 1.0
+            raised = False
+            for mag in KEYSTONE_RAISE:
+                if mag <= abs(current) + 1e-6:
+                    continue
+                raised = True
+                video = dict(base_params.get("video") or {})
+                video["keystone_a"] = sign * mag
+                params = {**base_params, "video": video}
+                emit("rendering", index=i, attempt=attempt_no)
+                _, cmd = render_variant(src, params, platform, path)
+                r = {**r, "params": params, "cmd": cmd, "vmaf": None, "passed": True}
+                u = _look_then_uniqueness()
+                if look_info.get("look_status") == "fail":
+                    _restore_medium_if_look_fail(snap)
+                    return
+                got = u.get("bits")
+                if (
+                    got is not None
+                    and uniqueness.status_for_bits(int(got), target=uniqueness_target) == "ok"
+                ):
+                    keystone_escalated = True
+                    if os.path.isfile(snap["path"]):
+                        os.remove(snap["path"])
+                    return
+            if not raised:
+                if os.path.isfile(snap["path"]):
+                    os.remove(snap["path"])
+                return
+            os.replace(snap["path"], path)
+            look_info = snap["look"]
+            u = snap["u"]
+            r = snap["r"]
+
         def _peer_bits(variant_path: str) -> int | None:
             """Lowest SSIM bits vs earlier kept variants; None if no peers yet.
 
@@ -424,6 +478,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
         # under 19 is uniqueness_fail. Never fake a 24-bit score.
         preset_used = preset.name
         escalated = False
+        keystone_escalated = False
         r = None
         u = {
             "uniqueness": None, "uniqueness_status": "unknown",
@@ -512,6 +567,14 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 and tuned["uniqueness"] >= uniqueness_target
                 and tuned.get("peer_ok", True)
             )
+            if not cleared and allow_creative_escalate:
+                _try_keystone_ladder()
+                cleared = (
+                    bool(r and r.get("passed"))
+                    and u.get("uniqueness") is not None
+                    and u["uniqueness"] >= uniqueness_target
+                    and u.get("uniqueness_status") == "ok"
+                )
             if (
                 not cleared and allow_creative_escalate
                 and look_info.get("look_status") != "fail"
@@ -538,7 +601,11 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 if r["passed"] and _gate_ok(u, u.get("min_bits_vs_peers")):
                     break
             else:
-                if (
+                if allow_creative_escalate:
+                    _try_keystone_ladder()
+                if r is not None and r["passed"] and _gate_ok(u, u.get("min_bits_vs_peers")):
+                    pass
+                elif (
                     allow_creative_escalate
                     and look_info.get("look_status") != "fail"
                 ):
@@ -601,6 +668,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
             "look_mae": look_info.get("look_mae"),
             "look_mae_max": look_info.get("look_mae_max"),
             "heads": u.get("heads"),
+            "keystone_a": ((r.get("params") or {}).get("video") or {}).get("keystone_a"),
+            "keystone_escalated": bool(
+                keystone_escalated and ((r.get("params") or {}).get("video") or {}).get("keystone_a")
+            ),
         }
         # Accept into the peer set only when we ship a usable file.
         if status not in ("corrupt", "uniqueness_fail") and os.path.exists(path):

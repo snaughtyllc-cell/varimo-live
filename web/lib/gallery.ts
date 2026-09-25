@@ -118,9 +118,31 @@ export function packOriginalityColor(pct: number | null): string {
 /** Poll Gallery while a pack is still generating so 0/20 rows do not look dead. */
 export function galleryRefreshMs(sources: SourceOut[] | undefined | null): number {
   if (!sources?.length) return 0;
-  return sources.some((source) => jobIsLive(source.job_state) || !!source.in_flight)
+  return sources.some(
+    (source) =>
+      jobIsLive(source.job_state) ||
+      !!source.in_flight ||
+      source.copy_status === "missing",
+  )
     ? 4000
     : 0;
+}
+
+/** Finished packs whose mp4s never landed — Retry delivery once per source. */
+export function missingCopySourceIds(
+  sources: SourceOut[] | undefined | null,
+  alreadyTried?: Set<string>,
+): string[] {
+  if (!sources?.length) return [];
+  const tried = alreadyTried ?? new Set<string>();
+  return sources
+    .filter((source) => (
+      source.copy_status === "missing"
+      && !jobIsLive(source.job_state)
+      && !source.in_flight
+      && !tried.has(source.source_id)
+    ))
+    .map((source) => source.source_id);
 }
 
 /** "Generating · 0/20 · today" / "20 variants · today" — pack-list row meta line. */

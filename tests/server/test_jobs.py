@@ -441,6 +441,119 @@ def test_retry_copy_pulls_missing_and_clears_copy_error(tmp_path):
     assert store.retry_copy("nope") is None
 
 
+def test_retry_copy_lands_clip_seed_object(tmp_path):
+    """Studio recorded clip_{seed}.mp4 — Retry must pull that R2 key."""
+    from tests.server.fakes import FakeObjectStore, FakeRunPodClient
+    from variant_maker.server.runpod_runner import RunPodServerlessRunner
+
+    blobstore = FakeObjectStore()
+    ws = Workspace(str(tmp_path))
+    runner = RunPodServerlessRunner(blobstore, FakeRunPodClient([]))
+    store = JobStore(ws, runner)
+    job_id, source_id = "jobclip01", "srcclip01"
+    out_dir = ws.source_out_dir(job_id, source_id)
+    os.makedirs(out_dir, exist_ok=True)
+    staged = tmp_path / "clip.mp4"
+    staged.write_bytes(b"CLIP-RETRY")
+    blobstore.put(f"outputs/{source_id}/clip_c0ffee01.mp4", str(staged))
+
+    job = Job(
+        job_id=job_id, count=1, created_utc="2026-09-25T18:00:00Z",
+        sources=[JobSource(
+            source_id=source_id, filename="Virgin-copy (7).MOV", requested=1,
+            variants=[VariantInfo(
+                source_id=source_id, index=1, filename="clip_c0ffee01.mp4",
+                status="ok", quality={"vmaf": 95.0}, uniqueness=0.43,
+            )],
+        )],
+        state="done", error=COPY_FAILED_MSG,
+    )
+    store._install_hydrated_job(job)
+    landed = os.path.join(out_dir, "clip_c0ffee01.mp4")
+    if os.path.isfile(landed):
+        os.remove(landed)
+    assert source_files_ready(job.sources[0], ws, job_id) == 0
+
+    store.retry_copy(source_id)
+    assert source_files_ready(job.sources[0], ws, job_id) == 1
+    assert job.error is None
+    with open(landed, "rb") as f:
+        assert f.read() == b"CLIP-RETRY"
+
+
+def test_retry_copy_remaps_engine_object_to_recorded_clip_name(tmp_path):
+    """Old worker uploaded {stem}_v01_{seed}.mp4; job.json has clip_{seed}.mp4."""
+    from tests.server.fakes import FakeObjectStore, FakeRunPodClient
+    from variant_maker.server.runpod_runner import RunPodServerlessRunner
+
+    blobstore = FakeObjectStore()
+    ws = Workspace(str(tmp_path))
+    runner = RunPodServerlessRunner(blobstore, FakeRunPodClient([]))
+    store = JobStore(ws, runner, object_store=blobstore)
+    job_id, source_id = "jobremap01", "srcremap01"
+    out_dir = ws.source_out_dir(job_id, source_id)
+    os.makedirs(out_dir, exist_ok=True)
+    staged = tmp_path / "engine.mp4"
+    staged.write_bytes(b"ENGINE-RETRY")
+    engine = "Virgin-copy (7)_v01_c0ffee01.mp4"
+    blobstore.put(f"outputs/{source_id}/{engine}", str(staged))
+
+    job = Job(
+        job_id=job_id, count=1, created_utc="2026-09-25T18:00:00Z",
+        sources=[JobSource(
+            source_id=source_id, filename="Virgin-copy (7).MOV", requested=1,
+            variants=[VariantInfo(
+                source_id=source_id, index=1, filename="clip_c0ffee01.mp4",
+                status="ok", quality={"vmaf": 95.0}, uniqueness=0.43,
+            )],
+        )],
+        state="done", error=COPY_FAILED_MSG,
+    )
+    store._install_hydrated_job(job)
+    clip_path = os.path.join(out_dir, "clip_c0ffee01.mp4")
+    engine_path = os.path.join(out_dir, engine)
+    for path in (clip_path, engine_path):
+        if os.path.isfile(path):
+            os.remove(path)
+    assert source_files_ready(job.sources[0], ws, job_id) == 0
+
+    store.retry_copy(source_id)
+    assert source_files_ready(job.sources[0], ws, job_id) == 1
+    assert job.error is None
+    assert os.path.isfile(clip_path)
+    with open(clip_path, "rb") as f:
+        assert f.read() == b"ENGINE-RETRY"
+
+
+def test_retry_copy_does_not_clone_a_ready_sibling_onto_missing_best_effort(tmp_path):
+    """A skipped copy must not inherit a sibling mp4 that already belongs to another row."""
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    job_id, source_id = "jobsteal01", "srcsteal01"
+    out_dir = ws.source_out_dir(job_id, source_id)
+    with open(os.path.join(out_dir, "v01.mp4"), "wb") as f:
+        f.write(b"ONE")
+    job = Job(
+        job_id=job_id, count=2, created_utc="2026-09-25T18:00:00Z",
+        sources=[JobSource(
+            source_id=source_id, filename="a.mp4", requested=2,
+            variants=[
+                VariantInfo(source_id=source_id, index=1, filename="v01.mp4",
+                            status="ok", quality={}),
+                VariantInfo(source_id=source_id, index=2, filename="v02.mp4",
+                            status="best_effort", quality={}),
+            ],
+        )],
+        state="done",
+    )
+    store._jobs[job_id] = job
+    store._source_index[source_id] = (job_id, job.sources[0])
+    store.retry_copy(source_id)
+    assert not os.path.isfile(os.path.join(out_dir, "v02.mp4"))
+    with open(os.path.join(out_dir, "v01.mp4"), "rb") as f:
+        assert f.read() == b"ONE"
+
+
 class _EmptyResultKeepsProgressRunner:
     """GPU-style: done events recorded, then an empty result (stream dropped the last chunk)."""
 

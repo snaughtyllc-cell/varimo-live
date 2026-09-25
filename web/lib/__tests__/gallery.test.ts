@@ -8,6 +8,7 @@ import {
   filterSources,
   galleryRefreshMs,
   gallerySearchPath,
+  missingCopySourceIds,
   isFileReady,
   packMetaLabel,
   packOriginalityColor,
@@ -109,6 +110,21 @@ describe("gallery helpers", () => {
     expect(packMetaLabel(live, now)).toBe("Generating · 0/20 · today");
     expect(packMetaLabel(live, now)).not.toMatch(/0 variants/);
     expect(galleryRefreshMs([live])).toBe(4000);
+  });
+
+  it("polls while a scored pack is still missing its download package", () => {
+    const missing = {
+      ...mk("virgin", 0, "2026-09-25T18:28:00Z"),
+      requested: 10,
+      delivered: 10,
+      files_ready: 0,
+      copy_status: "missing" as const,
+      job_state: "done",
+      variants: Array.from({ length: 10 }, (_, i) => ({ index: i + 1 })),
+    };
+    expect(galleryRefreshMs([missing])).toBe(4000);
+    expect(missingCopySourceIds([missing], new Set())).toEqual(["virgin"]);
+    expect(missingCopySourceIds([missing], new Set(["virgin"]))).toEqual([]);
   });
 
   it("labels a finished empty 20-pack as didn't finish", () => {

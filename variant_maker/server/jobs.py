@@ -21,6 +21,7 @@ from .caption_ai import (
     captions_for_source,
     strip_internal_index_lines,
 )
+from .copy_recover import is_variant_mp4, match_outputs, variant_mp4_basenames
 from .events import VariantEvent, event_to_dict
 from .runner import Runner, normalize_quality_mode
 from .usage import month_key, record_fast_job, record_ok_copies
@@ -1101,6 +1102,109 @@ class JobStore:
                 if n:
                     names.append(n)
         self._pull_named_outputs(source_id, names)
+        self._adopt_unmatched_outputs(source_id)
+
+    def _list_remote_mp4s(self, source_id: str) -> list[str]:
+        list_fn = getattr(self._runner, "list_outputs", None)
+        if callable(list_fn):
+            try:
+                names = list_fn(source_id)
+                if names:
+                    return list(names)
+            except Exception as exc:
+                print(
+                    f"list_outputs {source_id}: {type(exc).__name__}: {exc}",
+                    flush=True,
+                )
+        store = self._object_store
+        if store is None:
+            return []
+        try:
+            return variant_mp4_basenames(store.list_prefix(f"outputs/{source_id}/"))
+        except Exception as exc:
+            print(
+                f"list_prefix outputs/{source_id}/: {type(exc).__name__}: {exc}",
+                flush=True,
+            )
+            return []
+
+    def _download_output_as(
+        self, source_id: str, out_dir: str, remote_name: str, local_name: str,
+    ) -> bool:
+        dest = os.path.join(out_dir, os.path.basename(local_name))
+        fetch_as = getattr(self._runner, "fetch_output_as", None)
+        if callable(fetch_as) and fetch_as(source_id, out_dir, remote_name, local_name):
+            return os.path.isfile(dest) and os.path.getsize(dest) > 0
+        self._pull_named_outputs(source_id, [remote_name])
+        src = os.path.join(out_dir, os.path.basename(remote_name))
+        if os.path.isfile(src) and os.path.getsize(src) > 0:
+            if os.path.abspath(src) != os.path.abspath(dest):
+                shutil.copy2(src, dest)
+            return True
+        store = self._object_store
+        if store is None:
+            return False
+        try:
+            store.get(f"outputs/{source_id}/{remote_name}", dest)
+        except Exception as exc:
+            print(
+                f"object get outputs/{source_id}/{remote_name}: "
+                f"{type(exc).__name__}: {exc}",
+                flush=True,
+            )
+            return False
+        return os.path.isfile(dest) and os.path.getsize(dest) > 0
+
+    def _adopt_unmatched_outputs(self, source_id: str) -> None:
+        """Land leftover clip_* / engine mp4s under the names job.json recorded."""
+        loc = self._locate(source_id)
+        if loc is None:
+            return
+        job_id, source = loc
+        missing = [
+            v for v in source.variants
+            if is_shipped(v.status) and v.filename
+            and not variant_on_disk(self._ws, job_id, source.source_id, v.filename)
+        ]
+        if not missing:
+            return
+        claimed = {
+            v.filename for v in source.variants
+            if v.filename and variant_on_disk(self._ws, job_id, source.source_id, v.filename)
+        }
+        out_dir = self._ws.source_out_dir(job_id, source.source_id)
+        available: list[str] = []
+        try:
+            for name in os.listdir(out_dir):
+                if name in claimed:
+                    continue
+                path = os.path.join(out_dir, name)
+                if (
+                    is_variant_mp4(name)
+                    and os.path.isfile(path)
+                    and os.path.getsize(path) > 0
+                ):
+                    available.append(name)
+        except FileNotFoundError:
+            pass
+        available.extend(
+            name for name in self._list_remote_mp4s(source_id) if name not in claimed
+        )
+        matches = match_outputs(
+            [(v.index, v.filename) for v in missing], available,
+        )
+        for variant in missing:
+            src_name = matches.get(variant.index)
+            if not src_name:
+                continue
+            dest = self._ws.variant_path(job_id, source.source_id, variant.filename)
+            src_local = os.path.join(out_dir, src_name)
+            if os.path.isfile(src_local) and os.path.getsize(src_local) > 0:
+                if os.path.abspath(src_local) != os.path.abspath(dest):
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    shutil.copy2(src_local, dest)
+                continue
+            self._download_output_as(source_id, out_dir, src_name, variant.filename)
 
     def _refresh_copy_error(self, job: Job) -> None:
         """Surface a VA-facing error when GPU metadata is ok but mp4s never landed."""

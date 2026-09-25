@@ -290,3 +290,23 @@ class RoutingRunner:
                 if got:
                     return got
         return None
+
+    def list_outputs(self, source_id: str) -> list[str]:
+        for target in (self._fast_remote, self._remote):
+            if target is None:
+                continue
+            list_fn = getattr(target, "list_outputs", None)
+            if callable(list_fn):
+                names = list_fn(source_id)
+                if names:
+                    return list(names)
+        return []
+
+    def fetch_output_as(self, *args, **kwargs) -> bool:
+        for target in (self._fast_remote, self._remote):
+            if target is None:
+                continue
+            fetch_as = getattr(target, "fetch_output_as", None)
+            if callable(fetch_as) and fetch_as(*args, **kwargs):
+                return True
+        return False

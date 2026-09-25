@@ -84,6 +84,37 @@ def test_runner_downloads_when_stream_omits_result_chunk(tmp_path):
     assert os.path.isfile(result.manifest_path)
 
 
+def test_runner_recovers_clip_seed_mp4_when_stream_drops_everything(tmp_path):
+    """After clip_{seed} names, list_prefix fallback must not require v01.mp4."""
+    store = FakeObjectStore()
+    _stage(store, tmp_path, "outputs/srcA/clip_c0ffee01.mp4", b"CLIPSEED")
+    _stage(store, tmp_path, "outputs/srcA/manifest.json", b"{}")
+    src = tmp_path / "in.mp4"
+    src.write_bytes(b"SRC")
+    out_dir = str(tmp_path / "out")
+    runner = RunPodServerlessRunner(store, FakeRunPodClient([]))
+    result = runner.run(str(src), count=1, out_dir=out_dir, source_id="srcA",
+                        on_event=lambda e: None)
+    assert [v.filename for v in result.variants] == ["clip_c0ffee01.mp4"]
+    with open(result.variants[0].path, "rb") as f:
+        assert f.read() == b"CLIPSEED"
+
+
+def test_runner_recovers_engine_named_mp4_when_stream_drops_everything(tmp_path):
+    """Old Fast workers still upload {stem}_v01_{seed}.mp4."""
+    store = FakeObjectStore()
+    engine = "Virgin-copy (7)_v01_c0ffee01.mp4"
+    _stage(store, tmp_path, f"outputs/srcA/{engine}", b"ENGINE")
+    src = tmp_path / "in.mp4"
+    src.write_bytes(b"SRC")
+    runner = RunPodServerlessRunner(store, FakeRunPodClient([]))
+    result = runner.run(str(src), count=1, out_dir=str(tmp_path / "out"),
+                        source_id="srcA", on_event=lambda e: None)
+    assert [v.filename for v in result.variants] == [engine]
+    with open(result.variants[0].path, "rb") as f:
+        assert f.read() == b"ENGINE"
+
+
 def test_fetch_outputs_matches_basename_when_exact_key_missing(tmp_path):
     store = FakeObjectStore()
     _stage(store, tmp_path, "outputs/srcA/nested/v01.mp4", b"NESTED")

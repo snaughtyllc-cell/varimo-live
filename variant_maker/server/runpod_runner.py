@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 
+from .copy_recover import recover_variants_from_keys, variant_mp4_basenames
 from .events import VariantEvent
 from .runner import (
     DEFAULT_PLATFORM,
@@ -84,24 +85,46 @@ class RunPodServerlessRunner:
     def _file_ready(self, dest: str) -> bool:
         return os.path.isfile(dest) and os.path.getsize(dest) > 0
 
+    def _unlink_empty(self, dest: str) -> None:
+        try:
+            if os.path.isfile(dest) and os.path.getsize(dest) == 0:
+                os.remove(dest)
+        except OSError:
+            return
+
     def _try_get(self, key: str, dest: str) -> bool:
         try:
             self._store.get(key, dest)
         except Exception as exc:
             print(f"object get {key}: {type(exc).__name__}: {exc}", flush=True)
+            self._unlink_empty(dest)
             return False
-        return self._file_ready(dest)
+        if self._file_ready(dest):
+            return True
+        self._unlink_empty(dest)
+        return False
 
     def _fetch_named(self, source_id: str, out_dir: str, name: str | None) -> bool:
         if not name:
             return False
-        base = os.path.basename(str(name))
-        if base in ("", ".", "..") or base != str(name):
+        return self.fetch_output_as(source_id, out_dir, name, name)
+
+    def fetch_output_as(
+        self, source_id: str, out_dir: str, remote_name: str | None, local_name: str | None,
+    ) -> bool:
+        """Copy outputs/{source_id}/{remote} onto out_dir/{local}."""
+        if not remote_name or not local_name:
             return False
-        dest = os.path.join(out_dir, base)
+        remote = os.path.basename(str(remote_name))
+        local = os.path.basename(str(local_name))
+        if remote in ("", ".", "..") or local in ("", ".", ".."):
+            return False
+        if remote != str(remote_name) or local != str(local_name):
+            return False
+        dest = os.path.join(out_dir, local)
         if self._file_ready(dest):
             return True
-        if self._try_get(f"outputs/{source_id}/{base}", dest):
+        if self._try_get(f"outputs/{source_id}/{remote}", dest):
             return True
         try:
             keys = self._store.list_prefix(f"outputs/{source_id}/")
@@ -112,9 +135,20 @@ class RunPodServerlessRunner:
             )
             return False
         for key in keys:
-            if os.path.basename(key) == base and self._try_get(key, dest):
+            if os.path.basename(key) == remote and self._try_get(key, dest):
                 return True
         return False
+
+    def list_outputs(self, source_id: str) -> list[str]:
+        try:
+            keys = self._store.list_prefix(f"outputs/{source_id}/")
+        except Exception as exc:
+            print(
+                f"list_prefix outputs/{source_id}/: {type(exc).__name__}: {exc}",
+                flush=True,
+            )
+            return []
+        return variant_mp4_basenames(keys)
 
     def _meta_from_event(self, source_id: str, e: dict) -> dict | None:
         filename = e.get("filename")
@@ -160,18 +194,7 @@ class RunPodServerlessRunner:
                 flush=True,
             )
             return []
-        found: list[dict] = []
-        for key in keys:
-            base = os.path.basename(key)
-            stem, ext = os.path.splitext(base)
-            if ext.lower() != ".mp4" or not stem.startswith("v") or not stem[1:].isdigit():
-                continue
-            found.append({
-                "index": int(stem[1:]), "filename": base, "status": "ok",
-                "quality": {}, "key": key,
-            })
-        found.sort(key=lambda v: v["index"])
-        return found
+        return recover_variants_from_keys(source_id, keys)
 
     def _consume_stream(self, chunks, *, out_dir: str, source_id: str,
                         on_event: Callable[[VariantEvent], None]) -> SourceResult:
@@ -252,14 +275,22 @@ class RunPodServerlessRunner:
         """Pull variant files already in object storage (GPU finished, Studio missed the copy)."""
         os.makedirs(out_dir, exist_ok=True)
         got = 0
+        wanted: list[str] = []
         for raw in filenames:
             name = os.path.basename(raw)
             if not name or name in (".", ".."):
                 continue
+            wanted.append(name)
+        for name in wanted:
             dest = os.path.join(out_dir, name)
             if self._file_ready(dest):
                 got += 1
                 continue
             if self._fetch_named(source_id, out_dir, name):
+                got += 1
+        for extra in self.list_outputs(source_id):
+            if extra in wanted:
+                continue
+            if self._fetch_named(source_id, out_dir, extra):
                 got += 1
         return got

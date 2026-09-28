@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { initRun, reduceEvent, runDeliveredNone, runHasStarted } from "@/lib/progress";
+import { initRun, reduceEvent, runDeliveredNone, runFailedHeadline, runHasStarted } from "@/lib/progress";
 import { VariantEvent } from "@/lib/types";
 
 const q = { vmaf: 95, histogram_ok: true, regen_count: 0, passed: true, spatial_vmaf: null, spatial_ok: null };
@@ -180,6 +180,17 @@ describe("progress reducer", () => {
     }));
     r = reduceEvent(r, { state: "job-done" });
     expect(runDeliveredNone(r)).toBe(false);
+  });
+
+  it("runFailedHeadline separates cancel, missing package, and a lost run", () => {
+    expect(runFailedHeadline("Cancelled — New run when you want another pack.")).toBe("Cancelled");
+    expect(runFailedHeadline(
+      "GPU finished, but videos didn't copy back to Studio. Retry copy, or Regenerate if that still fails.",
+    )).toBe("Package not ready");
+    expect(runFailedHeadline(
+      "Processing finished, but the download package isn't ready. Retry delivery, or regenerate if that still fails.",
+    )).toBe("Package not ready");
+    expect(runFailedHeadline("The render worker stopped before this pack finished.")).toBe("Run lost");
   });
 
   it("runHasStarted is false until a copy is encoding or delivered", () => {

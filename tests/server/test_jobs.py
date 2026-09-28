@@ -332,15 +332,32 @@ def test_cancel_unknown_job_is_none(tmp_path):
     assert store.cancel("nope") is None
 
 
-def test_runner_crash_marks_done_with_gpu_timeout_copy(tmp_path):
+def test_runner_crash_marks_done_with_worker_stopped_copy(tmp_path):
     store = JobStore(Workspace(str(tmp_path)), _BoomRunner())
     job = store.create_job([("a.mp4", b"x")], count=1, quality_mode="hq")
     store.wait(job.job_id, timeout=5)
     assert job.state == "done"
     assert job.error is not None
+    assert "render worker stopped" in job.error
+    assert "New run" in job.error
+    assert "20 minutes" not in job.error
+    assert job.sources[0].delivered == 0
+
+
+class _TimeoutRunner:
+    def run(self, source_path, *, count, out_dir, source_id, on_event,
+            allow_creative_escalate=True, quality_mode="fast", cancel_token=None):
+        raise RuntimeError("RunPod job abc ended: TIMED_OUT")
+
+
+def test_runner_timeout_mentions_twenty_minute_cap(tmp_path):
+    store = JobStore(Workspace(str(tmp_path)), _TimeoutRunner())
+    job = store.create_job([("a.mp4", b"x")], count=1, quality_mode="fast")
+    store.wait(job.job_id, timeout=5)
+    assert job.state == "done"
+    assert job.error is not None
     assert "20 minutes" in job.error
     assert "New run" in job.error
-    assert job.sources[0].delivered == 0
 
 
 def test_copy_status_is_disk_only(tmp_path):

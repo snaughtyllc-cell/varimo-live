@@ -1,3 +1,5 @@
+import pytest
+
 from variant_maker.server.events import VariantEvent, event_to_dict
 from variant_maker.server.runner import LocalRunner, SourceResult, VariantResult
 
@@ -213,6 +215,87 @@ def test_routing_runner_sends_all_fast_to_fast_remote_when_set():
     )
     assert fast.resumes and fast.resumes[0]["runpod_job_id"] == "rp1"
     assert gpu.resumes and gpu.resumes[0]["runpod_job_id"] == "rp2"
+
+
+def test_routing_runner_retries_gpu_when_fast_fails_before_done():
+    from variant_maker.server.runner import RoutingRunner
+
+    class FastDown:
+        def run(self, *args, **kw):
+            raise RuntimeError("RunPod job abc ended: FAILED")
+
+    class Gpu:
+        def __init__(self):
+            self.calls = []
+
+        def run(self, *args, **kw):
+            self.calls.append(kw)
+            return SourceResult(variants=[], manifest_path="gpu")
+
+    gpu = Gpu()
+    router = RoutingRunner(object(), gpu, fast_remote=FastDown(), max_local_fast=3)
+    out = router.run(
+        "s.mp4", count=8, out_dir="o", source_id="s",
+        on_event=lambda e: None, quality_mode="fast",
+    )
+    assert out.manifest_path == "gpu"
+    assert len(gpu.calls) == 1
+    assert gpu.calls[0]["quality_mode"] == "fast"
+    assert gpu.calls[0]["count"] == 8
+
+
+def test_routing_runner_does_not_retry_gpu_after_a_done_variant():
+    from variant_maker.server.runner import RoutingRunner
+
+    class FastPartial:
+        def run(self, *args, on_event, **kw):
+            on_event(VariantEvent(
+                source_id=kw["source_id"], index=1, state="done",
+                status="ok", filename="clip.mp4",
+            ))
+            raise RuntimeError("RunPod job abc ended: FAILED")
+
+    class Gpu:
+        def __init__(self):
+            self.calls = 0
+
+        def run(self, *args, **kw):
+            self.calls += 1
+            raise AssertionError("gpu should not run after a done variant")
+
+    gpu = Gpu()
+    router = RoutingRunner(object(), gpu, fast_remote=FastPartial())
+    with pytest.raises(RuntimeError, match="ended: FAILED"):
+        router.run(
+            "s.mp4", count=8, out_dir="o", source_id="s",
+            on_event=lambda e: None, quality_mode="fast",
+        )
+    assert gpu.calls == 0
+
+
+def test_routing_runner_does_not_retry_gpu_on_timeout():
+    from variant_maker.server.runner import RoutingRunner
+
+    class FastTimeout:
+        def run(self, *args, **kw):
+            raise RuntimeError("RunPod job abc ended: TIMED_OUT")
+
+    class Gpu:
+        def __init__(self):
+            self.calls = 0
+
+        def run(self, *args, **kw):
+            self.calls += 1
+            raise AssertionError("timeout must not start a second encode")
+
+    gpu = Gpu()
+    router = RoutingRunner(object(), gpu, fast_remote=FastTimeout())
+    with pytest.raises(RuntimeError, match="TIMED_OUT"):
+        router.run(
+            "s.mp4", count=8, out_dir="o", source_id="s",
+            on_event=lambda e: None, quality_mode="fast",
+        )
+    assert gpu.calls == 0
 
 
 def test_encode_jobs_for_worker_ignores_container_cpu_count(monkeypatch):

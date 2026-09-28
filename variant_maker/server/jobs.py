@@ -162,17 +162,27 @@ class Job:
     export_id: str | None = None
 
 
+def _is_worker_timeout(raw: str) -> bool:
+    upper = raw.upper()
+    return "TIMED_OUT" in upper or "TIMED OUT" in upper or "EXECUTION TIMEOUT" in upper
+
+
 def _public_job_error(exc: BaseException) -> str:
-    """Short UI string. RunPod FAILED after ~20 min is serial Fast hitting the cap."""
+    """Short UI string. Only a real worker timeout mentions the 20-minute cap."""
     raw = str(exc)
     if "ended: CANCELLED" in raw:
         return USER_CANCEL_MSG
-    if "ended: FAILED" in raw or "TIMED_OUT" in raw.upper():
+    if _is_worker_timeout(raw):
         return (
             "Job hit the worker time limit before the pack finished. "
             "A 20-pack one-at-a-time often exceeds 20 minutes — New run. "
             "Later Fast packs encode several variants at once. "
             "If this keeps happening, set RunPod execution timeout to 3600s."
+        )
+    if "ended: FAILED" in raw:
+        return (
+            "The render worker stopped before this pack finished. "
+            "Hit New run to try again."
         )
     return raw or type(exc).__name__
 

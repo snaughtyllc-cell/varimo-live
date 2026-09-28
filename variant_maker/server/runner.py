@@ -74,6 +74,19 @@ def should_run_fast_local(
     return count <= max_local_fast
 
 
+def fast_endpoint_down(exc: BaseException) -> bool:
+    """True when Fast never produced a copy — safe to try the GPU endpoint once."""
+    raw = str(exc)
+    upper = raw.upper()
+    if "TIMED_OUT" in upper or "TIMED OUT" in upper or "EXECUTION TIMEOUT" in upper:
+        return False
+    if "ended: CANCELLED" in raw:
+        return False
+    if "ended: FAILED" in raw:
+        return True
+    return type(exc).__name__ in {"ConnectError", "ConnectTimeout", "HTTPStatusError"}
+
+
 FAST_JOBS_ENV = "VARIANT_FAST_JOBS"
 DEFAULT_FAST_JOBS = 8
 MAX_FAST_JOBS = 8
@@ -267,11 +280,40 @@ class RoutingRunner:
             allow_creative_escalate: bool = True,
             quality_mode: str = DEFAULT_QUALITY_MODE,
             cancel_token=None) -> SourceResult:
-        return self._pick(quality_mode, count).run(
-            source_path, count=count, out_dir=out_dir, source_id=source_id,
-            on_event=on_event, allow_creative_escalate=allow_creative_escalate,
-            quality_mode=quality_mode, cancel_token=cancel_token,
-        )
+        primary = self._pick(quality_mode, count)
+        saw_done = False
+
+        def _watch(event: VariantEvent) -> None:
+            nonlocal saw_done
+            if event.state == "done":
+                saw_done = True
+            on_event(event)
+
+        try:
+            return primary.run(
+                source_path, count=count, out_dir=out_dir, source_id=source_id,
+                on_event=_watch, allow_creative_escalate=allow_creative_escalate,
+                quality_mode=quality_mode, cancel_token=cancel_token,
+            )
+        except Exception as exc:
+            fallback = self._remote if primary is self._fast_remote else None
+            if (
+                fallback is None
+                or fallback is primary
+                or saw_done
+                or not fast_endpoint_down(exc)
+            ):
+                raise
+            print(
+                f"fast worker down for {source_id} ({type(exc).__name__}: {exc}); "
+                "retrying on the GPU endpoint",
+                flush=True,
+            )
+            return fallback.run(
+                source_path, count=count, out_dir=out_dir, source_id=source_id,
+                on_event=on_event, allow_creative_escalate=allow_creative_escalate,
+                quality_mode=quality_mode, cancel_token=cancel_token,
+            )
 
     def resume_run(self, *args, **kwargs) -> SourceResult:
         target = self._cloud(kwargs.get("quality_mode"), kwargs.get("count") or 1)

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRun } from "@/lib/runStore";
 import { cancelJob } from "@/lib/api";
-import { runDeliveredNone, runHasStarted } from "@/lib/progress";
+import { runDeliveredNone, runFailedHeadline, runHasStarted } from "@/lib/progress";
 import { liveRunSubcopy, reconstructFirstHeadline, reconstructFirstSubcopy } from "@/lib/hqWaitCopy";
 import {
   isPreparingJob,
@@ -93,7 +93,6 @@ export function ProgressPanel() {
   const reconstructing = Boolean(prepMode === "hq" && !started && !complete && !preparing && !progress.failed);
   const emptyFail = runDeliveredNone(progress);
   const failed = progress.failed;
-  const cancelled = Boolean(failed && /cancelled/i.test(failed));
   const headline = reconstructing
     ? reconstructFirstHeadline()
     : waking
@@ -101,9 +100,7 @@ export function ProgressPanel() {
     : early
     ? preparingHeadline()
     : failed
-      ? cancelled
-        ? "Cancelled"
-        : "Run lost"
+      ? runFailedHeadline(failed)
       : complete
         ? emptyFail
           ? "No variants"

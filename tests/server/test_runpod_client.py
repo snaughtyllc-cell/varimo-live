@@ -1,3 +1,5 @@
+import pytest
+
 from tests.server.fakes import FakeRunPodClient
 
 
@@ -141,6 +143,32 @@ def test_http_client_fetches_status_when_stream_and_output_lack_result(monkeypat
     results = [c for c in out if c.get("type") == "result"]
     assert len(results) == 1
     assert results[0]["variants"][0]["filename"] == "v01.mp4"
+
+
+def test_http_client_failed_includes_worker_error(monkeypatch):
+    import variant_maker.server.runpod_client as rc
+
+    class FakeResp:
+        def __init__(self, payload): self._p = payload
+        def raise_for_status(self): pass
+        def json(self): return self._p
+
+    class FakeHttp:
+        def __enter__(self): return self
+        def __exit__(self, *_): pass
+        def post(self, url, json, headers):
+            return FakeResp({"id": "job123"})
+        def get(self, url, headers):
+            return FakeResp({
+                "status": "FAILED",
+                "error": "handler crashed: No such filter",
+                "stream": [],
+            })
+
+    monkeypatch.setattr(rc, "_http", lambda: FakeHttp())
+    client = rc.HttpRunPodClient(endpoint_id="ep", api_key="k", poll_interval=0)
+    with pytest.raises(RuntimeError, match=r"ended: FAILED: handler crashed: No such filter"):
+        list(client.stream_run({"input": {}}))
 
 
 def test_http_client_cancel_posts_runpod_cancel(monkeypatch):

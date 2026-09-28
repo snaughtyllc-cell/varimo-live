@@ -142,6 +142,15 @@ export function reduceEvent(run: RunProgress, ev: VariantEvent | { state: "job-d
   return { ...run, bySource: { ...run.bySource, [e.source_id]: next } };
 }
 
+/** Headline when a run ends with an error. Copy-miss is a package problem, not a lost run. */
+export function runFailedHeadline(error: string | null | undefined): string {
+  if (error && /cancelled/i.test(error)) return "Cancelled";
+  if (error && /didn't copy back|download package isn't ready/i.test(error)) {
+    return "Package not ready";
+  }
+  return "Run lost";
+}
+
 export function runDeliveredNone(progress: RunProgress): boolean {
   if (!progress.complete) return false;
   const sources = Object.values(progress.bySource);

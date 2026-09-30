@@ -283,17 +283,17 @@ class RoutingRunner:
             return self._fast_remote or self._remote
         return picked
 
-    def _gpu_if_fast_left_no_video(
-        self, primary: Runner, out_dir: str, exc: BaseException | None,
-    ) -> Runner | None:
-        """One GPU encode when Fast finished with no playable mp4. A landed file stays."""
-        if primary is not self._fast_remote or self._remote is primary:
-            return None
-        if variant_files_landed(out_dir):
-            return None
-        if exc is not None and "ended: CANCELLED" in str(exc):
-            return None
-        return self._remote
+    def _encode_chain(self, primary: Runner, quality_mode: str) -> list[Runner]:
+        """Fast, then the GPU endpoint, then Studio CPU until a real mp4 exists."""
+        chain = [primary]
+        if primary is self._fast_remote and self._remote is not primary:
+            chain.append(self._remote)
+        if (
+            self._local not in chain
+            and normalize_quality_mode(quality_mode) == "fast"
+        ):
+            chain.append(self._local)
+        return chain
 
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
             on_event: Callable[[VariantEvent], None],
@@ -306,27 +306,37 @@ class RoutingRunner:
             "allow_creative_escalate": allow_creative_escalate,
             "quality_mode": quality_mode, "cancel_token": cancel_token,
         }
-        try:
-            result = primary.run(source_path, **kwargs)
-        except Exception as exc:
-            fallback = self._gpu_if_fast_left_no_video(primary, out_dir, exc)
-            if fallback is None:
-                raise
+        last_exc: BaseException | None = None
+        last_result: SourceResult | None = None
+        for index, runner in enumerate(self._encode_chain(primary, quality_mode)):
+            if index and variant_files_landed(out_dir) and last_result is not None:
+                return last_result
+            try:
+                last_result = runner.run(source_path, **kwargs)
+            except Exception as exc:
+                if "ended: CANCELLED" in str(exc):
+                    raise
+                if variant_files_landed(out_dir):
+                    raise
+                last_exc = exc
+                print(
+                    f"encode on {type(runner).__name__} failed for {source_id} "
+                    f"({type(exc).__name__}: {exc}); trying the next machine",
+                    flush=True,
+                )
+                continue
+            if variant_files_landed(out_dir):
+                return last_result
             print(
-                f"fast worker down for {source_id} ({type(exc).__name__}: {exc}); "
-                "retrying on the GPU endpoint",
+                f"encode on {type(runner).__name__} returned no video for {source_id}; "
+                "trying the next machine",
                 flush=True,
             )
-            return fallback.run(source_path, **kwargs)
-        fallback = self._gpu_if_fast_left_no_video(primary, out_dir, None)
-        if fallback is None:
-            return result
-        print(
-            f"fast worker returned no video for {source_id}; "
-            "retrying on the GPU endpoint",
-            flush=True,
-        )
-        return fallback.run(source_path, **kwargs)
+        if last_result is not None:
+            return last_result
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError(f"no encode machine produced a video for {source_id}")
 
     def resume_run(self, *args, **kwargs) -> SourceResult:
         target = self._cloud(kwargs.get("quality_mode"), kwargs.get("count") or 1)

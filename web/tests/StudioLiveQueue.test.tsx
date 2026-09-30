@@ -66,6 +66,51 @@ describe("StudioLiveQueue reserved tracks", () => {
     queue.data = { running: 0, fast: 0, hq: 0, jobs: [] };
   });
 
+  it("does not leave queued copy tiles up when the queue is clear", () => {
+    run.jobId = null;
+    run.complete = true;
+    run.progress = initRun([
+      { source_id: "s1", filename: "Nice day.mp4", requested: 3 },
+      { source_id: "s2", filename: "Gip hoe.mp4", requested: 3 },
+    ]);
+    render(<StudioLiveQueue />);
+    expect(screen.queryByText("queued")).toBeNull();
+    expect(screen.getByText(/Queue is clear/i)).toBeInTheDocument();
+    expect(screen.getByText(/Finished variants land here/i)).toBeInTheDocument();
+  });
+
+  it("keeps a finished thumb after the run ends and drops the empty slots", () => {
+    run.jobId = "j1";
+    run.complete = true;
+    run.progress = {
+      complete: true,
+      bySource: {
+        s1: {
+          source_id: "s1",
+          filename: "clip.mp4",
+          requested: 3,
+          delivered: 1,
+          done: 1,
+          inFlights: {},
+          variants: [
+            {
+              index: 1,
+              filename: "v01.mp4",
+              status: "ok",
+              quality,
+              file_url: "/api/variants/s1/v01.mp4",
+              look_var_url: "/api/look/s1/look_v01.jpg",
+              uniqueness: 0.55,
+            },
+          ],
+        },
+      },
+    };
+    render(<StudioLiveQueue />);
+    expect(screen.getByText("55%")).toBeInTheDocument();
+    expect(screen.queryByText("queued")).toBeNull();
+  });
+
   it("keeps the rows track mounted when the queue is empty so Generate cannot grow the rail", () => {
     const { container } = render(<StudioLiveQueue />);
     expect(container.querySelector(".studio-live__rows")).toBeTruthy();

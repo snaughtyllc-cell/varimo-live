@@ -26,8 +26,19 @@ describe("useJobProgress", () => {
     expect(MockES.last!.closed).toBe(true);
   });
   it("does nothing when jobId is null", () => {
-    renderHook(() => useJobProgress(null, sources));
+    const { result } = renderHook(() => useJobProgress(null, sources));
     expect(MockES.last).toBeNull();
+    expect(result.current.bySource).toEqual({});
+  });
+
+  it("drops stale queued tiles when the job is cleared", () => {
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string | null }) => useJobProgress(id, sources),
+      { initialProps: { id: "j1" as string | null } },
+    );
+    expect(result.current.bySource.s1.requested).toBe(1);
+    rerender({ id: null });
+    expect(result.current.bySource).toEqual({});
   });
   it("waits until sources are known before opening", () => {
     renderHook(() => useJobProgress("j1", []));

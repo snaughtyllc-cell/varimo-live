@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { liveRowThumbSrc, liveTileLabel, liveTileMediaSrc, liveTilePreviewSrc, packLiveTiles } from "@/lib/studioLiveTiles";
+import { liveRowThumbSrc, liveTileLabel, liveTileMediaSrc, liveTilePreviewSrc, packLiveTiles, visibleLiveTiles } from "@/lib/studioLiveTiles";
 import type { SourceProgress } from "@/lib/progress";
 
 const quality = {
@@ -42,6 +42,8 @@ describe("packLiveTiles", () => {
     expect(liveTileLabel(tiles[2], true)).toBe("starting");
     expect(liveTileLabel(tiles[2], true, { phase: "direct" })).toBe("uploading");
     expect(liveTileLabel(tiles[2], false, null, true)).toBe("waking");
+    expect(visibleLiveTiles(source, false).map((t) => t.kind)).toEqual(["done"]);
+    expect(visibleLiveTiles({ ...source, variants: [], delivered: 0, done: 0 }, false)).toEqual([]);
   });
 
   it("uses JPEG posters for done tiles and never the source MP4", () => {

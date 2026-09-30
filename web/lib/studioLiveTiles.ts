@@ -31,6 +31,13 @@ export function packLiveTiles(source: SourceProgress): LiveTile[] {
   return tiles;
 }
 
+/** Idle slots say "queued" only while a pack is actually running. */
+export function visibleLiveTiles(source: SourceProgress, active: boolean): LiveTile[] {
+  const tiles = packLiveTiles(source);
+  if (active) return tiles;
+  return tiles.filter((tile) => tile.kind === "done");
+}
+
 export function liveTileLabel(
   tile: LiveTile,
   preparing = false,

@@ -14,7 +14,7 @@ import { uploadProgressCopy } from "@/lib/jobUpload";
 import { reconstructFirstHeadline, reconstructFirstSubcopy } from "@/lib/hqWaitCopy";
 import { runHasStarted } from "@/lib/progress";
 import { useElapsedSeconds } from "@/lib/useElapsedSeconds";
-import { liveRowThumbSrc, liveTileLabel, liveTileMediaSrc, packLiveTiles } from "@/lib/studioLiveTiles";
+import { liveRowThumbSrc, liveTileLabel, liveTileMediaSrc, visibleLiveTiles } from "@/lib/studioLiveTiles";
 import { PosterThumb } from "@/components/common/PosterThumb";
 import type { SourceProgress } from "@/lib/progress";
 
@@ -31,13 +31,16 @@ function LivePackGrid({
   preparing,
   upload,
   waking,
+  active,
 }: {
   source: SourceProgress;
   preparing: boolean;
   upload?: { phase?: string } | null;
   waking?: boolean;
+  active: boolean;
 }) {
-  const tiles = packLiveTiles(source);
+  const tiles = visibleLiveTiles(source, active);
+  if (tiles.length === 0) return null;
   return (
     <div className="studio-live__grid" data-testid={`live-grid-${source.source_id}`}>
       {tiles.map((tile) => {
@@ -131,7 +134,8 @@ export function StudioLiveQueue() {
     : waking
       ? wakingSubcopy(elapsed, progress.waitPhase)
       : "";
-  const showLiveGrids = runSources.some((s) => s.requested > 0);
+  const liveSources = runSources.filter((source) => visibleLiveTiles(source, activeRun).length > 0);
+  const showLiveGrids = liveSources.length > 0;
   const previewSource =
     runSources.find((s) => s.source_id && !s.source_id.startsWith("prep-")) ?? runSources[0];
   const rowThumb = liveRowThumbSrc(previewSource);
@@ -218,13 +222,14 @@ export function StudioLiveQueue() {
         </div>
 
         {showLiveGrids ? (
-          runSources.map((source) => (
+          liveSources.map((source) => (
             <LivePackGrid
               key={source.source_id}
               source={source}
               preparing={preparing}
               upload={upload}
               waking={waking}
+              active={activeRun}
             />
           ))
         ) : (

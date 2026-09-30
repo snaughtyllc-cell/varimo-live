@@ -105,7 +105,13 @@ export function useJobProgress(
   const sourcesKey = sources.map((s) => s.source_id).join(",");
   const preparing = isPreparingJob(jobId);
   useEffect(() => {
-    if (!jobId || sources.length === 0) return;
+    if (!jobId) {
+      const empty = initRun([]);
+      runRef.current = empty;
+      setRun(empty);
+      return;
+    }
+    if (sources.length === 0) return;
     const fresh = initRun(sources);
     runRef.current = fresh;
     setRun(fresh);
@@ -159,6 +165,7 @@ export function useJobProgress(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, sourcesKey]);
+  if (!jobId) return initRun([]);
   if (preparing) return initRun(sources);
   return run;
 }

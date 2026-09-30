@@ -7,6 +7,7 @@ interface PosterThumbProps {
   className?: string;
   fill?: boolean;
   label?: string;
+  onError?: () => void;
 }
 
 /** Static poster only — never mounts a <video>, so Gallery scroll does not request MP4s. */
@@ -16,6 +17,7 @@ export function PosterThumb({
   className,
   fill = false,
   label,
+  onError,
 }: PosterThumbProps) {
   return (
     <div
@@ -39,6 +41,7 @@ export function PosterThumb({
         <img
           src={src}
           alt=""
+          onError={onError}
           style={{
             width: "100%",
             height: "100%",

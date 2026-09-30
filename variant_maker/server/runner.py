@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Callable, Protocol
 
 from .. import pipeline, uniqueness
+from .copy_recover import is_variant_mp4
 from .events import VariantEvent
 
 # Stage-1 LocalRunner defaults (see plan Global Constraints).
@@ -72,6 +73,26 @@ def should_run_fast_local(
     if normalize_quality_mode(quality_mode) != "fast":
         return False
     return count <= max_local_fast
+
+
+def variant_files_landed(out_dir: str) -> bool:
+    """True when this pack already has a non-empty variant mp4 on disk."""
+    try:
+        names = os.listdir(out_dir)
+    except FileNotFoundError:
+        return False
+    for name in names:
+        path = os.path.join(out_dir, name)
+        try:
+            if (
+                is_variant_mp4(name)
+                and os.path.isfile(path)
+                and os.path.getsize(path) > 0
+            ):
+                return True
+        except OSError:
+            continue
+    return False
 
 
 FAST_JOBS_ENV = "VARIANT_FAST_JOBS"
@@ -262,16 +283,50 @@ class RoutingRunner:
             return self._fast_remote or self._remote
         return picked
 
+    def _gpu_if_fast_left_no_video(
+        self, primary: Runner, out_dir: str, exc: BaseException | None,
+    ) -> Runner | None:
+        """One GPU encode when Fast finished with no playable mp4. A landed file stays."""
+        if primary is not self._fast_remote or self._remote is primary:
+            return None
+        if variant_files_landed(out_dir):
+            return None
+        if exc is not None and "ended: CANCELLED" in str(exc):
+            return None
+        return self._remote
+
     def run(self, source_path: str, *, count: int, out_dir: str, source_id: str,
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
             quality_mode: str = DEFAULT_QUALITY_MODE,
             cancel_token=None) -> SourceResult:
-        return self._pick(quality_mode, count).run(
-            source_path, count=count, out_dir=out_dir, source_id=source_id,
-            on_event=on_event, allow_creative_escalate=allow_creative_escalate,
-            quality_mode=quality_mode, cancel_token=cancel_token,
+        primary = self._pick(quality_mode, count)
+        kwargs = {
+            "count": count, "out_dir": out_dir, "source_id": source_id, "on_event": on_event,
+            "allow_creative_escalate": allow_creative_escalate,
+            "quality_mode": quality_mode, "cancel_token": cancel_token,
+        }
+        try:
+            result = primary.run(source_path, **kwargs)
+        except Exception as exc:
+            fallback = self._gpu_if_fast_left_no_video(primary, out_dir, exc)
+            if fallback is None:
+                raise
+            print(
+                f"fast worker down for {source_id} ({type(exc).__name__}: {exc}); "
+                "retrying on the GPU endpoint",
+                flush=True,
+            )
+            return fallback.run(source_path, **kwargs)
+        fallback = self._gpu_if_fast_left_no_video(primary, out_dir, None)
+        if fallback is None:
+            return result
+        print(
+            f"fast worker returned no video for {source_id}; "
+            "retrying on the GPU endpoint",
+            flush=True,
         )
+        return fallback.run(source_path, **kwargs)
 
     def resume_run(self, *args, **kwargs) -> SourceResult:
         target = self._cloud(kwargs.get("quality_mode"), kwargs.get("count") or 1)

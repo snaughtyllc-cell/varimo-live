@@ -104,7 +104,16 @@ class HttpRunPodClient:
                 if status == "CANCELLED":
                     raise JobCancelled()
                 if status != "COMPLETED":
-                    raise RuntimeError(f"RunPod job {job_id} ended: {status}")
+                    detail = body.get("error") or ""
+                    if not isinstance(detail, str):
+                        detail = str(detail)
+                    detail = " ".join(detail.split())
+                    if len(detail) > 300:
+                        detail = detail[:300]
+                    msg = f"RunPod job {job_id} ended: {status}"
+                    if detail:
+                        msg = f"{msg}: {detail}"
+                    raise RuntimeError(msg)
                 if not saw_result:
                     for extra in self._completed_result(http, job_id, body):
                         if _is_result(extra):

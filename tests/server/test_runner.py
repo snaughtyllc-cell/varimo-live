@@ -160,7 +160,7 @@ def test_should_run_fast_local_only_tiny_fast_packs():
     assert should_run_fast_local("fast", 3, max_local_fast=0) is False
 
 
-def test_routing_runner_sends_tiny_fast_to_local_else_remote():
+def test_routing_runner_sends_tiny_fast_to_local_else_remote(tmp_path):
     from variant_maker.server.runner import RoutingRunner, SourceResult
 
     class Fake:
@@ -170,13 +170,17 @@ def test_routing_runner_sends_tiny_fast_to_local_else_remote():
 
         def run(self, *args, **kw):
             self.calls.append(kw)
-            return SourceResult(variants=[], manifest_path="")
+            os.makedirs(kw["out_dir"], exist_ok=True)
+            with open(os.path.join(kw["out_dir"], f"{self.name}.mp4"), "wb") as fh:
+                fh.write(b"mp4")
+            return SourceResult(variants=[], manifest_path=self.name)
 
     local, remote = Fake("local"), Fake("remote")
     router = RoutingRunner(local, remote, max_local_fast=3)
-    router.run("s.mp4", count=3, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="fast")
-    router.run("s.mp4", count=20, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="fast")
-    router.run("s.mp4", count=1, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="hq")
+    out = str(tmp_path)
+    router.run("s.mp4", count=3, out_dir=out, source_id="s", on_event=lambda e: None, quality_mode="fast")
+    router.run("s.mp4", count=20, out_dir=out, source_id="s", on_event=lambda e: None, quality_mode="fast")
+    router.run("s.mp4", count=1, out_dir=out, source_id="s", on_event=lambda e: None, quality_mode="hq")
     assert len(local.calls) == 1 and local.calls[0]["count"] == 3
     assert [c["count"] for c in remote.calls] == [20, 1]
     assert remote.calls[1]["quality_mode"] == "hq"
@@ -224,7 +228,7 @@ def test_routing_runner_sends_all_fast_to_fast_remote_when_set(tmp_path):
     assert gpu.resumes and gpu.resumes[0]["runpod_job_id"] == "rp2"
 
 
-def test_routing_runner_retries_gpu_when_fast_fails_before_done():
+def test_routing_runner_retries_gpu_when_fast_fails_before_done(tmp_path):
     from variant_maker.server.runner import RoutingRunner
 
     class FastDown:
@@ -237,12 +241,15 @@ def test_routing_runner_retries_gpu_when_fast_fails_before_done():
 
         def run(self, *args, **kw):
             self.calls.append(kw)
+            os.makedirs(kw["out_dir"], exist_ok=True)
+            with open(os.path.join(kw["out_dir"], "clip_gpu.mp4"), "wb") as fh:
+                fh.write(b"mp4")
             return SourceResult(variants=[], manifest_path="gpu")
 
     gpu = Gpu()
     router = RoutingRunner(object(), gpu, fast_remote=FastDown(), max_local_fast=3)
     out = router.run(
-        "s.mp4", count=8, out_dir="o", source_id="s",
+        "s.mp4", count=8, out_dir=str(tmp_path), source_id="s",
         on_event=lambda e: None, quality_mode="fast",
     )
     assert out.manifest_path == "gpu"
@@ -301,6 +308,9 @@ def test_routing_runner_retries_gpu_when_fast_scores_but_no_file_lands(tmp_path)
 
         def run(self, *args, **kw):
             self.calls.append(kw)
+            os.makedirs(kw["out_dir"], exist_ok=True)
+            with open(os.path.join(kw["out_dir"], "clip_gpu.mp4"), "wb") as fh:
+                fh.write(b"mp4")
             return SourceResult(variants=[], manifest_path="gpu")
 
     gpu = Gpu()
@@ -327,6 +337,9 @@ def test_routing_runner_retries_gpu_when_fast_times_out_with_no_file(tmp_path):
 
         def run(self, *args, **kw):
             self.calls += 1
+            os.makedirs(kw["out_dir"], exist_ok=True)
+            with open(os.path.join(kw["out_dir"], "clip_gpu.mp4"), "wb") as fh:
+                fh.write(b"mp4")
             return SourceResult(variants=[], manifest_path="gpu")
 
     gpu = Gpu()
@@ -366,6 +379,115 @@ def test_routing_runner_does_not_retry_when_timeout_already_landed_a_file(tmp_pa
             on_event=lambda e: None, quality_mode="fast",
         )
     assert gpu.calls == 0
+
+
+def test_routing_runner_encodes_locally_when_remotes_leave_no_video(tmp_path):
+    from variant_maker.server.runner import RoutingRunner
+
+    class Down:
+        def run(self, *args, **kw):
+            raise RuntimeError("RunPod job abc ended: FAILED")
+
+    class Local:
+        def __init__(self):
+            self.calls = []
+
+        def run(self, *args, **kw):
+            self.calls.append(kw)
+            os.makedirs(kw["out_dir"], exist_ok=True)
+            with open(os.path.join(kw["out_dir"], "clip_local.mp4"), "wb") as fh:
+                fh.write(b"mp4")
+            return SourceResult(variants=[], manifest_path="local")
+
+    local = Local()
+    router = RoutingRunner(local, Down(), fast_remote=Down(), max_local_fast=3)
+    out = router.run(
+        "s.mp4", count=3, out_dir=str(tmp_path), source_id="s",
+        on_event=lambda e: None, quality_mode="fast",
+    )
+    assert out.manifest_path == "local"
+    assert len(local.calls) == 1
+    assert local.calls[0]["quality_mode"] == "fast"
+    assert local.calls[0]["count"] == 3
+
+
+def test_routing_runner_encodes_locally_when_remotes_return_no_file(tmp_path):
+    from variant_maker.server.runner import RoutingRunner
+
+    class Empty:
+        def __init__(self):
+            self.calls = 0
+
+        def run(self, *args, **kw):
+            self.calls += 1
+            return SourceResult(variants=[], manifest_path="empty")
+
+    class Local:
+        def __init__(self):
+            self.calls = []
+
+        def run(self, *args, **kw):
+            self.calls.append(kw)
+            os.makedirs(kw["out_dir"], exist_ok=True)
+            with open(os.path.join(kw["out_dir"], "clip_local.mp4"), "wb") as fh:
+                fh.write(b"mp4")
+            return SourceResult(variants=[], manifest_path="local")
+
+    local = Local()
+    fast, gpu = Empty(), Empty()
+    router = RoutingRunner(local, gpu, fast_remote=fast)
+    out = router.run(
+        "s.mp4", count=8, out_dir=str(tmp_path), source_id="s",
+        on_event=lambda e: None, quality_mode="fast",
+    )
+    assert fast.calls == 1
+    assert gpu.calls == 1
+    assert out.manifest_path == "local"
+    assert len(local.calls) == 1
+
+
+def test_routing_runner_does_not_encode_hq_on_studio_cpu(tmp_path):
+    from variant_maker.server.runner import RoutingRunner
+
+    class Down:
+        def run(self, *args, **kw):
+            raise RuntimeError("RunPod job abc ended: FAILED")
+
+    class Local:
+        def run(self, *args, **kw):
+            raise AssertionError("hq must stay on the gpu endpoint")
+
+    router = RoutingRunner(Local(), Down(), fast_remote=Down())
+    with pytest.raises(RuntimeError, match="ended: FAILED"):
+        router.run(
+            "s.mp4", count=1, out_dir=str(tmp_path), source_id="s",
+            on_event=lambda e: None, quality_mode="hq",
+        )
+
+
+def test_routing_runner_does_not_fall_through_on_cancel(tmp_path):
+    from variant_maker.server.runner import RoutingRunner
+
+    class Cancelled:
+        def run(self, *args, **kw):
+            raise RuntimeError("RunPod job abc ended: CANCELLED")
+
+    class Local:
+        def __init__(self):
+            self.calls = 0
+
+        def run(self, *args, **kw):
+            self.calls += 1
+            raise AssertionError("cancel must not encode again")
+
+    local = Local()
+    router = RoutingRunner(local, Cancelled(), fast_remote=Cancelled())
+    with pytest.raises(RuntimeError, match="CANCELLED"):
+        router.run(
+            "s.mp4", count=3, out_dir=str(tmp_path), source_id="s",
+            on_event=lambda e: None, quality_mode="fast",
+        )
+    assert local.calls == 0
 
 
 def test_encode_jobs_for_worker_ignores_container_cpu_count(monkeypatch):

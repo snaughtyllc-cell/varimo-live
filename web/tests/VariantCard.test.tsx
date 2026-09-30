@@ -195,6 +195,22 @@ describe("VariantCard aspect", () => {
     expect(thumb).toHaveAttribute("data-fill", "true");
   });
 
+  it("shows the variant video when the look still is missing", () => {
+    const { container } = render(
+      <VariantCard
+        variant={variant({ look_var_url: null })}
+        sourceId="s1"
+        onOpen={() => {}}
+        selected={false}
+        onToggle={() => {}}
+      />,
+    );
+    const video = container.querySelector("video");
+    expect(video).toBeTruthy();
+    expect(video?.getAttribute("src")).toContain("/files/v01.mp4");
+    expect(screen.queryByText("Not ready")).not.toBeInTheDocument();
+  });
+
   it("keeps a 9:16 box for variants that are not ready", () => {
     render(
       <VariantCard

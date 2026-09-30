@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from variant_maker.server.events import VariantEvent, event_to_dict
@@ -180,7 +182,7 @@ def test_routing_runner_sends_tiny_fast_to_local_else_remote():
     assert remote.calls[1]["quality_mode"] == "hq"
 
 
-def test_routing_runner_sends_all_fast_to_fast_remote_when_set():
+def test_routing_runner_sends_all_fast_to_fast_remote_when_set(tmp_path):
     from variant_maker.server.runner import RoutingRunner, SourceResult
 
     class Fake:
@@ -191,6 +193,10 @@ def test_routing_runner_sends_all_fast_to_fast_remote_when_set():
 
         def run(self, *args, **kw):
             self.calls.append(kw)
+            os.makedirs(kw["out_dir"], exist_ok=True)
+            path = os.path.join(kw["out_dir"], f"clip_{len(self.calls):08x}.mp4")
+            with open(path, "wb") as fh:
+                fh.write(b"mp4")
             return SourceResult(variants=[], manifest_path="")
 
         def resume_run(self, *args, **kw):
@@ -199,9 +205,10 @@ def test_routing_runner_sends_all_fast_to_fast_remote_when_set():
 
     local, gpu, fast = Fake("local"), Fake("gpu"), Fake("fast")
     router = RoutingRunner(local, gpu, fast_remote=fast, max_local_fast=3)
-    router.run("s.mp4", count=3, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="fast")
-    router.run("s.mp4", count=20, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="fast")
-    router.run("s.mp4", count=1, out_dir="o", source_id="s", on_event=lambda e: None, quality_mode="hq")
+    out = str(tmp_path)
+    router.run("s.mp4", count=3, out_dir=out, source_id="s", on_event=lambda e: None, quality_mode="fast")
+    router.run("s.mp4", count=20, out_dir=out, source_id="s", on_event=lambda e: None, quality_mode="fast")
+    router.run("s.mp4", count=1, out_dir=out, source_id="s", on_event=lambda e: None, quality_mode="hq")
     assert not local.calls
     assert [c["count"] for c in fast.calls] == [3, 20]
     assert gpu.calls[0]["count"] == 1 and gpu.calls[0]["quality_mode"] == "hq"
@@ -244,14 +251,18 @@ def test_routing_runner_retries_gpu_when_fast_fails_before_done():
     assert gpu.calls[0]["count"] == 8
 
 
-def test_routing_runner_does_not_retry_gpu_after_a_done_variant():
+def test_routing_runner_keeps_fast_pack_when_a_copy_already_landed(tmp_path):
     from variant_maker.server.runner import RoutingRunner
+
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "clip_abcd1234.mp4").write_bytes(b"mp4")
 
     class FastPartial:
         def run(self, *args, on_event, **kw):
             on_event(VariantEvent(
                 source_id=kw["source_id"], index=1, state="done",
-                status="ok", filename="clip.mp4",
+                status="ok", filename="clip_abcd1234.mp4",
             ))
             raise RuntimeError("RunPod job abc ended: FAILED")
 
@@ -261,19 +272,49 @@ def test_routing_runner_does_not_retry_gpu_after_a_done_variant():
 
         def run(self, *args, **kw):
             self.calls += 1
-            raise AssertionError("gpu should not run after a done variant")
+            raise AssertionError("gpu should not re-encode a pack that already has a file")
 
     gpu = Gpu()
     router = RoutingRunner(object(), gpu, fast_remote=FastPartial())
     with pytest.raises(RuntimeError, match="ended: FAILED"):
         router.run(
-            "s.mp4", count=8, out_dir="o", source_id="s",
+            "s.mp4", count=8, out_dir=str(out), source_id="s",
             on_event=lambda e: None, quality_mode="fast",
         )
     assert gpu.calls == 0
 
 
-def test_routing_runner_does_not_retry_gpu_on_timeout():
+def test_routing_runner_retries_gpu_when_fast_scores_but_no_file_lands(tmp_path):
+    from variant_maker.server.runner import RoutingRunner
+
+    class FastGhost:
+        def run(self, *args, on_event, **kw):
+            on_event(VariantEvent(
+                source_id=kw["source_id"], index=1, state="done",
+                status="ok", filename="clip_abcd1234.mp4", quality={"vmaf": 95},
+            ))
+            return SourceResult(variants=[], manifest_path="fast-empty")
+
+    class Gpu:
+        def __init__(self):
+            self.calls = []
+
+        def run(self, *args, **kw):
+            self.calls.append(kw)
+            return SourceResult(variants=[], manifest_path="gpu")
+
+    gpu = Gpu()
+    router = RoutingRunner(object(), gpu, fast_remote=FastGhost())
+    out = router.run(
+        "s.mp4", count=8, out_dir=str(tmp_path), source_id="s",
+        on_event=lambda e: None, quality_mode="fast",
+    )
+    assert out.manifest_path == "gpu"
+    assert len(gpu.calls) == 1
+    assert gpu.calls[0]["quality_mode"] == "fast"
+
+
+def test_routing_runner_retries_gpu_when_fast_times_out_with_no_file(tmp_path):
     from variant_maker.server.runner import RoutingRunner
 
     class FastTimeout:
@@ -286,13 +327,42 @@ def test_routing_runner_does_not_retry_gpu_on_timeout():
 
         def run(self, *args, **kw):
             self.calls += 1
-            raise AssertionError("timeout must not start a second encode")
+            return SourceResult(variants=[], manifest_path="gpu")
+
+    gpu = Gpu()
+    router = RoutingRunner(object(), gpu, fast_remote=FastTimeout())
+    out = router.run(
+        "s.mp4", count=8, out_dir=str(tmp_path), source_id="s",
+        on_event=lambda e: None, quality_mode="fast",
+    )
+    assert gpu.calls == 1
+    assert out.manifest_path == "gpu"
+
+
+def test_routing_runner_does_not_retry_when_timeout_already_landed_a_file(tmp_path):
+    from variant_maker.server.runner import RoutingRunner
+
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    (out_dir / "clip_abcd1234.mp4").write_bytes(b"mp4")
+
+    class FastTimeout:
+        def run(self, *args, **kw):
+            raise RuntimeError("RunPod job abc ended: TIMED_OUT")
+
+    class Gpu:
+        def __init__(self):
+            self.calls = 0
+
+        def run(self, *args, **kw):
+            self.calls += 1
+            raise AssertionError("timeout must not re-encode a pack that already has a file")
 
     gpu = Gpu()
     router = RoutingRunner(object(), gpu, fast_remote=FastTimeout())
     with pytest.raises(RuntimeError, match="TIMED_OUT"):
         router.run(
-            "s.mp4", count=8, out_dir="o", source_id="s",
+            "s.mp4", count=8, out_dir=str(out_dir), source_id="s",
             on_event=lambda e: None, quality_mode="fast",
         )
     assert gpu.calls == 0

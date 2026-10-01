@@ -168,16 +168,14 @@ def _is_worker_timeout(raw: str) -> bool:
 
 
 def _public_job_error(exc: BaseException) -> str:
-    """Short UI string. Only a real worker timeout mentions the 20-minute cap."""
+    """Short UI string. Only a real worker timeout mentions the 25-minute cap."""
     raw = str(exc)
     if "ended: CANCELLED" in raw:
         return USER_CANCEL_MSG
     if _is_worker_timeout(raw):
         return (
-            "Job hit the worker time limit before the pack finished. "
-            "A 20-pack one-at-a-time often exceeds 20 minutes — New run. "
-            "Later Fast packs encode several variants at once. "
-            "If this keeps happening, set RunPod execution timeout to 3600s."
+            "Job hit the 25-minute worker limit before the pack finished. "
+            "New run to try again."
         )
     if "ended: FAILED" in raw:
         return (

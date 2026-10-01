@@ -24,6 +24,10 @@ from .runpod_client import RunPodClient
 from .storage import ObjectStore
 
 DEFAULT_QUALITY_MODE = "hq"   # Tier-2 neural upscale on the GPU
+# RunPod's default execution timeout is 600s. A CPU 20-pack finishes the
+# first wave and dies around copy 10–12. Per-job policy overrides the
+# endpoint setting.
+EXECUTION_TIMEOUT_MS = 25 * 60 * 1000
 
 
 def _quality_mode() -> str:
@@ -61,7 +65,7 @@ class RunPodServerlessRunner:
             "min_bits_vs_peers": MIN_BITS_VS_PEERS,
             "auto_tune": limits.get("auto_tune", True),
             "jobs": encode_jobs_for_worker(quality_mode, count),
-        }}
+        }, "policy": {"executionTimeout": EXECUTION_TIMEOUT_MS}}
         return self._consume_stream(
             self._client.stream_run(payload, cancel_token=cancel_token),
             out_dir=out_dir, source_id=source_id, on_event=on_event,

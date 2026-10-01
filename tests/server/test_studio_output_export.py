@@ -613,3 +613,59 @@ def test_second_finish_hook_does_not_duplicate_upload(tmp_path):
     assert _wait_landed(drive, folder)
     assert len(exports.list()) == 1
     assert len(_landed(drive, folder)) == 1
+
+
+def test_finished_20_uploads_copies_that_land_after_the_first_pull(tmp_path):
+    """Queue can say 20 done while four mp4s are not on disk yet.
+
+    Export used to upload the 16 that were ready and leave the rest off Drive.
+    """
+    from pathlib import Path
+
+    ws = Workspace(str(tmp_path))
+    store = JobStore(ws, FakeRunner({}))
+    job = Job(
+        job_id="j1", count=20, created_utc="2026-01-01T00:00:00Z", state="done",
+        export_destination_id="dst_out",
+    )
+    src = JobSource(source_id="s1", filename="clip.mp4", requested=20)
+    out = Path(ws.source_out_dir("j1", "s1"))
+    for i in range(1, 21):
+        filename = f"v{i:02d}.mp4"
+        if i <= 16:
+            (out / filename).write_bytes(f"v{i}".encode())
+        src.variants.append(VariantInfo(
+            source_id="s1", index=i, filename=filename, status="ok", quality={},
+        ))
+    job.sources.append(src)
+    store._jobs["j1"] = job
+    store._source_index["s1"] = ("j1", src)
+    pulls = {"n": 0}
+
+    def pull(source_id):
+        pulls["n"] += 1
+        if pulls["n"] < 2:
+            return
+        for i in range(17, 21):
+            (out / f"v{i:02d}.mp4").write_bytes(f"late{i}".encode())
+
+    store._pull_missing_outputs = pull
+    drive = FakeDrive()
+    folder = drive.make_folder("out")
+    dest = DestinationStore(ws.destinations_path()).create(
+        name="Reels out", folder_id=folder, auth_mode="oauth",
+    )
+    export = start_job_export(
+        job=job, job_store=store, dest=dest,
+        export_store=ExportStore(ws.exports_dir()), drive=drive,
+    )
+    assert export is not None
+    deadline = time.time() + 8
+    landed = []
+    while time.time() < deadline:
+        landed = _landed(drive, folder)
+        if len(landed) >= 20:
+            break
+        time.sleep(0.05)
+    assert len(landed) == 20
+    assert {n["name"] for n in landed} == {f"v{i:02d}.mp4" for i in range(1, 21)}

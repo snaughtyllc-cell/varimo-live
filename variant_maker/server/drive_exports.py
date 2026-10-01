@@ -15,9 +15,9 @@ import os
 import secrets
 import tempfile
 import threading
-from dataclasses import dataclass, field
-
+import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any
 
 from variant_maker.farm.drive import DriveClient
@@ -107,6 +107,36 @@ def refs_for_finished_job(job: Job) -> list[VariantRef]:
     return refs
 
 
+# A finished pack can say 20 done while the last copies are still landing.
+# One pass drops those, and Drive keeps the short set.
+EXPORT_COPY_ATTEMPTS = 3
+EXPORT_COPY_WAIT_S = 1.0
+UPLOAD_ATTEMPTS = 3
+UPLOAD_RETRY_WAIT_S = 0.5
+
+
+def export_files_for_job(job_store: JobStore, job: Job) -> list[ExportFile]:
+    """Shipped copies for a finished pack, including ones that land a moment late."""
+    refs = refs_for_finished_job(job)
+    if not refs:
+        return []
+    files: list[ExportFile] = []
+    for attempt in range(EXPORT_COPY_ATTEMPTS):
+        if attempt:
+            for source in job.sources:
+                pull = getattr(job_store, "_pull_missing_outputs", None)
+                if callable(pull):
+                    pull(source.source_id)
+            time.sleep(EXPORT_COPY_WAIT_S)
+        try:
+            files = build_export_files(job_store, refs)
+        except ExportError:
+            files = []
+        if len(files) >= len(refs):
+            return files
+    return files
+
+
 def start_job_export(
     *,
     job: Job,
@@ -119,7 +149,9 @@ def start_job_export(
     refs = refs_for_finished_job(job)
     if not refs:
         return None
-    files = build_export_files(job_store, refs)
+    files = export_files_for_job(job_store, job)
+    if not files:
+        return None
     export = export_store.create(
         destination_id=dest.id, folder_id=dest.folder_id, files=files,
     )
@@ -281,22 +313,40 @@ class ExportRunner:
         job = self._store.get(export_id)
         if job is None:
             return
-        for f in job.files:
-            if f.status not in ("pending", "failed"):
-                continue
-            f.status = "uploading"
-            f.error = None
-            self._store.save(job)
-            try:
-                existing = {d.name for d in self._drive.list_files(job.folder_id)}
-                name = unique_upload_name(f.filename, existing)
-                f.drive_file_id = self._drive.upload(f.local_path, job.folder_id, name=name)
-                f.status = "succeeded"
+        for attempt in range(UPLOAD_ATTEMPTS):
+            job = self._store.get(export_id)
+            if job is None:
+                return
+            for f in job.files:
+                if f.status not in ("pending", "failed", "uploading"):
+                    continue
+                if not os.path.isfile(f.local_path):
+                    f.status = "failed"
+                    f.error = "file not on disk"
+                    self._store.save(job)
+                    continue
+                f.status = "uploading"
                 f.error = None
-            except Exception as exc:
-                f.status = "failed"
-                f.error = str(exc)
-            self._store.save(job)
+                self._store.save(job)
+                try:
+                    existing = {d.name for d in self._drive.list_files(job.folder_id)}
+                    name = unique_upload_name(f.filename, existing)
+                    f.drive_file_id = self._drive.upload(
+                        f.local_path, job.folder_id, name=name,
+                    )
+                    f.status = "succeeded"
+                    f.error = None
+                except Exception as exc:
+                    f.status = "failed"
+                    f.error = str(exc)
+                self._store.save(job)
+            job = self._store.get(export_id)
+            if job is None:
+                return
+            if all(f.status == "succeeded" for f in job.files):
+                break
+            if attempt + 1 < UPLOAD_ATTEMPTS:
+                time.sleep(UPLOAD_RETRY_WAIT_S)
 
         statuses = {f.status for f in job.files}
         if statuses == {"succeeded"}:

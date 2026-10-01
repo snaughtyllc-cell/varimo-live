@@ -144,6 +144,50 @@ def test_runner_uploads_and_suffixes_collision(tmp_path):
     assert job.files[0].drive_file_id
 
 
+def test_runner_retries_a_transient_drive_error(tmp_path):
+    """A quota blip must not leave four of a 20-pack off Drive."""
+    store, ws = _store_with_ok(tmp_path)
+    out = Path(ws.source_out_dir("j1", "s1"))
+    src = store.get("j1").sources[0]
+    for i in range(2, 21):
+        filename = f"v{i:02d}.mp4"
+        (out / filename).write_bytes(f"v{i}".encode())
+        src.variants.append(VariantInfo(
+            source_id="s1", index=i, filename=filename, status="ok", quality={},
+        ))
+    drive = FakeDrive()
+    folder = drive.make_folder("out")
+    exports = ExportStore(ws.exports_dir())
+    refs = [VariantRef("s1", i) for i in range(1, 21)]
+    files = build_export_files(store, refs)
+    job = exports.create(destination_id="dst_x", folder_id=folder, files=files)
+    flaky = {f"v{i:02d}.mp4" for i in range(17, 21)}
+
+    class FlakyDrive:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+        def upload(self, local_path, parent_id, name=None):
+            n = name or Path(local_path).name
+            if n in flaky:
+                flaky.discard(n)
+                raise RuntimeError("quota exceeded")
+            return self._inner.upload(local_path, parent_id, name)
+
+    ExportRunner(FlakyDrive(drive), exports).start(job)
+    for _ in range(80):
+        job = exports.get(job.export_id)
+        if job.state == "succeeded":
+            break
+        time.sleep(0.05)
+    assert job.state == "succeeded"
+    assert all(f.status == "succeeded" for f in job.files)
+    assert {f.name for f in drive.list_files(folder)} == {f"v{i:02d}.mp4" for i in range(1, 21)}
+
+
 def test_partial_failure_and_retry(tmp_path):
     store, ws = _store_with_ok(tmp_path)
     # add second ok file
@@ -161,27 +205,28 @@ def test_partial_failure_and_retry(tmp_path):
     class FlakyDrive:
         def __init__(self, inner):
             self._inner = inner
-            self._fail_once = {"v01.mp4"}
+            self.fail = True
 
         def __getattr__(self, name):
             return getattr(self._inner, name)
 
         def upload(self, local_path, parent_id, name=None):
             n = name or Path(local_path).name
-            if n in self._fail_once:
-                self._fail_once.discard(n)
+            if self.fail and n == "v01.mp4":
                 raise RuntimeError("quota exceeded")
             return self._inner.upload(local_path, parent_id, name)
 
-    runner = ExportRunner(FlakyDrive(drive), exports)
+    flaky = FlakyDrive(drive)
+    runner = ExportRunner(flaky, exports)
     runner.start(job)
-    for _ in range(50):
+    for _ in range(80):
         job = exports.get(job.export_id)
         if job.state in ("succeeded", "partial", "failed"):
             break
         time.sleep(0.05)
     assert job.state == "partial"
     assert sum(1 for f in job.files if f.status == "failed") == 1
+    flaky.fail = False
     job = runner.retry_failed(job.export_id)
     for _ in range(50):
         job = exports.get(job.export_id)

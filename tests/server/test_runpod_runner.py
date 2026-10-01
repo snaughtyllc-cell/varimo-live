@@ -172,6 +172,33 @@ def test_runner_quality_mode_env_fast(tmp_path, monkeypatch):
     assert captured["jobs"] == 1
 
 
+def test_cpu_pack_requests_twenty_five_minute_execution_timeout(tmp_path):
+    """RunPod's default 10-minute cap kills a Fast 20 around copy 10–12."""
+    captured = {}
+
+    class CapturingClient:
+        def stream_run(self, payload, cancel_token=None):
+            captured.clear()
+            captured.update(payload)
+            return iter([{"type": "result", "variants": [], "manifest_key": None}])
+
+    store = FakeObjectStore()
+    src = tmp_path / "in.mp4"
+    src.write_bytes(b"x")
+    runner = RunPodServerlessRunner(store, CapturingClient())
+    runner.run(
+        str(src), count=20, out_dir=str(tmp_path / "fast"), source_id="s",
+        on_event=lambda e: None, quality_mode="fast",
+    )
+    assert captured["input"]["quality_mode"] == "fast"
+    assert captured["policy"]["executionTimeout"] == 25 * 60 * 1000
+    runner.run(
+        str(src), count=3, out_dir=str(tmp_path / "hq"), source_id="h",
+        on_event=lambda e: None, quality_mode="hq",
+    )
+    assert captured["policy"]["executionTimeout"] == 25 * 60 * 1000
+
+
 def test_fast_20_pack_payload_jobs_not_capped_to_studio_cpus(tmp_path, monkeypatch):
     captured = {}
 

@@ -350,13 +350,14 @@ class _TimeoutRunner:
         raise RuntimeError("RunPod job abc ended: TIMED_OUT")
 
 
-def test_runner_timeout_mentions_twenty_minute_cap(tmp_path):
+def test_runner_timeout_mentions_twenty_five_minute_cap(tmp_path):
     store = JobStore(Workspace(str(tmp_path)), _TimeoutRunner())
     job = store.create_job([("a.mp4", b"x")], count=1, quality_mode="fast")
     store.wait(job.job_id, timeout=5)
     assert job.state == "done"
     assert job.error is not None
-    assert "20 minutes" in job.error
+    assert "25-minute" in job.error
+    assert "20 minutes" not in job.error
     assert "New run" in job.error
 
 

@@ -10,7 +10,7 @@ export function hqBatchHint(qualityMode: "fast" | "hq", totalVariants: number): 
       `${totalVariants} HQ variants run one after another on one GPU. ` +
       `The usual ~20 should stay Fast. HQ is for 1–${HQ_HERO_COUNT} hero takes. ` +
       `A ~$2/hr 4090-class card speeds the AI step; it does not 20× the batch. ` +
-      `RunPod currently kills a job at 20 minutes.`
+      `RunPod currently kills a job at 25 minutes.`
     );
   }
   return (

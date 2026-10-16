@@ -33,5 +33,7 @@ export async function POST(req: NextRequest) {
   const contentType = res.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
   appendSetCookies(res.headers, headers);
-  return new Response(await res.text(), { status: res.status, headers });
+  // 204/205/304 must not carry a body: Response() throws on one, which dropped the session cookie.
+  const bodyless = res.status === 204 || res.status === 205 || res.status === 304;
+  return new Response(bodyless ? null : await res.text(), { status: res.status, headers });
 }

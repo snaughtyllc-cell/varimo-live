@@ -113,6 +113,13 @@ export const STUDIO_DESTINATIONS: readonly StudioDestination[] = [
     tab: "none",
     summary: "Agency subscription checkout. Stripe paywall; webhook invites the payer. No app tabs.",
   },
+  {
+    href: "/sso/hq",
+    label: "HQ sign-in",
+    audience: "everyone",
+    tab: "none",
+    summary: "Hidden HQ handoff. Reads a fragment token and signs into an existing account. No app tabs.",
+  },
 ] as const;
 
 /** Phone bottom bar + desktop primary row. */

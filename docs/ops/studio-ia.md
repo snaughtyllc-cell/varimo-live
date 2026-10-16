@@ -24,7 +24,7 @@ describe v1 only. Do not treat them as the current product.
 | Agency member | **Studio · Gallery · Drops · Workflows · Drive** + **How to** (no Analytics) |
 | Agency owner | + **Team** (invite VAs) + **Analytics** |
 | Site admin (`SITE_ADMIN_EMAILS`) | all of the above + **Admin · Diagnostics** |
-| Unauthenticated | **Login** only |
+| Unauthenticated | **Login**, pricing, landing, and the HQ sign-in handoff |
 
 Missing/untagged `experience` is **agency** so Jeff Tingz and older
 operator studios keep Team. New-studio invites write **solo** on
@@ -56,6 +56,7 @@ row + progress card.
 | Admin | `/admin` | site admin | More | Workspaces, join/new-workspace invites, view-as. |
 | Diagnostics | `/diagnostics` | site admin (or auth off) | More | Failed encodes (`uniqueness_fail` / `corrupt` / `best_effort`). Operators never use this. |
 | Login | `/login` | unauthenticated | — | Invite-only email + password. No app tabs. |
+| HQ sign-in | `/sso/hq` | unauthenticated handoff | — | HQ opens this with a fragment token. Signs into an existing account. No app tabs. |
 
 ## Nested surfaces a redesign must include
 

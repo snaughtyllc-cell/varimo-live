@@ -74,7 +74,7 @@ beforeEach(() => {
 });
 
 describe("AuthGate", () => {
-  it.each(["/", "/landing", "/pricing"])("renders %s while auth is unresolved", (pathname) => {
+  it.each(["/", "/landing", "/pricing", "/sso/hq"])("renders %s while auth is unresolved", (pathname) => {
     nav.pathname = pathname;
     render(<AuthGate><div>Public content</div></AuthGate>);
     expect(screen.getByText("Public content")).toBeInTheDocument();

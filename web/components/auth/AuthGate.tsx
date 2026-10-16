@@ -10,7 +10,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { data, isLoading } = useAuthMe();
-  const isPublic = pathname === "/" || pathname === "/login" || pathname === "/pricing" || pathname === "/landing";
+  const isPublic = pathname === "/" || pathname === "/login" || pathname === "/pricing"
+    || pathname === "/landing" || pathname === "/sso/hq";
   const needsLogin = Boolean(data?.auth_required && !data.email);
   const loggedIn = Boolean(data?.email);
 

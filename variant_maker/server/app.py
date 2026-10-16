@@ -80,6 +80,15 @@ from .drops import DropPack, build_drop_packs
 from .events import VariantEvent, event_to_dict
 from .experience import resolve_experience
 from .gallery_folders import GalleryFolderError, GalleryFolderStore
+from .hq_sso import (
+    HqSsoError,
+    JtiStore,
+    parse_token_body,
+    read_sso_secret,
+    sso_failure,
+    verify_hq_token,
+    wall_now,
+)
 from .instagram_insights import (
     IgMedia,
     InstagramSyncStamp,
@@ -594,6 +603,11 @@ def create_app(
             environ=auth_env if auth_environ is not None else None,
         )
         login_pending = OAuthPendingStore(os.path.join(auth_dir, "login_pending.json"))
+
+    sso_secret = read_sso_secret(auth_env)
+    sso_jti: JtiStore | None = None
+    if auth_on and sso_secret:
+        sso_jti = JtiStore(os.path.join(data_dir, "auth", "hq_sso_jti.json"))
 
     store = JobStoreProxy(fallback_store)
     app.state.store = store
@@ -1523,6 +1537,33 @@ def create_app(
             user = tenants.get_user(user.email) or user
         _set_session_cookie(response, request, user)
         return _auth_me_out(user)
+
+    @app.post("/api/auth/hq")
+    async def auth_hq(request: Request) -> Response:
+        if not auth_on or tenants is None or sso_jti is None or not sso_secret:
+            status, detail = sso_failure("disabled")
+            raise HTTPException(status_code=status, detail=detail)
+        try:
+            token = parse_token_body(await request.body())
+            claims = verify_hq_token(token, sso_secret, now=wall_now())
+        except HqSsoError as exc:
+            status, detail = sso_failure(exc.code)
+            raise HTTPException(status_code=status, detail=detail) from None
+        user = tenants.get_user(claims["email"])
+        if user is None or not user.workspace_id:
+            status, detail = sso_failure("unknown_email")
+            raise HTTPException(status_code=status, detail=detail)
+        try:
+            fresh = sso_jti.consume(claims["jti"], claims["exp"], now=wall_now())
+        except HqSsoError as exc:
+            status, detail = sso_failure(exc.code)
+            raise HTTPException(status_code=status, detail=detail) from None
+        if not fresh:
+            status, detail = sso_failure("replay")
+            raise HTTPException(status_code=status, detail=detail)
+        resp = Response(status_code=204)
+        _set_session_cookie(resp, request, user)
+        return resp
 
     @app.post("/api/auth/password/set", status_code=204)
     def auth_password_set(request: Request, body: PasswordSetIn) -> Response:

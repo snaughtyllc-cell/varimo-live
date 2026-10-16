@@ -14,6 +14,7 @@ PUBLIC_API_PATHS = frozenset({
     "/api/auth/me",
     "/api/auth/logout",
     "/api/auth/password",
+    "/api/auth/hq",
     "/api/auth/google/start",
     "/api/auth/google/callback",
     "/api/billing/plans",

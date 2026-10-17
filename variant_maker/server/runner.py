@@ -160,6 +160,7 @@ class VariantResult:
     look_mae: float | None = None
     look_src: str | None = None
     look_var: str | None = None
+    object_key: str | None = None
 
 
 @dataclass

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { captureVideoPoster } from "@/lib/videoPoster";
+import { captureVideoFrame, captureVideoPoster } from "@/lib/videoPoster";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -46,6 +46,13 @@ describe("captureVideoPoster", () => {
 
     const file = new File(["x"], "gym.mp4", { type: "video/mp4" });
     await expect(captureVideoPoster(file, 500)).resolves.toBe("data:image/jpeg;base64,frame");
+    const frame = await captureVideoFrame(file, 500);
+    expect(frame).toEqual({
+      poster: "data:image/jpeg;base64,frame",
+      width: 1080,
+      height: 1920,
+      duration: 4,
+    });
     expect(drawImage).toHaveBeenCalled();
   });
 });

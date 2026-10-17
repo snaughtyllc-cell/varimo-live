@@ -5,6 +5,7 @@ description = "Local-first AI video variant generator (FFmpeg core + optional ne
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.1",
+    "pillow>=10",
 ]
 
 [project.optional-dependencies]
@@ -34,6 +35,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["variant_maker*"]
+
+[tool.setuptools.package-data]
+variant_maker = ["fonts/*.ttf", "fonts/NOTICE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

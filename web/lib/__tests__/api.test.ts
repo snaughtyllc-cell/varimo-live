@@ -124,6 +124,25 @@ describe("createJob posts multipart with files + count", () => {
     expect(body.get("export_destination_id")).toBe("dst_out");
   });
 
+  it("sends on-screen text after the Drive export folder", async () => {
+    const fetchMock = mockStudio(async () =>
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
+    const f = new File([new Uint8Array([1, 2])], "a.mp4", { type: "video/mp4" });
+    const project = {
+      captions: [{ text: "Sale", box_ids: ["A"] }],
+      boxes: [{ id: "A", x: 0.1, y: 0.2, w: 0.4, h: 0.2 }],
+      look: { style: "classic", background: "solid", color: "#FFFFFF" },
+    };
+    await api.createJob(
+      [f], 3, true, "fast", false, "none", "", undefined, "dst_out", [project, project],
+    );
+    const jobCall = fetchMock.mock.calls.find((c) => String(c[0]) === "/api/jobs");
+    const body = (jobCall![1] as RequestInit).body as FormData;
+    expect(body.get("export_destination_id")).toBe("dst_out");
+    expect(JSON.parse(String(body.get("onscreens")))).toEqual([project, project]);
+    expect(body.get("onscreen")).toBeNull();
+  });
+
   it("sends prep_mode hq when reconstruct-first is on", async () => {
     const fetchMock = mockStudio(async () =>
       new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }));
@@ -585,6 +604,28 @@ describe("createJobFromDrive", () => {
       caption_prompt: "",
       caption_prompts: [],
       export_destination_id: "dst_out",
+    });
+  });
+
+  it("sends onscreens and keeps the output folder", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ job_id: "j1", sources: [] }), { status: 201 }),
+    );
+    const project = {
+      captions: [{ text: "Sale", box_ids: ["A"] }],
+      boxes: [{ id: "A", x: 0.1, y: 0.2, w: 0.4, h: 0.2 }],
+      look: { style: "classic", background: "solid", color: "#FFFFFF" },
+    };
+    await api.createJobFromDrive({
+      destinationId: "dst_in",
+      fileIds: ["f1"],
+      count: 8,
+      exportDestinationId: "dst_out",
+      onscreens: [project],
+    });
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toMatchObject({
+      export_destination_id: "dst_out",
+      onscreens: [project],
     });
   });
 });

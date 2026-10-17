@@ -121,6 +121,7 @@ class JobSource:
     runpod_job_id: str | None = None
     planned_captions: list[str] = field(default_factory=list)
     caption_prompt: str = ""
+    onscreen: dict | None = None
 
     @property
     def delivered(self) -> int:
@@ -160,6 +161,7 @@ class Job:
     generate_captions: bool = False
     export_destination_id: str | None = None
     export_id: str | None = None
+    onscreen: dict | None = None
 
 
 def _is_worker_timeout(raw: str) -> bool:
@@ -342,6 +344,7 @@ def _job_to_dict(job: Job) -> dict:
         "generate_captions": job.generate_captions,
         "export_destination_id": job.export_destination_id or None,
         "export_id": job.export_id or None,
+        "onscreen": job.onscreen,
         "error": job.error,
         "sources": [
             {
@@ -353,6 +356,7 @@ def _job_to_dict(job: Job) -> dict:
                     strip_internal_index_lines(str(c)) for c in (s.planned_captions or [])
                 ],
                 "caption_prompt": s.caption_prompt or "",
+                "onscreen": s.onscreen,
                 "variants": [_variant_to_dict(v) for v in s.variants],
             }
             for s in job.sources
@@ -380,6 +384,7 @@ def _job_from_dict(data: dict) -> Job:
                 if c
             ],
             caption_prompt=str(raw.get("caption_prompt") or ""),
+            onscreen=raw.get("onscreen") if isinstance(raw.get("onscreen"), dict) else None,
         )
         for v in raw.get("variants") or []:
             if isinstance(v, dict):
@@ -407,6 +412,7 @@ def _job_from_dict(data: dict) -> Job:
         generate_captions=bool(data.get("generate_captions") or False),
         export_destination_id=(str(data.get("export_destination_id") or "").strip() or None),
         export_id=(str(data.get("export_id") or "").strip() or None),
+        onscreen=data.get("onscreen") if isinstance(data.get("onscreen"), dict) else None,
     )
 
 
@@ -498,7 +504,9 @@ class JobStore:
                     generate_captions: bool = False,
                     caption_prompt: str = "",
                     caption_prompts: list[str] | None = None,
-                    export_destination_id: str | None = None) -> Job:
+                    export_destination_id: str | None = None,
+                    onscreen: dict | None = None,
+                    onscreens: list | None = None) -> Job:
         self._assert_quota(len(uploads) * int(count))
         job_id = uuid.uuid4().hex[:12]
         sources = []
@@ -513,6 +521,8 @@ class JobStore:
             caption_prompt=caption_prompt,
             caption_prompts=caption_prompts,
             export_destination_id=export_destination_id,
+            onscreen=onscreen,
+            onscreens=onscreens,
         )
 
     def create_job_from_paths(self, paths: list[tuple[str, str]], count: int,
@@ -521,7 +531,9 @@ class JobStore:
                                generate_captions: bool = False,
                                caption_prompt: str = "",
                                caption_prompts: list[str] | None = None,
-                               export_destination_id: str | None = None) -> Job:
+                               export_destination_id: str | None = None,
+                               onscreen: dict | None = None,
+                               onscreens: list | None = None) -> Job:
         """Create a job from already-staged files: [(filename, abs_path), ...]."""
         self._assert_quota(len(paths) * int(count))
         job_id = uuid.uuid4().hex[:12]
@@ -539,6 +551,8 @@ class JobStore:
             caption_prompt=caption_prompt,
             caption_prompts=caption_prompts,
             export_destination_id=export_destination_id,
+            onscreen=onscreen,
+            onscreens=onscreens,
         )
 
     def _start_job(self, job_id: str, sources: list[JobSource], count: int,
@@ -546,7 +560,24 @@ class JobStore:
                     generate_captions: bool = False,
                     caption_prompt: str = "",
                     caption_prompts: list[str] | None = None,
-                    export_destination_id: str | None = None) -> Job:
+                    export_destination_id: str | None = None,
+                    onscreen: dict | None = None,
+                    onscreens: list | None = None) -> Job:
+        from ..onscreen import OnScreenError, normalize_project
+
+        try:
+            if onscreens is not None:
+                if len(onscreens) != len(sources):
+                    raise ValueError("Each source needs its own on-screen text.")
+                per_source = [normalize_project(item) for item in onscreens]
+            else:
+                shared = normalize_project(onscreen)
+                per_source = [shared for _ in sources]
+        except OnScreenError as exc:
+            raise ValueError(str(exc)) from exc
+        for source, project in zip(sources, per_source, strict=True):
+            source.onscreen = project
+        clean_onscreen = next((project for project in per_source if project), None)
         briefs = briefs_for_sources(
             len(sources),
             caption_prompt=caption_prompt,
@@ -562,7 +593,8 @@ class JobStore:
                    quality_mode=normalize_quality_mode(quality_mode),
                    created_seq=created_seq,
                    generate_captions=bool(generate_captions),
-                   export_destination_id=(str(export_destination_id or "").strip() or None))
+                   export_destination_id=(str(export_destination_id or "").strip() or None),
+                   onscreen=clean_onscreen)
         token = CancelToken()
         with self._lock:
             self._jobs[job_id] = job
@@ -821,6 +853,7 @@ class JobStore:
                         quality_mode=job.quality_mode,
                         cancel_token=token,
                     )
+                self._stamp_onscreen(source.onscreen or job.onscreen, out_dir, result)
                 new_variants = [
                     VariantInfo(
                         source_id=source.source_id, index=v.index, filename=v.filename,
@@ -1303,6 +1336,9 @@ class JobStore:
                 quality_mode=job.quality_mode,
                 cancel_token=token,
             )
+            self._stamp_onscreen(source.onscreen or job.onscreen, self._ws.source_out_dir(
+                job.job_id, source.source_id,
+            ), result)
             before = len(source.variants)
             for v in result.variants:
                 source.variants.append(VariantInfo(
@@ -1343,6 +1379,79 @@ class JobStore:
             ev = self._done.get(job.job_id)
             if ev is not None:
                 ev.set()
+
+    def _stamp_onscreen(self, project: dict | None, out_dir: str, result) -> None:
+        """Burn text on Studio after the worker file is back.
+
+        The Live worker image does not have this editor. Words are applied to
+        the local mp4 here, then put back on the same object key when one exists.
+        """
+        if not project or result is None:
+            return
+        from ..onscreen import (
+            OnScreenError,
+            burn_file,
+            fonts_ready,
+            mix_audio,
+            placement_record,
+            plan_versions,
+            poster_at,
+            text_poster_name,
+            write_text_poster,
+        )
+        from ..probe import probe
+        from .onscreen_beds import BedError, resolve_bed_file
+
+        plan = {p["n"]: p for p in plan_versions(project, len(result.variants))}
+        for v in result.variants:
+            quality = dict(v.quality or {})
+            placement = plan.get(v.index)
+            if placement is None:
+                continue
+            path = v.path or os.path.join(out_dir, v.filename)
+            key = getattr(v, "object_key", None)
+            missing = not os.path.isfile(path) or os.path.getsize(path) == 0
+            if missing and key and self._object_store is not None:
+                os.makedirs(os.path.dirname(path) or out_dir, exist_ok=True)
+                self._object_store.get(key, path)
+            if not os.path.isfile(path) or os.path.getsize(path) == 0:
+                raise OnScreenError(f"On-screen text could not find {v.filename}.")
+            changed = False
+            if not quality.get("onscreen"):
+                if not fonts_ready():
+                    raise OnScreenError("On-screen fonts are not installed.")
+                pre = probe(path)
+                burn_file(path, placement, pre.width, pre.height, pre.color)
+                quality["onscreen"] = placement_record(placement)
+                changed = True
+            audio = placement.get("audio") if isinstance(placement.get("audio"), dict) else None
+            if audio and not quality.get("onscreen_audio"):
+                try:
+                    bed = resolve_bed_file(self._ws.root, audio, self._object_store, out_dir)
+                except BedError as exc:
+                    raise OnScreenError(str(exc)) from exc
+                mix_audio(
+                    path, bed,
+                    mode=str(audio.get("mode") or "under"),
+                    volume=float(audio.get("volume") if audio.get("volume") is not None else 0.25),
+                    start=float(audio.get("start") or 0),
+                )
+                quality["onscreen_audio"] = {
+                    "name": audio.get("name"),
+                    "mode": audio.get("mode"),
+                    "volume": audio.get("volume"),
+                }
+                changed = True
+            if changed and key and self._object_store is not None:
+                self._object_store.put(key, path)
+            poster = text_poster_name(v.index)
+            poster_path = os.path.join(out_dir, poster)
+            write_text_poster(path, poster_path, at=poster_at(placement))
+            if key and self._object_store is not None:
+                prefix = str(key).rsplit("/", 1)[0]
+                self._object_store.put(f"{prefix}/{poster}", poster_path)
+            quality["onscreen_poster"] = poster
+            v.quality = quality
 
     def set_platform_result(self, source_id: str, index: int, result: str) -> VariantInfo | None:
         if result not in PLATFORM_RESULTS:

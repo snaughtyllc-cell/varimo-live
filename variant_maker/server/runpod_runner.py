@@ -268,6 +268,7 @@ class RunPodServerlessRunner:
                 look_mae=v.get("look_mae"),
                 look_src=v.get("look_src"),
                 look_var=v.get("look_var"),
+                object_key=key,
             ))
         manifest_path = os.path.join(out_dir, "manifest.json")
         if (manifest_key and not self._file_ready(manifest_path)

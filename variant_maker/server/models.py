@@ -356,6 +356,8 @@ class JobFromDriveIn(BaseModel):
     caption_prompt: str = ""
     caption_prompts: list[str] = []
     export_destination_id: str = ""
+    onscreen: dict | None = None
+    onscreens: list[dict] | None = None
 
 
 class GalleryFolderOut(BaseModel):

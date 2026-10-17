@@ -13,6 +13,11 @@ vi.mock("@/lib/api", () => ({
   createJob: (...args: unknown[]) => createJob(...args),
   createJobFromDrive: (...args: unknown[]) => createJobFromDrive(...args),
   getDriveStatus: async () => ({ status: "ready", sa_email: null, message: "ok" }),
+  listOnScreenTemplates: async () => [],
+  saveOnScreenTemplate: async () => { throw new Error("unused"); },
+  deleteOnScreenTemplate: async () => {},
+  soundFileKind: () => null,
+  soundSizeNote: () => null,
   listDestinations: async () => [
     { id: "dst_out", name: "Reels out", folder_id: "f1", auth_mode: "oauth" },
   ],
@@ -98,5 +103,22 @@ describe("Studio source draft after Generate", () => {
       expect(createJob).toHaveBeenCalled();
     });
     expect(createJob.mock.calls[0][8]).toBe("dst_out");
+    expect(createJob.mock.calls[0][9]).toBeNull();
+  });
+
+  it("puts on-screen text under post captions and sends it when the toggle is on", async () => {
+    const { container } = render(<StudioPage />);
+    const captions = screen.getByTestId("studio-captions-box");
+    const onscreen = screen.getByTestId("studio-onscreen");
+    expect(captions.compareDocumentPosition(onscreen) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2])], "gym-pull.mp4", { type: "video/mp4" });
+    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /on-screen text/i }));
+    const close = screen.queryByRole("button", { name: "Close" });
+    if (close) fireEvent.click(close);
+    fireEvent.click(screen.getByRole("button", { name: /generate/i }));
+    expect(await screen.findByText(/gym-pull.mp4: Add one on-screen line/i)).toBeInTheDocument();
+    expect(createJob).not.toHaveBeenCalled();
   });
 });

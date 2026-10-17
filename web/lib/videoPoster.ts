@@ -6,10 +6,17 @@ const POSTER_MAX_EDGE = 360;
  * Decode one frame of a local File into a JPEG data URL.
  * iOS Safari often leaves a <video src=blob> black; a still image always paints.
  */
-export async function captureVideoPoster(
+export type VideoFrame = { poster: string; width: number; height: number; duration: number };
+
+export async function captureVideoPoster(file: File, timeoutMs = 4000): Promise<string> {
+  const frame = await captureVideoFrame(file, timeoutMs);
+  return frame.poster;
+}
+
+export async function captureVideoFrame(
   file: File,
   timeoutMs = 4000,
-): Promise<string> {
+): Promise<VideoFrame> {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
   video.muted = true;
@@ -22,7 +29,7 @@ export async function captureVideoPoster(
   video.style.cssText =
     "position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
 
-  return new Promise<string>((resolve, reject) => {
+  return new Promise<VideoFrame>((resolve, reject) => {
     let settled = false;
 
     const cleanup = () => {
@@ -62,8 +69,9 @@ export async function captureVideoPoster(
           return;
         }
         settled = true;
+        const duration = Number.isFinite(video.duration) ? video.duration : 0;
         cleanup();
-        resolve(poster);
+        resolve({ poster, width: w, height: h, duration });
       } catch {
         fail("draw");
       }

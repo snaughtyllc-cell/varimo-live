@@ -103,6 +103,8 @@ def test_localrunner_sets_fast_tier1_defaults(monkeypatch, tmp_path):
     assert captured["jobs"] == 5
     assert captured["count"] == 5
     assert captured["auto_tune"] is True
+    assert captured["reel_recipe"] is True
+    assert captured["copy_start"] == 1
 
 
 def test_localrunner_honors_quality_mode_hq(monkeypatch, tmp_path):
@@ -127,6 +129,7 @@ def test_localrunner_honors_quality_mode_hq(monkeypatch, tmp_path):
     assert captured["quality_mode"] == "hq"
     assert captured["auto_tune"] is False
     assert captured["jobs"] == 1
+    assert captured["reel_recipe"] is False
 
 
 def test_encode_jobs_hq_serial_fast_parallel():

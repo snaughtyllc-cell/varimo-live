@@ -141,6 +141,8 @@ def test_fast_worker_parallelizes_20_pack_even_without_jobs_key(monkeypatch, tmp
     })
     assert captured["jobs"] == 8
     assert captured["uniqueness_target"] == 24 / 64
+    assert captured["reel_recipe"] is True
+    assert captured["copy_start"] == 1
 
 
 def test_fast_worker_honors_payload_jobs_when_container_reports_one_cpu(monkeypatch, tmp_path):

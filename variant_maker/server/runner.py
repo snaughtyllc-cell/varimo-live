@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Callable, Protocol
 
 from .. import pipeline, uniqueness
+from ..reel_copies import get_copy_start
 from .copy_recover import is_variant_mp4
 from .events import VariantEvent
 
@@ -229,6 +230,8 @@ class LocalRunner:
             ),
             "auto_tune": limits.get("auto_tune", True),
             "cancel_token": cancel_token,
+            "reel_recipe": quality_mode == "fast",
+            "copy_start": get_copy_start() or 1,
         }
         manifest = pipeline.run(config, on_event=engine_event)
         variants = [

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useCallback, useRef, DragEvent } from "react";
+import { HqTargetReview } from "@/components/studio/HqTargetReview";
 import { FileList } from "@/components/studio/FileList";
 import { DrivePickList } from "@/components/studio/DrivePickList";
 import { DrivePickerModal, type DrivePick } from "@/components/studio/DrivePickerModal";
@@ -286,6 +287,7 @@ export default function StudioPage() {
 
   return (
     <main className={studioShellClass(!!jobId)}>
+      <HqTargetReview />
       <input
         ref={fileInputRef}
         type="file"

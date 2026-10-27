@@ -29,7 +29,7 @@ export function HqSsoExchange() {
     exchangeHqSso(token).then((result) => {
       if (!live) return;
       if (result.ok) {
-        window.location.assign(HQ_SSO_NEXT);
+        window.location.assign(result.next ?? HQ_SSO_NEXT);
         return;
       }
       setMessage(result.message);

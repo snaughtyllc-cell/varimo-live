@@ -104,6 +104,7 @@ export function WorkflowsPanel() {
   const [name, setName] = useState("");
   const [inboxId, setInboxId] = useState("");
   const [outputId, setOutputId] = useState("");
+  const [winner, setWinner] = useState("");
   const [count, setCount] = useState(DEFAULT_PER_VIDEO);
   const [prepMode, setPrepMode] = useState<"none" | "hq">("none");
   const [pollMinutes, setPollMinutes] = useState(DEFAULT_POLL_MINUTES);
@@ -189,6 +190,7 @@ export function WorkflowsPanel() {
         name: name.trim(),
         inbox_destination_id: inboxId,
         output_destination_id: outputId,
+        winner: winner.trim(),
         count,
         quality_mode: "fast",
         prep_mode: labLane ? prepMode : "none",
@@ -200,6 +202,7 @@ export function WorkflowsPanel() {
       });
       setWorkflows((prev) => [...prev, created]);
       setName("");
+      setWinner("");
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to create workflow");
     } finally {
@@ -528,6 +531,7 @@ export function WorkflowsPanel() {
                       <span className="flow-card__meta-item">
                         {wf.count} variants · {wf.prep_mode === "hq" ? "reconstruct first" : "fast"} · poll every {Math.round(wf.poll_seconds / 60)} min
                         {wf.caption_from_filename ? " · filenames as captions" : ""}
+                        {wf.winner ? ` · winner ${wf.winner}` : ""}
                       </span>
                       <span className="flow-card__divider" aria-hidden="true" />
                       <span className="flow-card__meta-item flow-card__meta-item--muted">
@@ -627,6 +631,11 @@ export function WorkflowsPanel() {
                 </span>
               </label>
               <p className="workflow-hint">{workflowOutputHint()}</p>
+              <label className="workflow-folder-field">
+                Winner ID (optional)
+                <input aria-label="Workflow winner ID" className="workflow-field" value={winner} onChange={e => setWinner(e.target.value)} disabled={fieldsDisabled} />
+              </label>
+              <p className="workflow-hint">For a Postdesk winner, choose the page’s Winners folder as OUT and enter its trial ID. Use one source video per winner workflow. Leave blank for the usual per-source folders.</p>
 
               <div className="workflow-callout">
                 <span className="material-symbols-rounded workflow-callout__icon" aria-hidden="true">

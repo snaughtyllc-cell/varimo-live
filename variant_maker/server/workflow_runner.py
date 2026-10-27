@@ -186,14 +186,25 @@ def _harvest(
             if not job.sources:
                 raise RuntimeError("job has no sources")
             source = job.sources[0]
-            sub_id, n = _export_source(
-                drive, job_store, job, source,
-                stem=stem, sha=sha, output_folder_id=output_folder_id,
-                caption_store=caption_store,
-                caption_bank_id=caption_bank_id,
-                from_filename=from_filename,
-            )
+            if job.postdesk_target:
+                from .postdesk import export_job
+                receipt = export_job(drive, job_store, job)
+                sub_id, n = receipt["folder_id"], len(receipt["files"])
+            else:
+                sub_id, n = _export_source(
+                    drive, job_store, job, source,
+                    stem=stem, sha=sha,
+                    output_folder_id=job.workflow_output_folder_id or output_folder_id,
+                    caption_store=caption_store,
+                    caption_bank_id=caption_bank_id,
+                    from_filename=from_filename,
+                )
         except Exception as e:  # noqa: BLE001 — isolate one clip, keep the sweep going
+            if job.postdesk_target:
+                # Keep the same rendered job for delivery recovery. Never render another pack.
+                summary.failed += 1
+                summary.error = "Winner export needs review; no new render was started"
+                continue
             ledger.mark_failed(sha, error=f"{type(e).__name__}: {e}", file_id=file_id, md5=md5)
             summary.failed += 1
             continue
@@ -208,6 +219,7 @@ def _queue_new(
     workflow: Workflow,
     drive: DriveClient,
     inbox_folder_id: str,
+    output_folder_id: str,
     job_store: JobStore,
     ledger: Ledger,
     work_dir: str,
@@ -251,9 +263,15 @@ def _queue_new(
                 summary.skipped += 1
                 shutil.rmtree(job_dir, ignore_errors=True)
                 continue
+            if workflow.winner:
+                from .postdesk import claim_winner
+                claim_winner(job_store._ws.root, output_folder_id, workflow.winner, sha, owner="workflow:" + workflow.id)
             job = job_store.create_job_from_paths(
                 [(os.path.basename(f.name) or "clip.mp4", local)],
                 count=workflow.count,
+                workflow_output_folder_id=output_folder_id,
+                postdesk_target=({"folder_id": output_folder_id, "winner": workflow.winner}
+                                 if workflow.winner else None),
                 allow_creative_escalate=workflow.allow_creative_escalate,
                 quality_mode=workflow.quality_mode,
                 generate_captions=bool(workflow.caption_from_filename),
@@ -325,7 +343,7 @@ def tick_workflow(
                      caption_store=bank, caption_bank_id=bank_id,
                      from_filename=workflow.caption_from_filename)
     _queue_new(
-        workflow, drive, inbox_folder_id, job_store, ledger, work_dir, summary,
+        workflow, drive, inbox_folder_id, output_folder_id, job_store, ledger, work_dir, summary,
         max_attempts=max_attempts, slots=max(0, max_inflight - still),
     )
     # FakeRunner (and very short Fast jobs) may already be done — export in this tick.

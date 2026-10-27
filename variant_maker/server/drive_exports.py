@@ -172,6 +172,16 @@ def bind_studio_export(
     """
 
     def on_done(job: Job) -> None:
+        if job.postdesk_target and job.state == "done":
+            from .postdesk import export_job
+            drive = drive_fn() if callable(drive_fn) else drive_fn
+            if drive is not None:
+                try:
+                    export_job(drive, job_store, job)
+                except Exception:
+                    # Receipts retain uncertain outcomes. Never retry blindly.
+                    print(f"job {job.job_id}: Postdesk export needs review", flush=True)
+            return
         dest_id = (job.export_destination_id or "").strip()
         if job.state != "done" or not dest_id:
             return

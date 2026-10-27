@@ -821,6 +821,7 @@ export function createWorkflow(body: {
   auto_caption?: boolean;
   caption_bank_id?: string | null;
   caption_from_filename?: boolean;
+  winner?: string;
 }): Promise<Workflow> {
   return fetch("/api/workflows", {
     method: "POST",
@@ -848,6 +849,7 @@ export function updateWorkflow(
     auto_caption: boolean;
     caption_bank_id: string | null;
     caption_from_filename: boolean;
+    winner: string;
   }>,
 ): Promise<Workflow> {
   return fetch(`/api/workflows/${id}`, {

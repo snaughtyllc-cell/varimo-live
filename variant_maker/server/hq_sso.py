@@ -185,7 +185,15 @@ def verify_hq_token(token: str, secret: str, *, now: float) -> dict[str, Any]:
     role = payload.get("role")
     if role not in _ROLES:
         raise HqSsoError("invalid")
+    target = None
+    if "target" in payload:
+        from .postdesk import validate_target
+        try:
+            target = validate_target(payload["target"])
+        except ValueError:
+            raise HqSsoError("invalid") from None
     return {
+        **({"target": target} if target else {}),
         "email": email,
         "sub": sub.strip(),
         "jti": jti,

@@ -306,6 +306,7 @@ export interface GalleryFolders {
 }
 
 export interface Workflow {
+  winner?: string;
   id: string;
   name: string;
   inbox_destination_id: string;

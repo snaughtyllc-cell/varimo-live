@@ -82,7 +82,9 @@ def test_export_success_is_idempotent(tmp_path):
 
 
 @pytest.mark.parametrize("initial_route", ["manual", "api", "api_lost", "concurrent"])
-def test_hq_target_full_flow_requires_click_and_is_tenant_bound(tmp_path, initial_route, monkeypatch):
+def test_hq_target_full_flow_requires_click_and_is_tenant_bound(
+    tmp_path, initial_route, monkeypatch
+):
     import time
 
     from fastapi.testclient import TestClient
@@ -238,6 +240,25 @@ def test_hq_target_full_flow_requires_click_and_is_tenant_bound(tmp_path, initia
     )
     assert other.get("/api/hq/targets/" + hid).status_code == 404
     assert other.post(url).status_code == 404
+    # Workspace-wide grants still resolve only their bound user and tenant.
+    workspace_grant = {k: v for k, v in grant.items() if k != "models"}
+    workspace_grant["model_scope"] = "workspace"
+    env["VARIMO_HQ_API_KEYS_JSON"] = json.dumps([workspace_grant])
+    assert api.get("/api/hq/jobs/" + hid, headers=headers).status_code == 200
+    # A future model passes the model gate but still needs an explicit destination.
+    missing_model = api.post(
+        "/api/hq/jobs", json={**body, "target": {**target, "model": "Future"}}, headers=headers
+    )
+    assert missing_model.status_code == 400
+    assert "Register exactly one" in missing_model.json()["detail"]
+    other_ws = other.get("/api/auth/me").json()["workspace_id"]
+    env["VARIMO_HQ_API_KEYS_JSON"] = json.dumps([{**workspace_grant, "workspace_id": other_ws}])
+    assert api.get("/api/hq/jobs/" + hid, headers=headers).status_code == 401
+    env["VARIMO_HQ_API_KEYS_JSON"] = json.dumps(
+        [{**workspace_grant, "workspace_id": other_ws, "email": "other@x.com"}]
+    )
+    assert api.get("/api/hq/jobs/" + hid, headers=headers).status_code == 404
+    assert api.post("/api/hq/jobs/" + hid + "/reconcile", headers=headers).status_code == 404
     changed = {**target, "source_file_id": "different"}
     assert (
         c.post(
@@ -435,6 +456,19 @@ def test_hq_api_credentials_fail_closed():
     }
     header = "Bearer " + key
     assert authenticate(header, json.dumps([grant]), 99)
+    workspace_grant = {k: v for k, v in grant.items() if k != "models"}
+    workspace_grant["model_scope"] = "workspace"
+    assert authenticate(header, json.dumps([workspace_grant]), 99)
+    assert authenticate(header, json.dumps([{**workspace_grant, "models": ["GG"]}]), 99) is None
+    assert authenticate(header, json.dumps([{**workspace_grant, "model_scope": "all"}]), 99) is None
+    assert (
+        authenticate(
+            header,
+            json.dumps([{k: v for k, v in workspace_grant.items() if k != "model_scope"}]),
+            99,
+        )
+        is None
+    )
     for config in (
         [{**grant, "expires_at": 99}],
         [{**grant, "scope": "admin"}],

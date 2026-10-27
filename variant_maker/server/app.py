@@ -1359,8 +1359,22 @@ def create_app(
         token = tenant_cv.set(None)
         try:
             if not auth_on or tenants is None or hub is None:
+                if request.url.path == "/api/hq/jobs" or request.url.path.startswith("/api/hq/jobs/"):
+                    return JSONResponse({"detail": "HQ API disabled"}, status_code=404)
                 return await call_next(request)
             path = request.url.path
+            if path == "/api/hq/jobs" or path.startswith("/api/hq/jobs/"):
+                from .hq_api import authenticate
+                grant = authenticate(request.headers.get("authorization", ""),
+                                     auth_env.get("VARIMO_HQ_API_KEYS_JSON", ""), wall_now())
+                user = tenants.get_user(grant["email"]) if grant else None
+                if user is None or user.workspace_id != grant["workspace_id"]:
+                    return JSONResponse({"detail": "invalid HQ credential"}, status_code=401)
+                tenant_cv.set(hub.bundle(user.workspace_id))
+                request.state.user = user
+                request.state.viewing_workspace_id = user.workspace_id
+                request.state.hq_models = grant["models"]
+                return await call_next(request)
             sess = read_session(request.cookies.get(COOKIE_NAME), auth_secret)
             user = tenants.get_user(sess["email"]) if sess else None
             if user is None or not user.workspace_id:
@@ -1571,20 +1585,69 @@ def create_app(
             status, detail = sso_failure("replay")
             raise HTTPException(status_code=status, detail=detail)
         if claims.get("target"):
-            from .postdesk import handoff_path, locked, load, save
-            handoff_id, path = handoff_path(data_dir, user.workspace_id, claims["target"])
-            with locked(path):
-                existing = load(path)
-                if existing and existing.get("target") != claims["target"]:
-                    raise HTTPException(status_code=409, detail="Winner already has a different source")
-                if not existing:
-                    save(path, {"workspace_id": user.workspace_id, "email": user.email,
-                                "target": claims["target"]})
+            handoff_id = _register_hq_target(user, claims["target"])
             resp = JSONResponse({"next": "/studio?handoff=" + handoff_id})
         else:
             resp = Response(status_code=204)
         _set_session_cookie(resp, request, user)
         return resp
+
+    def _register_hq_target(user, target):
+        from .postdesk import handoff_path, locked, load, save, validate_target
+        try:
+            target = validate_target(target)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        handoff_id, path = handoff_path(data_dir, user.workspace_id, target)
+        with locked(path):
+            existing = load(path)
+            if existing and (existing.get("target") != target or existing.get("email") != user.email):
+                raise HTTPException(status_code=409, detail="Winner already belongs to another request")
+            if not existing:
+                save(path, {"workspace_id": user.workspace_id, "email": user.email, "target": target})
+        return handoff_id
+
+    @app.post("/api/hq/jobs")
+    def submit_hq_job(request: Request, body: dict):
+        from .postdesk import validate_target
+        if set(body) != {"target", "count"} or type(body.get("count")) is not int:
+            raise HTTPException(status_code=400, detail="Expected target and integer count")
+        if not 1 <= body["count"] <= 40:
+            raise HTTPException(status_code=400, detail="count must be 1–40")
+        try:
+            target = validate_target(body["target"])
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        if target["model"] not in request.state.hq_models:
+            raise HTTPException(status_code=403, detail="Model outside credential scope")
+        handoff_id = _register_hq_target(_require_user(request), target)
+        result = generate_hq_target(request, handoff_id, body["count"])
+        return {"status": "accepted", "operation_id": handoff_id, "job_id": result.job_id,
+                "status_url": "/api/hq/jobs/" + handoff_id,
+                "manual_url": "/studio?handoff=" + handoff_id}
+
+    @app.get("/api/hq/jobs/lookup")
+    def lookup_hq_job(request: Request, source_file_id: str, model: str, page: str, winner: str):
+        from .postdesk import handoff_path, validate_target
+        try:
+            target = validate_target({"source_file_id": source_file_id, "model": model,
+                                      "page": page, "winner": winner})
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        user = _require_user(request)
+        handoff_id, _ = handoff_path(data_dir, user.workspace_id, target)
+        _path, record = _handoff_record(request, handoff_id)
+        if record["target"] != target:
+            raise HTTPException(status_code=409, detail="Winner belongs to another request")
+        return preview_hq_target(request, handoff_id)
+
+    @app.get("/api/hq/jobs/{handoff_id}")
+    def hq_job_status(request: Request, handoff_id: str):
+        return preview_hq_target(request, handoff_id)
+
+    @app.post("/api/hq/jobs/{handoff_id}/reconcile")
+    def hq_job_reconcile(request: Request, handoff_id: str):
+        return resume_hq_export(request, handoff_id)
 
     def _handoff_record(request: Request, handoff_id: str):
         from .postdesk import load
@@ -1597,26 +1660,46 @@ def create_app(
         record = load(path)
         if record.get("workspace_id") != user.workspace_id or record.get("email") != user.email:
             raise HTTPException(status_code=404, detail="handoff not found")
+        allowed = getattr(request.state, "hq_models", None)
+        if allowed is not None and record["target"]["model"] not in allowed:
+            raise HTTPException(status_code=403, detail="Model outside credential scope")
         return path, record
 
     @app.get("/api/hq/targets/{handoff_id}")
     def preview_hq_target(request: Request, handoff_id: str):
         from .postdesk import authorized_source, resolve_target_folder, load
         _path, record = _handoff_record(request, handoff_id)
-        _require_drive()
-        try:
-            folder = resolve_target_folder(_drive(), app.state.destinations, record["target"])
-            source = authorized_source(_drive(), app.state.destinations, record["target"])
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from None
-        result = {"target": record["target"], "source_name": source.name,
-                  "folder_id": folder, "job_id": record.get("job_id")}
-        if record.get("job_id"):
-            job = store.get(record["job_id"])
-            if job:
-                result["state"] = job.state
-                receipt = load(os.path.join(store._ws.job_dir(job.job_id), "postdesk-export.json"))
-                result["exported"] = sum(bool(x.get("drive_id")) for x in receipt.get("files", {}).values())
+        job = store.get(record.get("job_id", ""))
+        if job is None:
+            # Recover an interrupted response before the operation receipt was saved.
+            job = next((j for j in store.list()
+                        if (j.postdesk_target or {}).get("handoff_id") == handoff_id), None)
+        result = {"operation_id": handoff_id, "target": record["target"],
+                  "count": record.get("count", 20), "job_id": job.job_id if job else record.get("job_id"),
+                  "state": job.state if job else ("needs_review" if record.get("submitting") else "ready"),
+                  "exported": 0, "delivery_state": "pending"}
+        if job:
+            result["source_name"] = job.sources[0].filename if job.sources else "source"
+            result["folder_id"] = job.postdesk_target["folder_id"]
+            receipt = load(os.path.join(store._ws.job_dir(job.job_id), "postdesk-export.json"))
+            rows = receipt.get("files", {}).values()
+            result["exported"] = sum(bool(x.get("drive_id")) for x in rows)
+            result["drive_file_ids"] = [x["drive_id"] for x in rows if x.get("drive_id")]
+            result["winner_folder_id"] = receipt.get("folder_id")
+            result["requested"] = sum(x.requested for x in job.sources)
+            result["rendered"] = sum(v.status == "ok" for x in job.sources for v in x.variants)
+            if any(not x.get("drive_id") for x in rows):
+                result["delivery_state"] = "needs_review"
+            elif job.state == "done":
+                result["delivery_state"] = ("complete" if result["exported"] == result["requested"]
+                                            else "partial" if result["exported"] else "pending")
+        else:
+            _require_drive()
+            try:
+                result["folder_id"] = resolve_target_folder(_drive(), app.state.destinations, record["target"])
+                result["source_name"] = authorized_source(_drive(), app.state.destinations, record["target"]).name
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from None
         return result
 
     @app.post("/api/hq/targets/{handoff_id}/generate", response_model=CreateJobResponse)
@@ -1628,6 +1711,8 @@ def create_app(
             raise HTTPException(status_code=400, detail="count must be 1–40")
         with locked(path):
             record = load(path)
+            if record.get("count") is not None and record["count"] != count:
+                raise HTTPException(status_code=409, detail="Operation count conflicts with original request")
             # Recover a crash after job creation but before the handoff receipt.
             found = next((j for j in store.list()
                           if (j.postdesk_target or {}).get("handoff_id") == handoff_id), None)
@@ -1645,8 +1730,12 @@ def create_app(
                     name = os.path.basename(source.name) or "source.mp4"
                     local = os.path.join(stage, "source.mp4")
                     _drive().download(source.id, local)
-                    claim_winner(store._ws.root, folder, record["target"]["winner"], source.id, owner="hq:" + handoff_id)
+                    try:
+                        claim_winner(store._ws.root, folder, record["target"]["winner"], source.id, owner="hq:" + handoff_id)
+                    except ValueError as exc:
+                        raise HTTPException(status_code=409, detail=str(exc)) from None
                     record["submitting"] = True
+                    record["count"] = count
                     save(path, record)
                     job = store.create_job_from_paths(
                         [(name, local)], count=count, quality_mode="fast",
@@ -1665,6 +1754,9 @@ def create_app(
         _path, record = _handoff_record(request, handoff_id)
         _require_drive()
         job = store.get(record.get("job_id", ""))
+        if job is None:
+            job = next((j for j in store.list()
+                        if (j.postdesk_target or {}).get("handoff_id") == handoff_id), None)
         if job is None or job.state != "done":
             raise HTTPException(status_code=409, detail="Render is not finished")
         try:

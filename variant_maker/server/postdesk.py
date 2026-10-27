@@ -67,10 +67,12 @@ def resolve_target_folder(drive, destinations, target: dict) -> str:
 
 
 def authorized_source(drive, destinations, target: dict):
-    """HQ source must be beneath this tenant's registered model POSTDESK root."""
-    roots = [d for d in destinations.list() if d.name == "Postdesk: " + target["model"]]
-    if len(roots) != 1:
+    """Source must be under a model root explicitly registered in this tenant."""
+    names = {"Postdesk: " + target["model"], "Postdesk source: " + target["model"]}
+    roots = [d for d in destinations.list() if d.name in names]
+    if not roots:
         raise ValueError("Postdesk model is not registered in this workspace")
+    root_ids = {d.folder_id for d in roots}
     source = drive.get_file(target["source_file_id"])
     if not is_video_file(source):
         raise ValueError("HQ source is not a video")
@@ -81,12 +83,12 @@ def authorized_source(drive, destinations, target: dict):
             break
         seen.add(node.id)
         parents = tuple(getattr(node, "parents", ()))
-        if roots[0].folder_id in parents:
+        if root_ids.intersection(parents):
             return source
         if len(parents) != 1:
             break
         node = drive.get_file(parents[0])
-    raise ValueError("Source is outside this workspace model POSTDESK folder")
+    raise ValueError("Source is outside this workspace registered model source folders")
 
 
 def save(path: str, data: dict) -> None:
@@ -213,3 +215,28 @@ def claim_winner(
             raise ValueError("This winner folder is already assigned to another source or workflow")
         if not claim:
             save(path, {"source": source_identity, "owner": owner})
+
+
+def workflow_submission(store, workflow_id: str, source_hash: str, payload: dict, create):
+    """Intent survives a crash before the workflow ledger receives the job ID."""
+    key = hashlib.sha256(json.dumps([workflow_id, source_hash]).encode()).hexdigest()
+    path = os.path.join(store._ws.root, "postdesk", "workflow-submissions", key + ".json")
+    with locked(path):
+        record = load(path)
+        if record and record["payload"] != payload:
+            raise ValueError("Winner submission conflicts with the original workflow request")
+        found = next(
+            (j for j in store.list() if (j.postdesk_target or {}).get("workflow_operation") == key),
+            None,
+        )
+        if found:
+            job = found
+        elif record:
+            raise ValueError(
+                "Workflow submission outcome needs review; no duplicate render started"
+            )
+        else:
+            save(path, {"payload": payload, "submitting": True})
+            job = create(key)
+        save(path, {"payload": payload, "job_id": job.job_id})
+        return job

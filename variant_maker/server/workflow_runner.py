@@ -266,19 +266,31 @@ def _queue_new(
             if workflow.winner:
                 from .postdesk import claim_winner
                 claim_winner(job_store._ws.root, output_folder_id, workflow.winner, sha, owner="workflow:" + workflow.id)
-            job = job_store.create_job_from_paths(
-                [(os.path.basename(f.name) or "clip.mp4", local)],
-                count=workflow.count,
-                workflow_output_folder_id=output_folder_id,
-                postdesk_target=({"folder_id": output_folder_id, "winner": workflow.winner}
-                                 if workflow.winner else None),
-                allow_creative_escalate=workflow.allow_creative_escalate,
-                quality_mode=workflow.quality_mode,
-                generate_captions=bool(workflow.caption_from_filename),
-                caption_prompt=(
-                    brief_from_filename(f.name) if workflow.caption_from_filename else ""
-                ),
-            )
+            def create_job(operation=None):
+                return job_store.create_job_from_paths(
+                    [(os.path.basename(f.name) or "clip.mp4", local)],
+                    count=workflow.count,
+                    workflow_output_folder_id=output_folder_id,
+                    postdesk_target=({"folder_id": output_folder_id, "winner": workflow.winner, "workflow_operation": operation}
+                                     if workflow.winner else None),
+                    allow_creative_escalate=workflow.allow_creative_escalate,
+                    quality_mode=workflow.quality_mode,
+                    generate_captions=bool(workflow.caption_from_filename),
+                    caption_prompt=(
+                        brief_from_filename(f.name) if workflow.caption_from_filename else ""
+                    ),
+                )
+            if workflow.winner:
+                from .postdesk import workflow_submission
+                job = workflow_submission(
+                    job_store, workflow.id, sha,
+                    {"folder_id": output_folder_id, "winner": workflow.winner,
+                     "count": workflow.count, "quality_mode": workflow.quality_mode,
+                     "allow_creative_escalate": workflow.allow_creative_escalate},
+                    create_job,
+                )
+            else:
+                job = create_job()
             ledger.mark_running(
                 sha, job_id=job.job_id, file_id=f.id, md5=f.md5, filename=f.name,
             )

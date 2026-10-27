@@ -1373,7 +1373,7 @@ def create_app(
                 tenant_cv.set(hub.bundle(user.workspace_id))
                 request.state.user = user
                 request.state.viewing_workspace_id = user.workspace_id
-                request.state.hq_models = grant["models"]
+                request.state.hq_models = None if grant.get("model_scope") == "workspace" else grant["models"]
                 return await call_next(request)
             sess = read_session(request.cookies.get(COOKIE_NAME), auth_secret)
             user = tenants.get_user(sess["email"]) if sess else None
@@ -1618,7 +1618,7 @@ def create_app(
             target = validate_target(body["target"])
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from None
-        if target["model"] not in request.state.hq_models:
+        if request.state.hq_models is not None and target["model"] not in request.state.hq_models:
             raise HTTPException(status_code=403, detail="Model outside credential scope")
         handoff_id = _register_hq_target(_require_user(request), target)
         result = generate_hq_target(request, handoff_id, body["count"])

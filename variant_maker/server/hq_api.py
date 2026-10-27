@@ -36,6 +36,12 @@ def authenticate(header: str, raw_config: str, now: float) -> dict | None:
             return None
         if not all(isinstance(row.get(k), str) and row[k] for k in ("workspace_id", "email")):
             return None
+        model_scope = row.get("model_scope", "named")
+        if model_scope == "workspace":
+            # Explicit workspace-wide access; never infer it from a missing list.
+            return row if "models" not in row else None
+        if model_scope != "named":
+            return None
         models = row.get("models")
         if not isinstance(models, list) or not models or len(models) > 100:
             return None

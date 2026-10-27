@@ -27,11 +27,17 @@ Varimo's Railway variable is `VARIMO_HQ_API_KEYS_JSON`, a JSON array of grants:
 }]
 ```
 
+Named-model grants above remain supported. For owner-approved access to all
+current and future models **only in the bound workspace**, replace `models` with
+`"model_scope": "workspace"` and omit `models` entirely. This explicit mode does
+not bypass user/workspace binding, source-root checks, destination registration,
+or expiry. Omitting both fields is invalid; wildcard `models: ["*"]` remains invalid.
+
 Those angle-bracket values are placeholders, not credentials. Owner installation
 and expiry selection require separate activation approval. Generate/store the
 raw key only through an approved secret-management flow; never paste it in chat.
 Varimo stores its digest, not the raw key. The key authorizes only these HQ job
-routes for the configured user/tenant and named models. It cannot sign in a
+routes for the configured user/tenant and approved model scope. It cannot sign in a
 browser or call other Varimo APIs. No wildcard models, expired grants, duplicate
 matching grants or auth-disabled installation are accepted. Removing a grant
 revokes that key for subsequent requests. Existing tenant render quota applies.

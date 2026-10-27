@@ -36,6 +36,7 @@ class Workflow:
     auto_caption: bool = False
     caption_bank_id: str = ""
     caption_from_filename: bool = False
+    winner: str = ""
 
 
 def _validate(
@@ -95,6 +96,7 @@ class WorkflowStore:
         auto_caption: bool = False,
         caption_bank_id: str = "",
         caption_from_filename: bool = False,
+        winner: str = "",
     ) -> Workflow:
         name, inbox, output, count, quality, poll_seconds = _validate(
             name=name,
@@ -104,6 +106,9 @@ class WorkflowStore:
             quality_mode=quality_mode,
             poll_seconds=poll_seconds,
         )
+        if winner:
+            from .postdesk import segment
+            winner = segment(winner)
         items = self._load()
         use_filename = bool(caption_from_filename)
         wf = Workflow(
@@ -119,6 +124,7 @@ class WorkflowStore:
             auto_caption=bool(auto_caption) and not use_filename,
             caption_bank_id=(caption_bank_id or "").strip(),
             caption_from_filename=use_filename,
+            winner=winner,
         )
         items.append(wf)
         self._save(items)
@@ -142,7 +148,11 @@ class WorkflowStore:
         auto_caption: bool | None = None,
         caption_bank_id: str | None = None,
         caption_from_filename: bool | None = None,
+        winner: str | None = None,
     ) -> Workflow | None:
+        if winner:
+            from .postdesk import segment
+            winner = segment(winner)
         items = self._load()
         for i, w in enumerate(items):
             if w.id != workflow_id:
@@ -184,6 +194,7 @@ class WorkflowStore:
                     w.caption_bank_id if caption_bank_id is None else str(caption_bank_id or "").strip()
                 ),
                 caption_from_filename=use_filename,
+                winner=w.winner if winner is None else winner,
             )
             items[i] = updated
             self._save(items)
@@ -222,6 +233,7 @@ class WorkflowStore:
                 auto_caption=bool(item.get("auto_caption") or False),
                 caption_bank_id=str(item.get("caption_bank_id") or ""),
                 caption_from_filename=bool(item.get("caption_from_filename") or False),
+                winner=str(item.get("winner") or ""),
             ))
         return out
 

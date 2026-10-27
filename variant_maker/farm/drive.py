@@ -20,6 +20,7 @@ class DriveFile:
     name: str
     mime_type: str
     md5: str | None = None  # Drive's content checksum; cheap dedup signal without download
+    parents: tuple[str, ...] = ()
 
     @property
     def is_folder(self) -> bool:
@@ -81,6 +82,7 @@ def _to_drive_file(res: dict) -> DriveFile:
         name=res["name"],
         mime_type=res.get("mimeType", ""),
         md5=res.get("md5Checksum"),
+        parents=tuple(res.get("parents", [])),
     )
 
 
@@ -203,7 +205,7 @@ class GoogleDrive(DriveClient):
 
     def get_file(self, file_id: str) -> DriveFile:
         res = self.service.files().get(
-            fileId=file_id, fields="id, name, mimeType, md5Checksum",
+            fileId=file_id, fields="id, name, mimeType, md5Checksum, parents",
             supportsAllDrives=True,
         ).execute()
         return _to_drive_file(res)

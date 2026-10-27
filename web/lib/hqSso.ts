@@ -11,7 +11,7 @@ let held: string | null = null;
 let inflight: Promise<HqSsoResult> | null = null;
 let inflightToken: string | null = null;
 
-export type HqSsoResult = { ok: true } | { ok: false; message: string };
+export type HqSsoResult = { ok: true; next?: string } | { ok: false; message: string };
 
 export function resetHqSsoForTests(): void {
   held = null;
@@ -64,6 +64,15 @@ export function exchangeHqSso(
       });
     } catch {
       return { ok: false, message: UNREACHABLE };
+    }
+    if (res.status === 200) {
+      try {
+        const data = await res.json() as { next?: unknown };
+        if (typeof data.next === "string" && /^\/studio\?handoff=[a-f0-9]{64}$/.test(data.next)) {
+          return { ok: true, next: data.next };
+        }
+      } catch { /* Invalid target response must not redirect. */ }
+      return { ok: false, message: FAILED };
     }
     let detail: string | null = null;
     if (res.status !== 204) {

@@ -66,3 +66,13 @@ describe("exchangeHqSso", () => {
     expect(HQ_SSO_MISSING).toMatch(/missing/i);
   });
 });
+
+it("accepts only the server's bounded local handoff redirect", async () => {
+  resetHqSsoForTests();
+  const next = `/studio?handoff=${"a".repeat(64)}`;
+  const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({next}), {status:200}));
+  expect(await exchangeHqSso("token",fetcher)).toEqual({ok:true,next});
+  resetHqSsoForTests();
+  fetcher.mockResolvedValue(new Response(JSON.stringify({next:"https://evil.example"}), {status:200}));
+  expect((await exchangeHqSso("token",fetcher)).ok).toBe(false);
+});

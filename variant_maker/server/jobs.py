@@ -161,6 +161,8 @@ class Job:
     generate_captions: bool = False
     export_destination_id: str | None = None
     export_id: str | None = None
+    postdesk_target: dict | None = None
+    workflow_output_folder_id: str | None = None
     onscreen: dict | None = None
 
 
@@ -344,6 +346,8 @@ def _job_to_dict(job: Job) -> dict:
         "generate_captions": job.generate_captions,
         "export_destination_id": job.export_destination_id or None,
         "export_id": job.export_id or None,
+        "postdesk_target": job.postdesk_target,
+        "workflow_output_folder_id": job.workflow_output_folder_id,
         "onscreen": job.onscreen,
         "error": job.error,
         "sources": [
@@ -412,6 +416,8 @@ def _job_from_dict(data: dict) -> Job:
         generate_captions=bool(data.get("generate_captions") or False),
         export_destination_id=(str(data.get("export_destination_id") or "").strip() or None),
         export_id=(str(data.get("export_id") or "").strip() or None),
+        postdesk_target=data.get("postdesk_target"),
+        workflow_output_folder_id=data.get("workflow_output_folder_id"),
         onscreen=data.get("onscreen") if isinstance(data.get("onscreen"), dict) else None,
     )
 
@@ -532,6 +538,8 @@ class JobStore:
                                caption_prompt: str = "",
                                caption_prompts: list[str] | None = None,
                                export_destination_id: str | None = None,
+                               postdesk_target: dict | None = None,
+                               workflow_output_folder_id: str | None = None,
                                onscreen: dict | None = None,
                                onscreens: list | None = None) -> Job:
         """Create a job from already-staged files: [(filename, abs_path), ...]."""
@@ -551,6 +559,8 @@ class JobStore:
             caption_prompt=caption_prompt,
             caption_prompts=caption_prompts,
             export_destination_id=export_destination_id,
+            postdesk_target=postdesk_target,
+            workflow_output_folder_id=workflow_output_folder_id,
             onscreen=onscreen,
             onscreens=onscreens,
         )
@@ -561,6 +571,8 @@ class JobStore:
                     caption_prompt: str = "",
                     caption_prompts: list[str] | None = None,
                     export_destination_id: str | None = None,
+                    postdesk_target: dict | None = None,
+                    workflow_output_folder_id: str | None = None,
                     onscreen: dict | None = None,
                     onscreens: list | None = None) -> Job:
         from ..onscreen import OnScreenError, normalize_project
@@ -594,6 +606,8 @@ class JobStore:
                    created_seq=created_seq,
                    generate_captions=bool(generate_captions),
                    export_destination_id=(str(export_destination_id or "").strip() or None),
+                   postdesk_target=postdesk_target,
+                   workflow_output_folder_id=workflow_output_folder_id,
                    onscreen=clean_onscreen)
         token = CancelToken()
         with self._lock:

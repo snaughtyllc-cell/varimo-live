@@ -392,6 +392,7 @@ class WorkflowSummaryOut(BaseModel):
 
 class WorkflowOut(BaseModel):
     id: str
+    winner: str = ""
     name: str
     inbox_destination_id: str
     output_destination_id: str
@@ -408,6 +409,7 @@ class WorkflowOut(BaseModel):
 
 
 class WorkflowCreateIn(BaseModel):
+    winner: str = ""
     name: str
     inbox_destination_id: str
     output_destination_id: str
@@ -422,6 +424,7 @@ class WorkflowCreateIn(BaseModel):
 
 
 class WorkflowUpdateIn(BaseModel):
+    winner: str | None = None
     name: str | None = None
     inbox_destination_id: str | None = None
     output_destination_id: str | None = None

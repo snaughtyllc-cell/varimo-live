@@ -42,7 +42,7 @@ class FakeDrive(DriveClient):
             if n["parent"] != folder_id:
                 continue
             md5 = self._md5(n["blob"]) if n["blob"] else None
-            out.append(DriveFile(id=fid, name=n["name"], mime_type=n["mime_type"], md5=md5))
+            out.append(DriveFile(id=fid, name=n["name"], mime_type=n["mime_type"], md5=md5, parents=(n["parent"],) if n["parent"] else ()))
         return out
 
     def download(self, file_id: str, dest_path: str) -> None:
@@ -67,7 +67,7 @@ class FakeDrive(DriveClient):
     def get_file(self, file_id: str) -> DriveFile:
         n = self._nodes[file_id]  # KeyError if missing
         md5 = self._md5(n["blob"]) if n["blob"] else None
-        return DriveFile(id=file_id, name=n["name"], mime_type=n["mime_type"], md5=md5)
+        return DriveFile(id=file_id, name=n["name"], mime_type=n["mime_type"], md5=md5, parents=(n["parent"],) if n["parent"] else ())
 
     def trash(self, file_id: str) -> None:
         del self._nodes[file_id]

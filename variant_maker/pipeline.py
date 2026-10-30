@@ -19,6 +19,7 @@ from .manifest import Manifest, VariantRecord
 from .platforms import fit_platform_to_source, resolve_platform
 from .presets import get_preset
 from .probe import probe
+from .reel_recipe import params_for_copy
 from .sampler import apply_rotate_safe, clamp_strength, derive_seed, disable_fast_pixel_ops, sample
 from .shot import classify_shot
 from .variant_names import clip_filename
@@ -105,8 +106,9 @@ def run(config: dict, *, on_event=None) -> Manifest:
     jobs = max(1, config.get("jobs", 1))
 
     audio_uniqueness = bool(config.get("audio_uniqueness", False))
+    rubberband_request = config.get("rubberband")
     if audio_uniqueness:
-        rubberband = config.get("rubberband")
+        rubberband = rubberband_request
         if rubberband is None:
             rubberband = has_rubberband()
     else:
@@ -135,6 +137,20 @@ def run(config: dict, *, on_event=None) -> Manifest:
         auto_tune = False
         uniq_strengths = [1.0]
 
+    # Fixed Reel table. One encode, no strong preset, pitch when rubberband exists.
+    reel_on = (
+        bool(config.get("reel_recipe"))
+        and str(config.get("quality_mode") or "fast").strip().lower() != "hq"
+    )
+    copy_start = max(int(config.get("copy_start") or 1), 1)
+    if reel_on:
+        allow_creative_escalate = False
+        auto_tune = False
+        uniq_strengths = [1.0]
+        rotate_off = True
+        max_regen = 0
+        rubberband = has_rubberband() if rubberband_request is None else bool(rubberband_request)
+
     master_seed = config.get("seed")
     if master_seed is None:
         master_seed = random.randrange(2 ** 32)
@@ -156,9 +172,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
         getattr(src, "width", None),
         getattr(src, "height", None),
     )
-    # Fast: never lanczos-upscale a sub-canvas source (720p IG → 1080 glitter).
-    # HQ Real-ESRGAN is the true upscaler and still targets the full social canvas.
-    if not hq:
+    # Fast random path: never lanczos-upscale a sub-canvas source (720p → glitter).
+    # The fixed Reel table targets the exact social canvas, including 720 → 1080.
+    # HQ Real-ESRGAN still targets the full social canvas on its own.
+    if not hq and not reel_on:
         platform = fit_platform_to_source(platform, src.width, src.height)
     shot_info = classify_shot(src.path, src.duration_s)
     shot_kind = shot_info.get("kind")
@@ -188,6 +205,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
         "protect": False,
         "count": count,
         "shot": shot_info,
+        "reel_recipe": bool(reel_on),
+        "copy_start": copy_start if reel_on else None,
         "quality_floor": {"metric": "vmaf", "value": floor},
         "ffmpeg_version": _ffmpeg_version(),
         "copyid": copyid_mode,
@@ -198,17 +217,27 @@ def run(config: dict, *, on_event=None) -> Manifest:
         fname = _name(vseed)
         return vseed, fname, os.path.join(out_dir, fname)
 
+    def _draw(use_preset, vseed: int, strength: float, index: int) -> dict:
+        if reel_on:
+            return params_for_copy(
+                copy_start + index - 1,
+                duration_s=src.duration_s,
+                rubberband=bool(rubberband),
+            )
+        return sample(
+            use_preset, vseed, strength=strength, rubberband=rubberband,
+            duration_s=src.duration_s, shot=shot_kind,
+            width=src.width, height=src.height,
+            audio_uniqueness=audio_uniqueness,
+        )
+
     # --dry-run: print the plan + commands, render nothing, write nothing.
     if dry_run:
         from .neural import protect
         records = []
         for i in range(1, count + 1):
             vseed, fname, path = _prep(i)
-            params = sample(
-                preset, vseed, rubberband=rubberband, duration_s=src.duration_s,
-                shot=shot_kind, width=src.width, height=src.height,
-                audio_uniqueness=audio_uniqueness,
-            )
+            params = _draw(preset, vseed, 1.0, i)
             if use_face_protect(config.get("quality_mode")):
                 params = protect.apply_to_params(params)
             _apply_variant_policy(params, vseed, preset, shot_kind, rotate_off, config)
@@ -255,12 +284,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             effective_strength = clamp_strength(strength)
             last_strength = effective_strength
             emit("rendering", index=i, attempt=attempt_no)
-            params = sample(
-                use_preset, vseed, strength=effective_strength, rubberband=rubberband,
-                duration_s=src.duration_s, shot=shot_kind,
-                width=src.width, height=src.height,
-                audio_uniqueness=audio_uniqueness,
-            )
+            params = _draw(use_preset, vseed, effective_strength, i)
             if protect_frame is not None:
                 from .neural import protect
                 params = protect.apply_to_params(params, frame_path=protect_frame)
@@ -648,7 +672,10 @@ def run(config: dict, *, on_event=None) -> Manifest:
 
         if spatial_ok is False:
             status = "corrupt"
-        elif uniqueness.status_for_bits(u.get("bits"), target=uniqueness_target) == "below_floor":
+        elif (
+            not reel_on
+            and uniqueness.status_for_bits(u.get("bits"), target=uniqueness_target) == "below_floor"
+        ):
             # Missed 24 after the hunt, and missed the 19-bit / 30% post-escalate
             # ship floor. Do not count this as a delivered ok file.
             u["uniqueness_status"] = "below_floor"

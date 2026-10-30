@@ -13,6 +13,8 @@ from dataclasses import dataclass, field, replace
 from typing import Literal
 
 from variant_maker.normalize import maybe_normalize_upload
+from variant_maker.probe import sha256_file
+from variant_maker.reel_copies import allocate, reset_copy_start, set_copy_start
 
 from .cancel import USER_CANCEL_MSG, CancelToken, JobCancelled
 from .caption_ai import (
@@ -771,6 +773,24 @@ class JobStore:
         if changed:
             self._persist(job)
 
+    def _encode_source(
+        self, in_path: str, *, count: int, out_dir: str, source_id: str, on_event,
+        allow_creative_escalate: bool, quality_mode: str, cancel_token,
+    ):
+        """Run one source. Fast packs take the next Reel copy numbers for this file."""
+        token = None
+        if normalize_quality_mode(quality_mode) == "fast" and os.path.isfile(in_path):
+            token = set_copy_start(allocate(self._ws.root, sha256_file(in_path), count))
+        try:
+            return self._runner.run(
+                in_path, count=count, out_dir=out_dir, source_id=source_id,
+                on_event=on_event, allow_creative_escalate=allow_creative_escalate,
+                quality_mode=quality_mode, cancel_token=cancel_token,
+            )
+        finally:
+            if token is not None:
+                reset_copy_start(token)
+
     def _run_job(self, job: Job, token: CancelToken, *, skip_finished: bool = False) -> None:
         captions_thread: threading.Thread | None = None
         try:
@@ -852,7 +872,7 @@ class JobStore:
                             f"({type(exc).__name__}: {exc}); re-running source",
                             flush=True,
                         )
-                        result = self._runner.run(
+                        result = self._encode_source(
                             in_path, count=job.count, out_dir=out_dir,
                             source_id=source.source_id, on_event=on_event,
                             allow_creative_escalate=job.allow_creative_escalate,
@@ -860,7 +880,7 @@ class JobStore:
                             cancel_token=token,
                         )
                 else:
-                    result = self._runner.run(
+                    result = self._encode_source(
                         in_path, count=job.count, out_dir=out_dir,
                         source_id=source.source_id, on_event=on_event,
                         allow_creative_escalate=job.allow_creative_escalate,
@@ -1340,7 +1360,7 @@ class JobStore:
                 if mapped.state in ("done", "looking") or token.runpod_job_id:
                     self._persist(job)
 
-            result = self._runner.run(
+            result = self._encode_source(
                 self._ws.source_in_path(job.job_id, source.source_id, source.filename),
                 count=n,
                 out_dir=self._ws.source_out_dir(job.job_id, source.source_id),

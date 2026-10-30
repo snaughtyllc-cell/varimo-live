@@ -150,6 +150,7 @@ def test_runner_sends_hq_defaults_in_payload(tmp_path):
     assert captured["auto_tune"] is False
     assert captured["uniqueness_target"] == DEFAULT_TARGET
     assert captured["jobs"] == 1
+    assert captured["reel_recipe"] is False
 
 
 def test_runner_quality_mode_env_fast(tmp_path, monkeypatch):
@@ -170,6 +171,8 @@ def test_runner_quality_mode_env_fast(tmp_path, monkeypatch):
     assert captured["quality_mode"] == "fast"
     assert captured["auto_tune"] is True
     assert captured["jobs"] == 1
+    assert captured["reel_recipe"] is True
+    assert captured["copy_start"] == 1
 
 
 def test_cpu_pack_requests_twenty_five_minute_execution_timeout(tmp_path):

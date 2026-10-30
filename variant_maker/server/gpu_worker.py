@@ -85,6 +85,8 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
         "allow_creative_escalate": job_input.get("allow_creative_escalate", True),
         "auto_tune": auto_tune,
         "rubberband": job_input.get("rubberband"),
+        "reel_recipe": bool(job_input.get("reel_recipe", quality_mode == "fast")),
+        "copy_start": int(job_input.get("copy_start") or 1),
     }
 
     q: queue.Queue = queue.Queue()

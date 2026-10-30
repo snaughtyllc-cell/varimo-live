@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 
+from ..reel_copies import get_copy_start
 from .copy_recover import recover_variants_from_keys, variant_mp4_basenames
 from .events import VariantEvent
 from .runner import (
@@ -65,6 +66,8 @@ class RunPodServerlessRunner:
             "min_bits_vs_peers": MIN_BITS_VS_PEERS,
             "auto_tune": limits.get("auto_tune", True),
             "jobs": encode_jobs_for_worker(quality_mode, count),
+            "reel_recipe": quality_mode == "fast",
+            "copy_start": get_copy_start() or 1,
         }, "policy": {"executionTimeout": EXECUTION_TIMEOUT_MS}}
         return self._consume_stream(
             self._client.stream_run(payload, cancel_token=cancel_token),

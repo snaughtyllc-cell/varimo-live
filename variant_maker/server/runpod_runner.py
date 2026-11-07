@@ -45,7 +45,7 @@ class RunPodServerlessRunner:
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
             quality_mode: str | None = None,
-            cancel_token=None) -> SourceResult:
+            cancel_token=None, motion: str | None = None) -> SourceResult:
         basename = os.path.basename(source_path)
         source_key = f"inputs/{source_id}/{basename}"
         self._store.put(source_key, source_path)
@@ -66,6 +66,8 @@ class RunPodServerlessRunner:
             "auto_tune": limits.get("auto_tune", True),
             "jobs": encode_jobs_for_worker(quality_mode, count),
         }, "policy": {"executionTimeout": EXECUTION_TIMEOUT_MS}}
+        if motion:
+            payload["input"]["motion"] = motion
         return self._consume_stream(
             self._client.stream_run(payload, cancel_token=cancel_token),
             out_dir=out_dir, source_id=source_id, on_event=on_event,

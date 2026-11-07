@@ -316,6 +316,7 @@ def sample(
     width: int | None = None,
     height: int | None = None,
     audio_uniqueness: bool = False,
+    motion_off: bool = False,
 ) -> dict:
     """Draw budgeted, zero-mean params for one variant.
 
@@ -328,6 +329,8 @@ def sample(
     hint (`talking_head` / `motion`); None keeps the preset rebuild band so seeds match.
     ``width`` / ``height`` select the Instagram-720 crop (punch from the top).
     Omitted size keeps the 1080 caption-safe center band so seeds match.
+    ``motion_off`` pins the crop window (end == start) and zeroes handheld wander
+    AFTER every draw, so RNG streams and all other axes match the default sample.
     """
     strength = clamp_strength(strength)
     budget = preset.budget * strength
@@ -447,6 +450,13 @@ def sample(
         if inner_lo <= inner_hi:
             raw["crop_y_frac"] = min(max(raw["crop_y_frac"], inner_lo), inner_hi)
             raw["crop_y_end_frac"] = min(max(raw["crop_y_end_frac"], inner_lo), inner_hi)
+    if motion_off:
+        # Static crop: filtergraph emits the plain crop string when end == start
+        # and handheld amps are zero. Drawn after the RNG calls above on purpose.
+        raw["crop_x_end_frac"] = raw["crop_x_frac"]
+        raw["crop_y_end_frac"] = raw["crop_y_frac"]
+        raw["crop_hand_amp_x"] = 0.0
+        raw["crop_hand_amp_y"] = 0.0
     raw["trim_end_s"] = rng.uniform(preset.trim_s.lo, preset.trim_s.hi)
     raw["resample_px"] = rng.choice(RESAMPLE_PX_CHOICES)
     raw["resample_flags"] = rng.choice(RESAMPLE_FLAGS)

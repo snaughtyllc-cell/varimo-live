@@ -808,3 +808,51 @@ def test_apply_rotate_safe_uses_their_band():
     assert apply_rotate_safe(-2.0, "talking_head") == pytest.approx(-0.8)
     assert apply_rotate_safe(0.5, "talking_head") == pytest.approx(0.5)
     assert apply_rotate_safe(0.0, "talking_head", allow_zero=True) == 0.0
+
+
+MOTION_OFF_SEEDS = SEEDS[:60]
+
+
+@pytest.mark.parametrize("shot", [None, "talking_head", "motion"])
+@pytest.mark.parametrize("dims", [(None, None), (720, 1280)])
+def test_motion_off_zeroes_drift_and_handheld(shot, dims):
+    w, h = dims
+    for seed in MOTION_OFF_SEEDS:
+        v = sample(MEDIUM, seed, shot=shot, width=w, height=h, motion_off=True)["video"]
+        assert v["crop_x_end_frac"] == v["crop_x_frac"]
+        assert v["crop_y_end_frac"] == v["crop_y_frac"]
+        assert v["crop_hand_amp_x"] == 0.0 and v["crop_hand_amp_y"] == 0.0
+
+
+@pytest.mark.parametrize("shot", [None, "talking_head"])
+def test_motion_off_changes_nothing_else(shot):
+    """Every other axis is bit-identical to the default sample for the same seed."""
+    motion_keys = {"crop_x_end_frac", "crop_y_end_frac", "crop_hand_amp_x", "crop_hand_amp_y"}
+    for seed in MOTION_OFF_SEEDS:
+        base = sample(STRONG, seed, shot=shot, width=720, height=1280)
+        off = sample(STRONG, seed, shot=shot, width=720, height=1280, motion_off=True)
+        assert {k: v for k, v in base["video"].items() if k not in motion_keys} == {
+            k: v for k, v in off["video"].items() if k not in motion_keys
+        }
+        assert {k: v for k, v in base.items() if k != "video"} == {
+            k: v for k, v in off.items() if k != "video"
+        }
+
+
+def test_default_sample_still_drifts():
+    """Without the flag, the camera motion is unchanged (drift + handheld present)."""
+    drifting = [
+        sample(MEDIUM, s)["video"] for s in MOTION_OFF_SEEDS
+    ]
+    assert any(v["crop_x_end_frac"] != v["crop_x_frac"] for v in drifting)
+    assert all(v["crop_hand_amp_x"] > 0 and v["crop_hand_amp_y"] > 0 for v in drifting)
+
+
+def test_motion_off_params_render_static_crop():
+    from variant_maker import filtergraph
+
+    v = sample(MEDIUM, MOTION_OFF_SEEDS[0], motion_off=True)["video"]
+    out = filtergraph._crop_filter(v, 10.0)
+    assert out.startswith("crop=iw*") and "sin(2*PI" not in out and "min(max(" not in out
+    d = sample(MEDIUM, MOTION_OFF_SEEDS[0])["video"]
+    assert "sin(2*PI" in filtergraph._crop_filter(d, 10.0)

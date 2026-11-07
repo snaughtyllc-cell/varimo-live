@@ -24,7 +24,8 @@ class FakeRunner:
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
             quality_mode: str = "fast",
-            cancel_token=None) -> SourceResult:
+            cancel_token=None, motion=None) -> SourceResult:
+        self.last_motion = motion
         self.last_quality_mode = quality_mode
         self.last_allow_creative_escalate = allow_creative_escalate
         os.makedirs(out_dir, exist_ok=True)

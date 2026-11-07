@@ -164,6 +164,12 @@ class Job:
     postdesk_target: dict | None = None
     workflow_output_folder_id: str | None = None
     onscreen: dict | None = None
+    motion: str | None = None  # "off" = no crop drift / handheld (HQ API opt-out)
+
+
+def _motion_kwargs(job: "Job") -> dict:
+    """Only pass `motion` to the runner when set, so other runners are untouched."""
+    return {"motion": job.motion} if job.motion else {}
 
 
 def _is_worker_timeout(raw: str) -> bool:
@@ -349,6 +355,7 @@ def _job_to_dict(job: Job) -> dict:
         "postdesk_target": job.postdesk_target,
         "workflow_output_folder_id": job.workflow_output_folder_id,
         "onscreen": job.onscreen,
+        "motion": job.motion,
         "error": job.error,
         "sources": [
             {
@@ -419,6 +426,7 @@ def _job_from_dict(data: dict) -> Job:
         postdesk_target=data.get("postdesk_target"),
         workflow_output_folder_id=data.get("workflow_output_folder_id"),
         onscreen=data.get("onscreen") if isinstance(data.get("onscreen"), dict) else None,
+        motion="off" if data.get("motion") == "off" else None,
     )
 
 
@@ -541,7 +549,8 @@ class JobStore:
                                postdesk_target: dict | None = None,
                                workflow_output_folder_id: str | None = None,
                                onscreen: dict | None = None,
-                               onscreens: list | None = None) -> Job:
+                               onscreens: list | None = None,
+                               motion: str | None = None) -> Job:
         """Create a job from already-staged files: [(filename, abs_path), ...]."""
         self._assert_quota(len(paths) * int(count))
         job_id = uuid.uuid4().hex[:12]
@@ -563,6 +572,7 @@ class JobStore:
             workflow_output_folder_id=workflow_output_folder_id,
             onscreen=onscreen,
             onscreens=onscreens,
+            motion=motion,
         )
 
     def _start_job(self, job_id: str, sources: list[JobSource], count: int,
@@ -574,7 +584,8 @@ class JobStore:
                     postdesk_target: dict | None = None,
                     workflow_output_folder_id: str | None = None,
                     onscreen: dict | None = None,
-                    onscreens: list | None = None) -> Job:
+                    onscreens: list | None = None,
+                    motion: str | None = None) -> Job:
         from ..onscreen import OnScreenError, normalize_project
 
         try:
@@ -608,7 +619,8 @@ class JobStore:
                    export_destination_id=(str(export_destination_id or "").strip() or None),
                    postdesk_target=postdesk_target,
                    workflow_output_folder_id=workflow_output_folder_id,
-                   onscreen=clean_onscreen)
+                   onscreen=clean_onscreen,
+                   motion=motion)
         token = CancelToken()
         with self._lock:
             self._jobs[job_id] = job
@@ -858,6 +870,7 @@ class JobStore:
                             allow_creative_escalate=job.allow_creative_escalate,
                             quality_mode=job.quality_mode,
                             cancel_token=token,
+                            **_motion_kwargs(job),
                         )
                 else:
                     result = self._runner.run(
@@ -866,6 +879,7 @@ class JobStore:
                         allow_creative_escalate=job.allow_creative_escalate,
                         quality_mode=job.quality_mode,
                         cancel_token=token,
+                        **_motion_kwargs(job),
                     )
                 self._stamp_onscreen(source.onscreen or job.onscreen, out_dir, result)
                 new_variants = [
@@ -1349,6 +1363,7 @@ class JobStore:
                 allow_creative_escalate=job.allow_creative_escalate,
                 quality_mode=job.quality_mode,
                 cancel_token=token,
+                **_motion_kwargs(job),
             )
             self._stamp_onscreen(source.onscreen or job.onscreen, self._ws.source_out_dir(
                 job.job_id, source.source_id,

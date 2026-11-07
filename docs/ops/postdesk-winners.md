@@ -56,6 +56,15 @@ Request (exact outer fields, count integer 1–40):
 }
 ```
 
+Optional third outer field `"motion": "off"` (the only accepted value; anything
+else is 400). It disables Varimo's own camera motion for that job: the crop
+window's start→end drift and the handheld wander are zeroed, leaving a static
+crop. Use it when a downstream style layer adds its own push/pull/drift. Crop
+size/offset, speed, color, mirror, audio and uniqueness are unchanged. Omit the
+field for today's behavior. The value is stored with the operation: a retry must
+repeat the same `motion` (or omit it consistently), otherwise it is 409, like a
+count conflict. The GPU/CPU worker image must include this change to honor it.
+
 Target has exactly those four fields. Source ID: 1–200 alphanumeric, `_` or `-`.
 Other values: 1–120 characters, no leading/trailing whitespace, slash, backslash,
 control characters, `.` or `..`. Names match exactly, including case.
@@ -74,7 +83,7 @@ HTTP 200 response:
 
 Accepted means a durable job exists (possibly queued), not finished or posted.
 Identical retries return the existing job. Same operation with a different
-source or count returns 409. One operation cannot move to another user.
+source, count or motion returns 409. One operation cannot move to another user.
 
 `GET /api/hq/jobs/<operation_id>` uses the same Authorization header. It returns
 operation_id, target, count, job_id, state, source_name, folder_id and exported.

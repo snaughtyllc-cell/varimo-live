@@ -1607,11 +1607,16 @@ def create_app(
                 save(path, {"workspace_id": user.workspace_id, "email": user.email, "target": target})
         return handoff_id
 
+    _INHERIT_MOTION = object()
+
     @app.post("/api/hq/jobs")
     def submit_hq_job(request: Request, body: dict):
         from .postdesk import validate_target
-        if set(body) != {"target", "count"} or type(body.get("count")) is not int:
+        if (not {"target", "count"} <= set(body) <= {"target", "count", "motion"}
+                or type(body.get("count")) is not int):
             raise HTTPException(status_code=400, detail="Expected target and integer count")
+        if "motion" in body and body["motion"] != "off":
+            raise HTTPException(status_code=400, detail='motion must be "off" when present')
         if not 1 <= body["count"] <= 40:
             raise HTTPException(status_code=400, detail="count must be 1–40")
         try:
@@ -1621,7 +1626,7 @@ def create_app(
         if request.state.hq_models is not None and target["model"] not in request.state.hq_models:
             raise HTTPException(status_code=403, detail="Model outside credential scope")
         handoff_id = _register_hq_target(_require_user(request), target)
-        result = generate_hq_target(request, handoff_id, body["count"])
+        result = _generate_hq(request, handoff_id, body["count"], body.get("motion"))
         return {"status": "accepted", "operation_id": handoff_id, "job_id": result.job_id,
                 "status_url": "/api/hq/jobs/" + handoff_id,
                 "manual_url": "/studio?handoff=" + handoff_id}
@@ -1704,6 +1709,10 @@ def create_app(
 
     @app.post("/api/hq/targets/{handoff_id}/generate", response_model=CreateJobResponse)
     def generate_hq_target(request: Request, handoff_id: str, count: int = 20):
+        # Manual fallback: adopts whatever motion the operation was created with.
+        return _generate_hq(request, handoff_id, count, _INHERIT_MOTION)
+
+    def _generate_hq(request: Request, handoff_id: str, count: int, motion):
         from .postdesk import authorized_source, resolve_target_folder, locked, load, save, claim_winner
         path, _record = _handoff_record(request, handoff_id)
         _require_drive()
@@ -1713,6 +1722,10 @@ def create_app(
             record = load(path)
             if record.get("count") is not None and record["count"] != count:
                 raise HTTPException(status_code=409, detail="Operation count conflicts with original request")
+            if motion is _INHERIT_MOTION:
+                motion = record.get("motion")
+            elif record.get("count") is not None and record.get("motion") != motion:
+                raise HTTPException(status_code=409, detail="Operation motion conflicts with original request")
             # Recover a crash after job creation but before the handoff receipt.
             found = next((j for j in store.list()
                           if (j.postdesk_target or {}).get("handoff_id") == handoff_id), None)
@@ -1736,9 +1749,11 @@ def create_app(
                         raise HTTPException(status_code=409, detail=str(exc)) from None
                     record["submitting"] = True
                     record["count"] = count
+                    if motion:
+                        record["motion"] = motion
                     save(path, record)
                     job = store.create_job_from_paths(
-                        [(name, local)], count=count, quality_mode="fast",
+                        [(name, local)], count=count, quality_mode="fast", motion=motion,
                         postdesk_target={**record["target"], "folder_id": folder,
                                          "handoff_id": handoff_id},
                     )

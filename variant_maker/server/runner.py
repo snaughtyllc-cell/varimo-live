@@ -174,7 +174,7 @@ class Runner(Protocol):
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
             quality_mode: str = DEFAULT_QUALITY_MODE,
-            cancel_token=None) -> SourceResult:
+            cancel_token=None, motion: str | None = None) -> SourceResult:
         ...
 
 
@@ -185,7 +185,7 @@ class LocalRunner:
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
             quality_mode: str = DEFAULT_QUALITY_MODE,
-            cancel_token=None) -> SourceResult:
+            cancel_token=None, motion: str | None = None) -> SourceResult:
         def engine_event(state: str, **kw) -> None:
             on_event(VariantEvent(
                 source_id=source_id,
@@ -230,6 +230,8 @@ class LocalRunner:
             "auto_tune": limits.get("auto_tune", True),
             "cancel_token": cancel_token,
         }
+        if motion:
+            config["motion"] = motion
         manifest = pipeline.run(config, on_event=engine_event)
         variants = [
             VariantResult(
@@ -300,13 +302,15 @@ class RoutingRunner:
             on_event: Callable[[VariantEvent], None],
             allow_creative_escalate: bool = True,
             quality_mode: str = DEFAULT_QUALITY_MODE,
-            cancel_token=None) -> SourceResult:
+            cancel_token=None, motion: str | None = None) -> SourceResult:
         primary = self._pick(quality_mode, count)
         kwargs = {
             "count": count, "out_dir": out_dir, "source_id": source_id, "on_event": on_event,
             "allow_creative_escalate": allow_creative_escalate,
             "quality_mode": quality_mode, "cancel_token": cancel_token,
         }
+        if motion:
+            kwargs["motion"] = motion
         last_exc: BaseException | None = None
         last_result: SourceResult | None = None
         for index, runner in enumerate(self._encode_chain(primary, quality_mode)):

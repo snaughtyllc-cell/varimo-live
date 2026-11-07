@@ -86,6 +86,8 @@ def process_job(job_input: dict, store: ObjectStore, *, work_dir: str) -> Iterat
         "auto_tune": auto_tune,
         "rubberband": job_input.get("rubberband"),
     }
+    if job_input.get("motion"):
+        config["motion"] = job_input["motion"]
 
     q: queue.Queue = queue.Queue()
     DONE = object()

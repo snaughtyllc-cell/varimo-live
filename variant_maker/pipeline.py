@@ -112,6 +112,8 @@ def run(config: dict, *, on_event=None) -> Manifest:
     else:
         rubberband = False
     config = {**config, "rubberband": rubberband, "audio_uniqueness": audio_uniqueness}
+    # Opt-out of Varimo's own crop drift + handheld (a downstream layer adds motion).
+    motion_off = config.get("motion") == "off"
 
     # Uniqueness gate: try the light (config) preset at escalating strengths; if none
     # clears the target (and peer-bits floor), spend exactly one creative-escalate
@@ -207,7 +209,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
             params = sample(
                 preset, vseed, rubberband=rubberband, duration_s=src.duration_s,
                 shot=shot_kind, width=src.width, height=src.height,
-                audio_uniqueness=audio_uniqueness,
+                audio_uniqueness=audio_uniqueness, motion_off=motion_off,
             )
             if use_face_protect(config.get("quality_mode")):
                 params = protect.apply_to_params(params)
@@ -259,7 +261,7 @@ def run(config: dict, *, on_event=None) -> Manifest:
                 use_preset, vseed, strength=effective_strength, rubberband=rubberband,
                 duration_s=src.duration_s, shot=shot_kind,
                 width=src.width, height=src.height,
-                audio_uniqueness=audio_uniqueness,
+                audio_uniqueness=audio_uniqueness, motion_off=motion_off,
             )
             if protect_frame is not None:
                 from .neural import protect

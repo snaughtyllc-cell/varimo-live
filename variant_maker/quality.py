@@ -26,6 +26,7 @@ _QUALITY_NEUTRAL = {
     "crop_keep": 1.0, "crop_x_frac": 0.5, "crop_y_frac": 0.5,
     "rotate_deg": 0.0, "trim_s": 0.0, "trim_end_s": 0.0, "speed": 1.0,
     "resample_px": 0,
+    "keystone_a": 0.0,  # tilt is geometry: in the VMAF proxy it misaligns every pixel (score ~0)
     "rebuild_scale": 1.0,
     "luma_shade": 0.0,
 }
@@ -99,6 +100,9 @@ def quality_render(src: SourceInfo, params: dict, out_path: str) -> str:
     """Render the quality proxy: quality ops only, at source geometry/timing (for VMAF)."""
     v = dict(params["video"])
     v.update(_QUALITY_NEUTRAL)
+    # Keep the source frame rate: an out_fps of 48/60 makes twice the frames, VMAF pairs them
+    # by index, and the score sinks even though the copy looks fine.
+    v["out_fps"] = None
     qparams = {"video": v, "audio": params["audio"]}
     ffmpeg.render_variant(src, qparams, get_platform("none"), out_path)
     return out_path

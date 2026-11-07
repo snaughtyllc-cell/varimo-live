@@ -243,3 +243,57 @@ def test_regen_until_pass_on_regen_optional():
     from variant_maker import quality
     out = quality.regen_until_pass(lambda s: {"passed": True}, max_regen=3)
     assert out["regen_count"] == 0  # no on_regen, no error
+
+
+def test_quality_render_strips_keystone(monkeypatch, tmp_path):
+    """Keystone tilt is geometry: left in the VMAF proxy it shifts pixels by up to ~6% of the
+    width at one edge and VMAF collapses to ~0, so every tilted copy failed the gate and was
+    regenerated max_regen times before shipping best_effort."""
+    captured = {}
+
+    def fake_render(src, params, platform, path, dry_run=False):
+        captured["video"] = dict(params["video"])
+        open(path, "w").close()
+        return path, "cmd"
+
+    monkeypatch.setattr(ffmpeg, "render_variant", fake_render)
+    src = SourceInfo(
+        "in.mp4", "abc", 4.0, 1080, 1920, 30.0, True,
+        ColorTags("tv", "bt709", "bt709", "bt709"),
+    )
+    params = _neutral_params()
+    params["video"]["keystone_a"] = -0.03
+    quality.quality_render(src, params, str(tmp_path / "qr.mp4"))
+    assert captured["video"]["keystone_a"] == 0.0
+    assert params["video"]["keystone_a"] == -0.03  # the real variant keeps its tilt
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
+def test_vmaf_high_for_tilted_variant_quality_render(real_clip, tmp_path):
+    src = probe(real_clip)
+    params = _neutral_params()
+    params["video"]["keystone_a"] = 0.03
+    qr = quality.quality_render(src, params, str(tmp_path / "tilted.mp4"))
+    assert quality.vmaf(real_clip, qr) > 85
+
+
+def test_quality_render_keeps_source_frame_rate(monkeypatch, tmp_path):
+    """out_fps (48/60) would double the proxy's frames; VMAF pairs frames by index."""
+    captured = {}
+
+    def fake_render(src, params, platform, path, dry_run=False):
+        captured["video"] = dict(params["video"])
+        open(path, "w").close()
+        return path, "cmd"
+
+    monkeypatch.setattr(ffmpeg, "render_variant", fake_render)
+    src = SourceInfo(
+        "in.mp4", "abc", 4.0, 1080, 1920, 30.0, True,
+        ColorTags("tv", "bt709", "bt709", "bt709"),
+    )
+    params = _neutral_params()
+    params["video"]["out_fps"] = 60
+    quality.quality_render(src, params, str(tmp_path / "qr.mp4"))
+    assert captured["video"]["out_fps"] is None
+    assert params["video"]["out_fps"] == 60

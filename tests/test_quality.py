@@ -297,3 +297,21 @@ def test_quality_render_keeps_source_frame_rate(monkeypatch, tmp_path):
     quality.quality_render(src, params, str(tmp_path / "qr.mp4"))
     assert captured["video"]["out_fps"] is None
     assert params["video"]["out_fps"] == 60
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not HAS_FFMPEG, reason="needs ffmpeg")
+def test_signalstats_handles_video_starting_after_default_probe_window(tmp_path):
+    """Audio can start >5s before video; movie must probe far enough to find its format."""
+    path = str(tmp_path / "late video.mp4")
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
+         "-i", "sine=frequency=440:duration=7", "-itsoffset", "6",
+         "-f", "lavfi", "-i", "testsrc2=size=64x64:rate=10:duration=1",
+         "-map", "1:v", "-map", "0:a", "-c:v", "libx264",
+         "-pix_fmt", "yuv420p", "-c:a", "aac", path],
+        check=True, capture_output=True,
+    )
+    luma, saturation = quality._signalstats(path)
+    assert luma > 0
+    assert saturation > 0

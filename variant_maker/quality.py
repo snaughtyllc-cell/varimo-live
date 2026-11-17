@@ -54,10 +54,15 @@ def _lavfi_safe(path: str):
 
 def _signalstats(path: str) -> tuple[float, float]:
     """Mean (YAVG luma, SATAVG saturation) across frames via the signalstats lavfi graph."""
+    # Audio may precede video by more than the default five-second probe window.
+    # Probe up to 100 seconds / 100 MB so movie can discover the pixel format.
     with _lavfi_safe(path) as safe:
         cmd = [
             "ffprobe", "-v", "error", "-f", "lavfi",
-            "-i", f"movie={safe},signalstats",
+            "-i", (
+                f"movie={safe}:format_opts='probesize=100000000"
+                "\\:analyzeduration=100000000',signalstats"
+            ),
             "-show_entries", "frame_tags=lavfi.signalstats.YAVG,lavfi.signalstats.SATAVG",
             "-print_format", "json",
         ]

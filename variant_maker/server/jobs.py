@@ -738,17 +738,22 @@ class JobStore:
         """Write job.json so a Studio restart can restore Gallery + resume a live run."""
         path = self._ws.job_meta_path(job.job_id)
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(_job_to_dict(job), f)
-        with self._lock:
-            if job.job_id not in self._jobs:
-                try:
-                    os.remove(tmp)
-                except OSError:
-                    pass
-                return
-            os.replace(tmp, path)
+        # Progress, captions and user actions may persist the same job concurrently.
+        # Each writer needs its own temporary file; sharing job.json.tmp lets one
+        # writer rename another writer's file and makes the second rename fail.
+        tmp = path + "." + uuid.uuid4().hex + ".tmp"
+        try:
+            with open(tmp, "x", encoding="utf-8") as f:
+                json.dump(_job_to_dict(job), f)
+            with self._lock:
+                if job.job_id not in self._jobs:
+                    return
+                os.replace(tmp, path)
+        finally:
+            try:
+                os.remove(tmp)
+            except FileNotFoundError:
+                pass
 
     def _plan_captions(self, job: Job) -> None:
         """Haiku/OpenAI copy. Never raises — a caption miss must not fail the pack."""

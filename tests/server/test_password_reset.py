@@ -72,10 +72,16 @@ def test_reset_api_success_revokes_only_target_sessions(tmp_path):
     _login(client, 'jeff')
     old_cookie = client.cookies.get(COOKIE_NAME)
     store = TenantStore(str(tmp_path / 'auth' / 'tenants.json'))
+    from variant_maker.server.tenants import UserInfo
+    other_workspace = store.create_workspace(name='Other')
+    store.upsert_user(UserInfo('other@example.com', 'Other', other_workspace.id, 'owner', hash_password('other-password')))
+    other = TestClient(app)
+    assert other.post('/api/auth/password', json={'email':'other@example.com', 'password':'other-password'}).status_code == 200
     token = store.issue_password_reset('jeff@x.com')
     response = client.post('/api/auth/password/reset', json={'token': token, 'password': 'fresh-password'})
     assert response.status_code == 204, response.text
     assert client.get('/api/auth/me').json()['email'] is None
+    assert other.get('/api/auth/me').json()['email'] == 'other@example.com'
     assert client.post('/api/auth/password', json={'email':'jeff@x.com', 'password':'fresh-password'}).status_code == 200
     assert client.get('/api/auth/me').json()['email'] == 'jeff@x.com'
     assert old_cookie != client.cookies.get(COOKIE_NAME)
@@ -103,3 +109,50 @@ def test_reset_separate_store_instances_are_atomic(tmp_path):
     with concurrent.futures.ThreadPoolExecutor() as pool:
         results = list(pool.map(consume, range(4)))
     assert sum(r is not None for r in results) == 1
+
+
+def test_password_login_racing_reset_cannot_keep_old_credential_session(tmp_path, monkeypatch):
+    import threading
+
+    import variant_maker.server.app as app_module
+    from tests.server.test_auth_app import _login
+    app, _ = _auth_app(tmp_path)
+    seed = TestClient(app)
+    _login(seed, 'jeff')
+    seed.post('/api/auth/password/set', json={'password':'old-password'})
+    store = TenantStore(str(tmp_path / 'auth' / 'tenants.json'))
+    token = store.issue_password_reset('jeff@x.com')
+    verified = threading.Event()
+    continue_login = threading.Event()
+    original = app_module.verify_password
+    def paused_verify(password, stored):
+        result = original(password, stored)
+        verified.set()
+        assert continue_login.wait(5)
+        return result
+    monkeypatch.setattr(app_module, 'verify_password', paused_verify)
+    login_client = TestClient(app)
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        login = pool.submit(login_client.post, '/api/auth/password', json={'email':'jeff@x.com', 'password':'old-password'})
+        assert verified.wait(5)
+        assert TestClient(app).post('/api/auth/password/reset', json={'token':token, 'password':'fresh-password'}).status_code == 204
+        continue_login.set()
+        assert login.result().status_code == 200
+    # Cookie was issued AFTER reset, but based on the old verified hash.
+    assert login_client.get('/api/auth/me').json()['email'] is None
+    assert login_client.post('/api/auth/password', json={'email':'jeff@x.com', 'password':'fresh-password'}).status_code == 200
+    assert login_client.get('/api/auth/me').json()['email'] == 'jeff@x.com'
+
+
+def _process_consume(args):
+    path, token, hashed = args
+    return TenantStore(path).consume_password_reset(token, hashed) is not None
+
+
+def test_reset_cross_process_atomic_consumption(tmp_path):
+    store = setup_store(tmp_path)
+    token = store.issue_password_reset('camden@example.com')
+    args = (str(tmp_path / 'tenants.json'), token, hash_password('something'))
+    with concurrent.futures.ProcessPoolExecutor(max_workers=3) as pool:
+        results = list(pool.map(_process_consume, [args] * 3))
+    assert sum(results) == 1

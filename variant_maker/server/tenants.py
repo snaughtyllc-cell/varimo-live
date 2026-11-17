@@ -408,9 +408,9 @@ class TenantStore:
 
     def consume_password_reset(self, token: str, password_hash: str,
                                *, now: float | None = None) -> UserInfo | None:
-        ts = time.time() if now is None else now
         digest = hashlib.sha256(token.encode()).hexdigest()
         with self._lock:
+            ts = time.time() if now is None else now
             data = self._load()
             resets = data.setdefault("password_resets", {})
             for email, reset in list(resets.items()):

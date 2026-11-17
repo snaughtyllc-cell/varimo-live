@@ -12,6 +12,9 @@ replacement account, or change workspace membership.
 - Atomic consume and password update under thread + advisory filesystem locks.
   The current service is a single process; all operator access must use TenantStore,
   not direct JSON edits. Filesystem must support `flock` (Linux/macOS).
+- New login cookies bind to the verified credential version (HMAC of the stored
+  password hash). A login racing a reset cannot turn old credentials into a
+  post-reset session.
 - Successful recovery revokes the target's older cookie sessions; other users are
   unaffected. Legacy cookies without issue time are rejected only for users who
   have recovered. Recovery does not automatically sign the user in.

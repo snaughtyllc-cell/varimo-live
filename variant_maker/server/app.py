@@ -22,6 +22,7 @@ from starlette.requests import ClientDisconnect
 from variant_maker.farm.drive import DriveClient, is_video_file
 from variant_maker.farm.ledger import Ledger
 
+from .password_reset import register_password_reset_routes
 from .auth_app import PUBLIC_API_PATHS, AttrProxy, JobStoreProxy, current_bundle, tenant_cv
 from .billing import billing_status_payload, grant_from_checkout, session_email, session_is_paid
 from .creator_waitlist import register_creator_waitlist_routes
@@ -1377,6 +1378,8 @@ def create_app(
                 return await call_next(request)
             sess = read_session(request.cookies.get(COOKIE_NAME), auth_secret)
             user = tenants.get_user(sess["email"]) if sess else None
+            if user is not None and not tenants.session_is_current(user.email, sess.get("iat")):
+                user = None
             if user is None or not user.workspace_id:
                 user = None
             protected = path.startswith("/api/") and path not in PUBLIC_API_PATHS
@@ -1779,6 +1782,8 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from None
         return {"folder_id": receipt["folder_id"], "exported": len(receipt["files"])}
+
+    register_password_reset_routes(app, tenants if auth_on else None, _login_origin)
 
     @app.post("/api/auth/password/set", status_code=204)
     def auth_password_set(request: Request, body: PasswordSetIn) -> Response:

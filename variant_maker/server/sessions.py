@@ -70,6 +70,7 @@ def sign_session(
 ) -> str:
     payload = {
         "email": email.strip().lower(),
+        "iat": now if now is not None else time.time(),
         "workspace_id": workspace_id,
         "exp": int((now if now is not None else time.time()) + ttl_s),
     }
@@ -86,7 +87,7 @@ def read_session(token: str | None, secret: str, *, now: float | None = None) ->
         return None
     if not email or not workspace_id:
         return None
-    return {"email": email, "workspace_id": workspace_id, "exp": int(payload["exp"])}
+    return {"email": email, "workspace_id": workspace_id, "exp": int(payload["exp"]), "iat": payload.get("iat")}
 
 
 def sign_view(workspace_id: str, secret: str, *, ttl_s: int = DEFAULT_TTL_S,

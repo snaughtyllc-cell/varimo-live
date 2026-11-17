@@ -113,7 +113,7 @@ def test_session_roundtrip(tmp_path):
     secret = load_or_create_secret(str(tmp_path / "secret"))
     token = sign_session(email="a@b.com", workspace_id="ws_1", secret=secret, now=1_000)
     got = read_session(token, secret, now=1_001)
-    assert got == {"email": "a@b.com", "workspace_id": "ws_1", "exp": 1_000 + 7 * 24 * 3600}
+    assert got == {"email": "a@b.com", "workspace_id": "ws_1", "exp": 1_000 + 7 * 24 * 3600, "iat": 1_000}
 
 
 def test_session_rejects_tamper_and_expiry(tmp_path):

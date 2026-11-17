@@ -6,12 +6,16 @@ Tests keep using a single Workspace at the data-dir root.
 from __future__ import annotations
 
 import datetime as _dt
+import fcntl
+import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import tempfile
 import threading
+import time
 import uuid
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
@@ -201,12 +205,42 @@ def _new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:10]}"
 
 
+class _StoreLock:
+    """Serialize read-modify-write across threads and operator/server processes."""
+    def __init__(self, path: str):
+        self.path = path + '.lock'
+        self.thread_lock = threading.Lock()
+        self.fd = None
+
+    def __enter__(self):
+        self.thread_lock.acquire()
+        try:
+            os.makedirs(os.path.dirname(self.path) or '.', exist_ok=True)
+            self.fd = os.open(self.path, os.O_CREAT | os.O_RDWR, 0o600)
+            fcntl.flock(self.fd, fcntl.LOCK_EX)
+        except Exception:
+            if self.fd is not None:
+                os.close(self.fd)
+                self.fd = None
+            self.thread_lock.release()
+            raise
+        return self
+
+    def __exit__(self, *_):
+        try:
+            fcntl.flock(self.fd, fcntl.LOCK_UN)
+            os.close(self.fd)
+            self.fd = None
+        finally:
+            self.thread_lock.release()
+
+
 class TenantStore:
     """One JSON file: workspaces, users, invites."""
 
     def __init__(self, path: str) -> None:
         self._path = path
-        self._lock = threading.Lock()
+        self._lock = _StoreLock(path)
 
     def _empty(self) -> dict:
         return {"workspaces": {}, "users": {}, "invites": [], "billing": {}}
@@ -225,7 +259,9 @@ class TenantStore:
         users = raw.get("users") if isinstance(raw.get("users"), dict) else {}
         invites = raw.get("invites") if isinstance(raw.get("invites"), list) else []
         billing = raw.get("billing") if isinstance(raw.get("billing"), dict) else {}
-        return {"workspaces": workspaces, "users": users, "invites": invites, "billing": billing}
+        return {"workspaces": workspaces, "users": users, "invites": invites, "billing": billing,
+                "password_resets": raw.get("password_resets", {}),
+                "sessions_invalid_before": raw.get("sessions_invalid_before", {})}
 
     def _save(self, data: dict) -> None:
         os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
@@ -348,6 +384,54 @@ class TenantStore:
             role=user.role,
             password_hash=password_hash,
         ))
+
+    def issue_password_reset(self, email: str, *, ttl_s: int = 3600,
+                             now: float | None = None) -> str:
+        """Operator-only issuance. Never log the returned bearer token."""
+        if not 1 <= ttl_s <= 3600:
+            raise ValueError("reset lifetime must be at most one hour")
+        key = normalize_email(email)
+        ts = time.time() if now is None else now
+        token = secrets.token_urlsafe(32)
+        with self._lock:
+            data = self._load()
+            user = _parse_user(data["users"].get(key), key)
+            if user is None:
+                raise ValueError("existing user required")
+            data.setdefault("password_resets", {})[key] = {
+                "digest": hashlib.sha256(token.encode()).hexdigest(),
+                "expires": ts + ttl_s,
+                "password_version": hashlib.sha256((user.password_hash or "").encode()).hexdigest(),
+            }
+            self._save(data)
+        return token
+
+    def consume_password_reset(self, token: str, password_hash: str,
+                               *, now: float | None = None) -> UserInfo | None:
+        ts = time.time() if now is None else now
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        with self._lock:
+            data = self._load()
+            resets = data.setdefault("password_resets", {})
+            for email, reset in list(resets.items()):
+                if not secrets.compare_digest(reset.get("digest", ""), digest):
+                    continue
+                user = _parse_user(data["users"].get(email), email)
+                if (user is None or ts >= reset["expires"] or
+                        reset["password_version"] != hashlib.sha256((user.password_hash or "").encode()).hexdigest()):
+                    return None
+                user.password_hash = password_hash
+                data["users"][email] = _user_payload(user)
+                del resets[email]
+                data.setdefault("sessions_invalid_before", {})[email] = ts
+                self._save(data)
+                return user
+        return None
+
+    def session_is_current(self, email: str, issued_at: float | None) -> bool:
+        with self._lock:
+            cutoff = self._load().get("sessions_invalid_before", {}).get(normalize_email(email))
+        return cutoff is None or (issued_at is not None and issued_at > cutoff)
 
     def add_invite(self, *, email: str, kind: InviteKind,
                    workspace_id: str | None) -> Invite:

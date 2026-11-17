@@ -26,6 +26,9 @@ replacement account, or change workspace membership.
   operator-assisted use. A general public recovery service needs shared throttling
   and an authenticated email-delivery provider before expanding this flow.
 
+Use the canonical `https://www.varimo.io` origin. The apex host currently redirects
+API paths to the homepage and cannot be used for recovery links.
+
 ## Release / issue / verify
 
 1. Run tests; inspect production queue and defer deployment while jobs are active.

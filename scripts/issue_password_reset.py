@@ -21,7 +21,7 @@ def main():
         token = TenantStore(args.store).issue_password_reset(args.email)
         with os.fdopen(fd, 'w') as out:
             fd = None
-            out.write('https://varimo.io/api/auth/password/reset#' + token + '\n')
+            out.write('https://www.varimo.io/api/auth/password/reset#' + token + '\n')
     except Exception:
         if fd is not None:
             os.close(fd)

@@ -60,6 +60,11 @@ def load_or_create_secret(path: str, environ: dict | None = None) -> str:
     return secret
 
 
+def credential_version(password_hash: str | None, secret: str) -> str:
+    """Bind cookies to the verified credential snapshot without exposing its hash."""
+    return hmac.new(secret.encode(), b'credential-version:' + (password_hash or '').encode(), hashlib.sha256).hexdigest()
+
+
 def sign_session(
     *,
     email: str,
@@ -67,12 +72,17 @@ def sign_session(
     secret: str,
     ttl_s: int = DEFAULT_TTL_S,
     now: float | None = None,
+    password_hash: str | None = None,
+    bind_credential: bool = False,
 ) -> str:
     payload = {
         "email": email.strip().lower(),
+        "iat": now if now is not None else time.time(),
         "workspace_id": workspace_id,
         "exp": int((now if now is not None else time.time()) + ttl_s),
     }
+    if bind_credential:
+        payload["credential_version"] = credential_version(password_hash, secret)
     return _encode(payload, secret)
 
 
@@ -86,7 +96,12 @@ def read_session(token: str | None, secret: str, *, now: float | None = None) ->
         return None
     if not email or not workspace_id:
         return None
-    return {"email": email, "workspace_id": workspace_id, "exp": int(payload["exp"])}
+    result = {"email": email, "workspace_id": workspace_id, "exp": int(payload["exp"]), "iat": payload.get("iat")}
+    if "credential_version" in payload:
+        if not isinstance(payload["credential_version"], str):
+            return None
+        result["credential_version"] = payload["credential_version"]
+    return result
 
 
 def sign_view(workspace_id: str, secret: str, *, ttl_s: int = DEFAULT_TTL_S,

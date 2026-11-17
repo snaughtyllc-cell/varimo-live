@@ -222,6 +222,7 @@ from .models import (
     WorkspaceExperienceIn,
     WorkspaceInviteIn,
 )
+from .password_reset import register_password_reset_routes
 from .passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
 from .plans import UsageLimitError, enforce_quota, get_plan, meter_line, parse_plan, remaining_pct
 from .post_url import normalize_post_url
@@ -230,6 +231,7 @@ from .sessions import (
     COOKIE_NAME,
     DEFAULT_TTL_S,
     VIEW_COOKIE_NAME,
+    credential_version,
     load_or_create_secret,
     read_session,
     read_view,
@@ -1377,6 +1379,11 @@ def create_app(
                 return await call_next(request)
             sess = read_session(request.cookies.get(COOKIE_NAME), auth_secret)
             user = tenants.get_user(sess["email"]) if sess else None
+            if (user is not None and "credential_version" in sess and
+                    sess["credential_version"] != credential_version(user.password_hash, auth_secret)):
+                user = None
+            if user is not None and not tenants.session_is_current(user.email, sess.get("iat")):
+                user = None
             if user is None or not user.workspace_id:
                 user = None
             protected = path.startswith("/api/") and path not in PUBLIC_API_PATHS
@@ -1483,6 +1490,7 @@ def create_app(
     def _set_session_cookie(response: Response, request: Request, user) -> None:
         token = sign_session(
             email=user.email, workspace_id=user.workspace_id, secret=auth_secret,
+            password_hash=user.password_hash, bind_credential=True,
         )
         response.set_cookie(COOKIE_NAME, token, **_cookie_kw(request))
         # Login always lands in the account's home studio. Admin view is opt-in.
@@ -1780,6 +1788,8 @@ def create_app(
             raise HTTPException(status_code=409, detail=str(exc)) from None
         return {"folder_id": receipt["folder_id"], "exported": len(receipt["files"])}
 
+    register_password_reset_routes(app, tenants if auth_on else None, _login_origin)
+
     @app.post("/api/auth/password/set", status_code=204)
     def auth_password_set(request: Request, body: PasswordSetIn) -> Response:
         if not auth_on or tenants is None:
@@ -1793,8 +1803,10 @@ def create_app(
                 status_code=400,
                 detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters.",
             )
-        tenants.set_password(user.email, hash_password(password))
-        return Response(status_code=204)
+        updated_user = tenants.set_password(user.email, hash_password(password))
+        response = Response(status_code=204)
+        _set_session_cookie(response, request, updated_user)
+        return response
 
     @app.post("/api/auth/logout", status_code=204)
     def auth_logout() -> Response:

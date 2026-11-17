@@ -11,6 +11,7 @@ import shlex
 import subprocess
 
 from .color import output_color_args, resolve_output_color
+from .diagnostics import failure_diagnostic
 from .filtergraph import build_audio_filters, build_video_filters
 from .platforms import Platform, x264_rate_args
 from .probe import SourceInfo
@@ -50,6 +51,7 @@ def run(cmd: list[str]) -> subprocess.CompletedProcess:
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()
+        print(failure_diagnostic("ffmpeg", detail, result.returncode), flush=True)
         raise subprocess.CalledProcessError(
             result.returncode, result.args, output=result.stdout, stderr=detail or result.stderr,
         )

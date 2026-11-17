@@ -5,6 +5,8 @@ import time
 from collections.abc import Iterator
 from typing import Protocol
 
+from ..diagnostics import failure_diagnostic, log_http_failure
+
 
 class RunPodClient(Protocol):
     def stream_run(self, payload: dict, cancel_token=None) -> Iterator[dict]: ...
@@ -65,6 +67,7 @@ class HttpRunPodClient:
             if cancel_token is not None and cancel_token.is_set():
                 raise JobCancelled()
             resp = http.post(f"{self._base}/run", json=payload, headers=self._headers)
+            log_http_failure(resp, "runpod_submit")
             resp.raise_for_status()
             job_id = resp.json()["id"]
             yield from self._poll_stream(http, job_id, cancel_token)
@@ -90,6 +93,7 @@ class HttpRunPodClient:
                 cancel_token.cancel()
                 raise JobCancelled()
             r = http.get(f"{self._base}/stream/{job_id}", headers=self._headers)
+            log_http_failure(r, "runpod_stream")
             r.raise_for_status()
             body = r.json()
             for item in body.get("stream") or []:
@@ -105,6 +109,7 @@ class HttpRunPodClient:
                     raise JobCancelled()
                 if status != "COMPLETED":
                     detail = body.get("error") or ""
+                    print(failure_diagnostic("runpod_failed", detail), flush=True)
                     if not isinstance(detail, str):
                         detail = str(detail)
                     detail = " ".join(detail.split())
@@ -131,6 +136,7 @@ class HttpRunPodClient:
             return
         try:
             r = http.get(f"{self._base}/status/{job_id}", headers=self._headers)
+            log_http_failure(r, "runpod_status")
             r.raise_for_status()
             status_chunks = [c for c in _as_chunks(r.json()) if isinstance(c, dict)]
         except Exception as exc:
